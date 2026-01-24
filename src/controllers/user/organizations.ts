@@ -17,12 +17,10 @@ import {
 import { sendSuccess, sendCreated } from "../../utils/responseUtils";
 import db from "../../database/db";
 
-// GET /api/organizations
-// Get all organizations the current user is a member of
 export const getMyOrganizations = async (
   req: RequestWithUser,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const userId = req.user!.role_id;
@@ -34,18 +32,20 @@ export const getMyOrganizations = async (
 
     const organizations = await getOrganizationsByUserId(userId, pagination);
 
-    return sendSuccess(res, organizations, "Organizations retrieved successfully");
+    return sendSuccess(
+      res,
+      organizations,
+      "Organizations retrieved successfully",
+    );
   } catch (error) {
     next(error);
   }
 };
 
-// POST /api/organizations
-// Create a new organization (current user becomes owner)
 export const createOrganizationHandler = async (
   req: RequestWithUser,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   const client = await db.connect();
 
@@ -55,18 +55,16 @@ export const createOrganizationHandler = async (
     const userId = req.user!.role_id;
     const { name, slug } = req.body;
 
-    // Create the organization
     const newOrg = await createOrganization(
       { name, slug, owner_id: userId },
-      client
+      client,
     );
 
-    // Add the creator as owner member
     await addOrganizationMember(
       newOrg.id,
       { user_id: userId, role: "owner" },
       null,
-      client
+      client,
     );
 
     await client.query("COMMIT");
@@ -80,52 +78,52 @@ export const createOrganizationHandler = async (
   }
 };
 
-// GET /api/organizations/:organizationId
-// Get a single organization (must be a member)
-// Organization data is attached by middleware
 export const getOrganization = async (
   req: RequestWithUser,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const organization = req.organization;
 
-    return sendSuccess(res, organization, "Organization retrieved successfully");
-  } catch (error) {
-    next(error);
-  }
-};
-
-// PUT /api/organizations/:organizationId
-// Update organization (must be owner or admin)
-export const updateOrganization = async (
-  req: RequestWithUser,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const organizationId = req.params.organizationId as string;
-    const updates = req.body;
-
-    const updatedOrganization = await modifyOrganization(organizationId, updates);
-
     return sendSuccess(
       res,
-      updatedOrganization,
-      "Organization updated successfully"
+      organization,
+      "Organization retrieved successfully",
     );
   } catch (error) {
     next(error);
   }
 };
 
-// DELETE /api/organizations/:organizationId
-// Delete organization (must be owner)
+export const updateOrganization = async (
+  req: RequestWithUser,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const organizationId = req.params.organizationId as string;
+    const updates = req.body;
+
+    const updatedOrganization = await modifyOrganization(
+      organizationId,
+      updates,
+    );
+
+    return sendSuccess(
+      res,
+      updatedOrganization,
+      "Organization updated successfully",
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const deleteOrganizationHandler = async (
   req: RequestWithUser,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const organizationId = req.params.organizationId as string;
@@ -135,19 +133,17 @@ export const deleteOrganizationHandler = async (
     return sendSuccess(
       res,
       deletedOrganization,
-      "Organization deleted successfully"
+      "Organization deleted successfully",
     );
   } catch (error) {
     next(error);
   }
 };
 
-// GET /api/organizations/:organizationId/members
-// Get organization members (must be a member)
 export const getMembers = async (
   req: RequestWithUser,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const organizationId = req.params.organizationId as string;
@@ -165,27 +161,27 @@ export const getMembers = async (
   }
 };
 
-// POST /api/organizations/:organizationId/members
-// Add a member to organization (must be owner or admin)
 export const addMember = async (
   req: RequestWithUser,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const organizationId = req.params.organizationId as string;
     const { user_id, role } = req.body;
     const invitedBy = req.user!.role_id;
 
-    // Cannot add someone as owner via this endpoint
     if (role === "owner") {
-      throw { status: 400, msg: "Cannot add member as owner. Use transfer ownership." };
+      throw {
+        status: 400,
+        msg: "Cannot add member as owner. Use transfer ownership.",
+      };
     }
 
     const newMember = await addOrganizationMember(
       organizationId,
       { user_id, role: role || "member" },
-      invitedBy
+      invitedBy,
     );
 
     return sendCreated(res, newMember, "Member added successfully");
@@ -194,12 +190,10 @@ export const addMember = async (
   }
 };
 
-// PUT /api/organizations/:organizationId/members/:userId
-// Update member role (must be owner or admin)
 export const updateMember = async (
   req: RequestWithUser,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const organizationId = req.params.organizationId as string;
@@ -214,12 +208,10 @@ export const updateMember = async (
   }
 };
 
-// DELETE /api/organizations/:organizationId/members/:userId
-// Remove a member (must be owner or admin, or self for leaving)
 export const removeMember = async (
   req: RequestWithUser,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const organizationId = req.params.organizationId as string;
@@ -229,14 +221,20 @@ export const removeMember = async (
     // Allow users to remove themselves (leave org)
     // Or admins/owners to remove others
     if (userId !== currentUserId) {
-      // Check if current user has permission (middleware should handle this)
-      const currentUserRole = req.organizationRole;
+
+      const currentUserRole = req.organizationMembership!.role;
       if (currentUserRole !== "owner" && currentUserRole !== "admin") {
-        throw { status: 403, msg: "Only owners and admins can remove other members" };
+        throw {
+          status: 403,
+          msg: "Only owners and admins can remove other members",
+        };
       }
     }
 
-    const removedMember = await removeOrganizationMember(organizationId, userId);
+    const removedMember = await removeOrganizationMember(
+      organizationId,
+      userId,
+    );
 
     return sendSuccess(res, removedMember, "Member removed successfully");
   } catch (error) {
@@ -244,12 +242,10 @@ export const removeMember = async (
   }
 };
 
-// POST /api/organizations/:organizationId/transfer-ownership
-// Transfer ownership to another member (must be owner)
 export const transferOwnershipHandler = async (
   req: RequestWithUser,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const organizationId = req.params.organizationId as string;
@@ -259,7 +255,7 @@ export const transferOwnershipHandler = async (
     const result = await transferOwnership(
       organizationId,
       currentOwnerId,
-      new_owner_id
+      new_owner_id,
     );
 
     return sendSuccess(res, result, "Ownership transferred successfully");
@@ -273,13 +269,16 @@ export const transferOwnershipHandler = async (
 export const leaveOrganization = async (
   req: RequestWithUser,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const organizationId = req.params.organizationId as string;
     const userId = req.user!.role_id;
 
-    const removedMember = await removeOrganizationMember(organizationId, userId);
+    const removedMember = await removeOrganizationMember(
+      organizationId,
+      userId,
+    );
 
     return sendSuccess(res, removedMember, "Left organization successfully");
   } catch (error) {

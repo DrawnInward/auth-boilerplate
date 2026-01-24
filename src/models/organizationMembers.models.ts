@@ -206,7 +206,6 @@ export const removeOrganizationMember = async (
   userId: string,
   client: PoolClient | Pool = db,
 ): Promise<OrganizationMember> => {
-  // First check if user is owner
   const member = await getOrganizationMember(organizationId, userId);
   if (!member) {
     throw { status: 404, msg: "Member not found" };
@@ -254,7 +253,6 @@ export const transferOwnership = async (
     };
   }
 
-  // Demote current owner to admin
   const demoteQuery = `
     UPDATE organization_members
     SET role = 'admin'
@@ -262,7 +260,6 @@ export const transferOwnership = async (
     RETURNING *;
   `;
 
-  // Promote new owner
   const promoteQuery = `
     UPDATE organization_members
     SET role = 'owner'
@@ -270,7 +267,6 @@ export const transferOwnership = async (
     RETURNING *;
   `;
 
-  // Also update the organizations table owner_id
   const updateOrgQuery = `
     UPDATE organizations
     SET owner_id = $1, updated_at = NOW()

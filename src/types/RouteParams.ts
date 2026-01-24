@@ -9,8 +9,16 @@ export const organizationMemberParamsSchema = organizationParamsSchema.extend({
   userId: z.string().uuid("Invalid user ID format"),
 });
 
+export const organizationInvitationParamsSchema = organizationParamsSchema.extend({
+  invitationId: z.string().uuid("Invalid invitation ID format"),
+});
+
 export const userParamsSchema = z.object({
   userId: z.string().uuid("Invalid user ID format"),
+});
+
+export const tokenParamsSchema = z.object({
+  token: z.string().min(1, "Token is required"),
 });
 
 // Query parameter validation schemas
@@ -28,6 +36,8 @@ export const organizationsQuerySchema = paginationQuerySchema.extend({
 // Export types
 export type OrganizationParams = z.infer<typeof organizationParamsSchema>;
 export type OrganizationMemberParams = z.infer<typeof organizationMemberParamsSchema>;
+export type OrganizationInvitationParams = z.infer<typeof organizationInvitationParamsSchema>;
 export type UserParams = z.infer<typeof userParamsSchema>;
+export type TokenParams = z.infer<typeof tokenParamsSchema>;
 export type PaginationQuery = z.infer<typeof paginationQuerySchema>;
 export type OrganizationsQuery = z.infer<typeof organizationsQuerySchema>;

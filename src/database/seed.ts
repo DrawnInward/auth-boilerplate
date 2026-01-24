@@ -1,5 +1,5 @@
 import { Organization, OrganizationMember } from "../../shared/src/types";
-import { Admin, RefreshToken, User } from "../types";
+import { Admin, Invitation, RefreshToken, User } from "../types";
 import db from "./db";
 
 async function seed({
@@ -8,6 +8,7 @@ async function seed({
   refreshTokensData = [],
   organizationsData = [],
   organizationMembersData = [],
+  invitationsData = [],
 
   verbose = false,
 }: {
@@ -16,6 +17,7 @@ async function seed({
   refreshTokensData?: RefreshToken[];
   organizationsData?: Organization[];
   organizationMembersData?: OrganizationMember[];
+  invitationsData?: Invitation[];
   verbose?: boolean;
 }) {
   if (process.env.NODE_ENV === "production") {
@@ -31,6 +33,7 @@ async function seed({
 
   try {
     log("Dropping existing tables...");
+    await db.query("DROP TABLE IF EXISTS invitations CASCADE");
     await db.query("DROP TABLE IF EXISTS organization_members CASCADE");
     await db.query("DROP TABLE IF EXISTS organizations CASCADE");
     await db.query("DROP TABLE IF EXISTS refresh CASCADE");
@@ -111,6 +114,23 @@ async function seed({
       );
     `);
 
+    log("Creating invitations table...");
+    await db.query(`
+      CREATE TABLE invitations (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        email VARCHAR(255) NOT NULL,
+        token_hash VARCHAR(255) UNIQUE NOT NULL,
+        type VARCHAR(50) NOT NULL CHECK (type IN ('registration', 'org_invite', 'password_reset')),
+        organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+        role VARCHAR(20) CHECK (role IN ('admin', 'member', 'viewer')),
+        invited_by UUID REFERENCES users(user_id) ON DELETE SET NULL,
+        is_existing_user BOOLEAN DEFAULT FALSE,
+        expires_at TIMESTAMPTZ NOT NULL,
+        used_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+
     log("Creating indexes...");
     // User indexes
     await db.query(`CREATE INDEX idx_users_deleted_at ON users(deleted_at);`);
@@ -140,6 +160,20 @@ async function seed({
     );
     await db.query(
       `CREATE INDEX idx_org_members_role ON organization_members(role);`,
+    );
+
+    // Invitation indexes
+    await db.query(
+      `CREATE INDEX idx_invitations_token_hash ON invitations(token_hash);`,
+    );
+    await db.query(
+      `CREATE INDEX idx_invitations_email ON invitations(email);`,
+    );
+    await db.query(
+      `CREATE INDEX idx_invitations_type ON invitations(type);`,
+    );
+    await db.query(
+      `CREATE INDEX idx_invitations_org ON invitations(organization_id) WHERE organization_id IS NOT NULL;`,
     );
 
     log("Inserting users...");
@@ -232,6 +266,43 @@ async function seed({
             member.user_id,
             member.role,
             member.invited_by || null,
+          ];
+
+      await db.query(query, values);
+    }
+
+    log("Inserting invitations...");
+    for (const invitation of invitationsData) {
+      const query = invitation.id
+        ? `INSERT INTO invitations (id, email, token_hash, type, organization_id, role, invited_by, is_existing_user, expires_at, used_at, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
+        : `INSERT INTO invitations (email, token_hash, type, organization_id, role, invited_by, is_existing_user, expires_at, used_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`;
+
+      const values = invitation.id
+        ? [
+            invitation.id,
+            invitation.email,
+            invitation.token_hash,
+            invitation.type,
+            invitation.organization_id || null,
+            invitation.role || null,
+            invitation.invited_by || null,
+            invitation.is_existing_user || false,
+            invitation.expires_at,
+            invitation.used_at || null,
+            invitation.created_at || new Date().toISOString(),
+          ]
+        : [
+            invitation.email,
+            invitation.token_hash,
+            invitation.type,
+            invitation.organization_id || null,
+            invitation.role || null,
+            invitation.invited_by || null,
+            invitation.is_existing_user || false,
+            invitation.expires_at,
+            invitation.used_at || null,
           ];
 
       await db.query(query, values);

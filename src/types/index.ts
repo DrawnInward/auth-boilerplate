@@ -1,6 +1,7 @@
 export * from "./User";
 export * from "./Admin";
 export * from "./RefreshToken";
+export * from "./Invitation";
 export * from "./ValidationErrorResponse";
 export * from "./RequestWithUser";
 export * from "./TokenCookieOptions";

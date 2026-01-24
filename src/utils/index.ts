@@ -9,3 +9,8 @@ export * from "./generateApiKey";
 export * from "./excludePasswordHash";
 export * from "./responseUtils";
 export * from "./errorHandling";
+export * from "./escapeHtml";
+export * from "./sanitizeUrl";
+export * from "./buildClickableLinks";
+export * from "./config";
+export * from "./email/index";

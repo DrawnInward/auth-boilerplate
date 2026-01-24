@@ -9,7 +9,9 @@ import { validateParams, validateBody } from "../../middleware/validate";
 import {
   organizationParamsSchema,
   organizationMemberParamsSchema,
+  organizationInvitationParamsSchema,
 } from "../../types/RouteParams";
+import { inviteMemberSchema } from "../../types/Invitation";
 import {
   createOrganizationDtoSchema,
   updateOrganizationDtoSchema,
@@ -29,6 +31,11 @@ import {
   transferOwnershipHandler,
   leaveOrganization,
 } from "../../controllers/user/organizations";
+import {
+  inviteMember,
+  listInvitations,
+  cancelInvitation,
+} from "../../controllers/user/invitations";
 
 const router = express.Router();
 
@@ -125,6 +132,34 @@ router.post(
   validateParams(organizationParamsSchema),
   organizationMemberMiddleware,
   leaveOrganization
+);
+
+// POST /api/organizations/:organizationId/invite - Invite a member (owner/admin only)
+router.post(
+  "/:organizationId/invite",
+  authoriseUser(["user"]),
+  validateParams(organizationParamsSchema),
+  validateBody(inviteMemberSchema),
+  requireOrgAdmin,
+  inviteMember
+);
+
+// GET /api/organizations/:organizationId/invitations - List pending invitations (owner/admin only)
+router.get(
+  "/:organizationId/invitations",
+  authoriseUser(["user"]),
+  validateParams(organizationParamsSchema),
+  requireOrgAdmin,
+  listInvitations
+);
+
+// DELETE /api/organizations/:organizationId/invitations/:invitationId - Cancel invitation (owner/admin only)
+router.delete(
+  "/:organizationId/invitations/:invitationId",
+  authoriseUser(["user"]),
+  validateParams(organizationInvitationParamsSchema),
+  requireOrgAdmin,
+  cancelInvitation
 );
 
 export default router;

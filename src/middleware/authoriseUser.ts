@@ -53,17 +53,21 @@ export const authoriseUser =
       const userDetails = jwt.verify(token, secretKey);
 
       if (isRefresh) {
+        const refreshPayload = userDetails as RefreshJwtPayload;
         const { accessToken, newRefreshToken } = await createAccessToken(
-          userDetails as RefreshJwtPayload,
+          refreshPayload,
           token
         );
 
         setAuthCookies(res, accessToken, newRefreshToken);
 
-        req.user = jwt.verify(
-          accessToken,
-          process.env.USER_ACCESS_KEY!
-        ) as AccessJwtPayload;
+        // Use the correct key based on role_type from the refresh token
+        const accessKey =
+          refreshPayload.role_type === "admin"
+            ? process.env.ADMIN_ACCESS_KEY!
+            : process.env.USER_ACCESS_KEY!;
+
+        req.user = jwt.verify(accessToken, accessKey) as AccessJwtPayload;
       } else {
         req.user = userDetails as AccessJwtPayload;
       }
