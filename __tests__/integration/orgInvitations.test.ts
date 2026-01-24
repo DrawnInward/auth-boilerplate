@@ -40,8 +40,7 @@ describe("Organization Invitation Integration Tests", () => {
     adminCookies = adminLogin.headers["set-cookie"] as any;
 
     // Login as member (BOB - member of ACME_CORP)
-    // Note: BOB is inactive in test data, so we need to use a different approach
-    // For now, we'll test with owner and admin only
+    // Note: BOB is inactive in test data, add another user that is active and then write tests for this
   });
 
   afterAll(async () => {

@@ -724,7 +724,7 @@ describe("Admin Model CRUD Operations", () => {
         tempAdmin.admin_id,
       ]);
 
-      // Now we can delete the original root admin
+      // Now delete the original root admin
       const originalRoot = await getAdmin("root.admin@test.com");
       await deleteAdmin(originalRoot!.admin_id!);
 
