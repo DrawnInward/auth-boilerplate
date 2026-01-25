@@ -8,6 +8,9 @@ import {
   completeRegistrationSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  mfaVerifySchema,
+  mfaBackupVerifySchema,
+  setPasswordSchema,
 } from "../../types";
 import {
   login,
@@ -17,6 +20,9 @@ import {
   completeRegistration,
   forgotPassword,
   resetPassword,
+  mfaLoginVerify,
+  mfaLoginBackupVerify,
+  setPassword,
 } from "../../controllers/user/auth";
 
 const router = express.Router();
@@ -36,5 +42,12 @@ router.post("/reset-password", authLimiter, validateBody(resetPasswordSchema), r
 // Standard auth routes
 router.post("/login", authLimiter, validateBody(loginUserSchema), login);
 router.post("/logout", authoriseUser(["user"]), logout);
+
+// MFA login verification routes
+router.post("/mfa/login-verify", authLimiter, validateBody(mfaVerifySchema), mfaLoginVerify);
+router.post("/mfa/login-backup", authLimiter, validateBody(mfaBackupVerifySchema), mfaLoginBackupVerify);
+
+// Set password for OAuth users
+router.post("/set-password", authoriseUser(["user"]), validateBody(setPasswordSchema), setPassword);
 
 export default router;

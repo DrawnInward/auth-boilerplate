@@ -41,10 +41,10 @@ describe("Admin Authentication Integration Tests", () => {
       expect(cookies).toBeDefined();
       const cookieArray = Array.isArray(cookies) ? cookies : [cookies];
       expect(
-        cookieArray.some((cookie: string) => cookie.includes("access_token"))
+        cookieArray.some((cookie: string) => cookie.includes("access_token")),
       ).toBe(true);
       expect(
-        cookieArray.some((cookie: string) => cookie.includes("refresh_token"))
+        cookieArray.some((cookie: string) => cookie.includes("refresh_token")),
       ).toBe(true);
     });
 
@@ -196,7 +196,7 @@ describe("Admin Authentication Integration Tests", () => {
 
       // Extract access token from cookie
       const accessTokenCookie = cookieArray.find((cookie: string) =>
-        cookie.includes("access_token")
+        cookie.includes("access_token"),
       );
       expect(accessTokenCookie).toBeDefined();
 
@@ -223,12 +223,12 @@ describe("Admin Authentication Integration Tests", () => {
 
       // Extract refresh token from cookie
       const refreshTokenCookie = cookieArray.find((cookie: string) =>
-        cookie.includes("refresh_token")
+        cookie.includes("refresh_token"),
       );
       expect(refreshTokenCookie).toBeDefined();
 
       const refreshTokenMatch = refreshTokenCookie?.match(
-        /refresh_token=([^;]+)/
+        /refresh_token=([^;]+)/,
       );
       expect(refreshTokenMatch).toBeDefined();
       const refreshToken = refreshTokenMatch![1];
@@ -261,7 +261,7 @@ describe("Admin Authentication Integration Tests", () => {
       const cookies = response.headers["set-cookie"];
       const cookieArray = Array.isArray(cookies) ? cookies : [cookies];
       const accessTokenCookie = cookieArray.find((cookie: string) =>
-        cookie.includes("access_token")
+        cookie.includes("access_token"),
       );
       const accessTokenMatch = accessTokenCookie?.match(/access_token=([^;]+)/);
       const accessToken = accessTokenMatch![1];
@@ -285,16 +285,16 @@ describe("Admin Authentication Integration Tests", () => {
       const cookieArray = Array.isArray(cookies) ? cookies : [cookies];
 
       const accessTokenCookie = cookieArray.find((cookie: string) =>
-        cookie.includes("access_token")
+        cookie.includes("access_token"),
       );
       const accessTokenMatch = accessTokenCookie?.match(/access_token=([^;]+)/);
       const accessToken = accessTokenMatch![1];
 
       const refreshTokenCookie = cookieArray.find((cookie: string) =>
-        cookie.includes("refresh_token")
+        cookie.includes("refresh_token"),
       );
       const refreshTokenMatch = refreshTokenCookie?.match(
-        /refresh_token=([^;]+)/
+        /refresh_token=([^;]+)/,
       );
       const refreshToken = refreshTokenMatch![1];
 

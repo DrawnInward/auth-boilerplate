@@ -1,14 +1,20 @@
 import { z } from "zod";
 
+export const authProviderSchema = z.enum(["local", "google", "both"]);
+
 export const userSchema = z.object({
   user_id: z.string().uuid().optional(),
   email: z.string().email(),
-  password_hash: z.string().optional(),
+  password_hash: z.string().nullable().optional(),
   email_verified: z.boolean().optional(),
   deleted_at: z.string().nullable().optional(),
   is_active: z.boolean().optional(),
   deactivated_at: z.string().nullable().optional(),
   deactivated_by: z.string().uuid().nullable().optional(),
+  mfa_enabled: z.boolean().optional(),
+  mfa_secret: z.string().nullable().optional(),
+  google_id: z.string().nullable().optional(),
+  auth_provider: authProviderSchema.optional(),
   created_at: z.string().optional(),
   updated_at: z.string().optional(),
 });

@@ -3,7 +3,6 @@ import app from "../../src/app";
 import db from "../../src/database/db";
 import seed from "../../src/database/seed";
 import { testUsers } from "../../src/database/test-data";
-import { getUserUuid } from "../../src/database/test-data/testUuids";
 
 require("dotenv").config({ quiet: true });
 

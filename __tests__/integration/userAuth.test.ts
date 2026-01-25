@@ -241,7 +241,7 @@ describe("User Authentication Integration Tests", () => {
       const decodedRefresh = jwt.decode(refreshToken) as any;
 
       expect(decodedRefresh.exp).toBeGreaterThanOrEqual(
-        beforeLogin + 200 * 24 * 60 * 60
+        beforeLogin + 7 * 24 * 60 * 60
       );
     });
 

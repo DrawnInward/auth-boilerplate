@@ -43,7 +43,7 @@ export const fetchRefreshById = async (id: string): Promise<RefreshToken> => {
 
 export const fetchRefreshByTokenHash = async (
   tokenHash: string,
-  client: PoolClient | Pool = db
+  client: PoolClient | Pool = db,
 ): Promise<RefreshToken> => {
   const queryString = `
     SELECT * FROM refresh
@@ -65,7 +65,7 @@ export const fetchRefreshByTokenHash = async (
 export const modifyRefreshById = async (
   detailsToUpdate: UpdateRefreshTokenDto,
   id: string,
-  client: PoolClient | Pool = db
+  client: PoolClient | Pool = db,
 ): Promise<RefreshToken> => {
   const setClause = Object.keys(detailsToUpdate)
     .map((key, index) => `${key} = $${index + 1}`)
@@ -89,7 +89,7 @@ export const modifyRefreshById = async (
 
 export const addRefresh = async (
   newRefresh: CreateRefreshTokenDto,
-  client: PoolClient | Pool = db
+  client: PoolClient | Pool = db,
 ): Promise<{ token: string; refresh_id: string }> => {
   const queryString = `
     INSERT INTO refresh
@@ -124,9 +124,9 @@ export const addRefresh = async (
     }
 
     const refreshToken = jwt.sign(
-      { refresh_id: refreshId, role_type },
+      { refresh_id: refreshId, role_id, role_type },
       refreshKey,
-      { expiresIn: "200d" }
+      { expiresIn: "7d" },
     );
 
     const tokenHash = determinateHash(refreshToken);
@@ -138,7 +138,7 @@ export const addRefresh = async (
       WHERE refresh_id = $2 
       RETURNING *;
       `,
-      [tokenHash, refreshId]
+      [tokenHash, refreshId],
     );
 
     const refreshTokenDetails = updateRefreshTokenQuery.rows[0];
@@ -169,7 +169,7 @@ export const removeRefreshById = async (id: string): Promise<void> => {
 
 export const createAccessToken = async (
   decodedRefreshToken: { refresh_id: string; role_type: string },
-  originalRefreshToken: string
+  originalRefreshToken: string,
 ): Promise<{ accessToken: string; newRefreshToken: string }> => {
   const client = await db.connect();
 
@@ -185,7 +185,7 @@ export const createAccessToken = async (
       // Token was already used - possible replay attack
       await revokeUserTokens(
         refreshTokenData.role_id,
-        refreshTokenData.role_type
+        refreshTokenData.role_type,
       );
       throw {
         status: 401,
@@ -209,7 +209,7 @@ export const createAccessToken = async (
         last_used_time: new Date().toISOString(),
       },
       refresh_id,
-      client
+      client,
     );
 
     const newRefreshData = await addRefresh(
@@ -217,7 +217,7 @@ export const createAccessToken = async (
         role_id: refreshTokenData.role_id,
         role_type: refreshTokenData.role_type,
       },
-      client
+      client,
     );
 
     const accessKeyEnvironmentVariable = `${role_type.toUpperCase()}_ACCESS_KEY`;
@@ -232,7 +232,7 @@ export const createAccessToken = async (
     const accessToken = jwt.sign(
       { role_id: refreshTokenData.role_id, role_type },
       accessKey,
-      { expiresIn: "10m" }
+      { expiresIn: "10m" },
     );
 
     await client.query("COMMIT");
@@ -251,7 +251,7 @@ export const createAccessToken = async (
 export const revokeUserTokens = async (
   roleId: string,
   roleType: string,
-  client: PoolClient | Pool = db
+  client: PoolClient | Pool = db,
 ): Promise<string> => {
   const queryStr = `
     UPDATE refresh
@@ -271,7 +271,7 @@ export const revokeUserTokens = async (
 
 export const revokeRefreshToken = async (
   refreshId: string,
-  client = db
+  client = db,
 ): Promise<string> => {
   const queryStr = `
     UPDATE refresh

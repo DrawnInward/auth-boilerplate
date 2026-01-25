@@ -153,6 +153,25 @@ export const getUserWithPassword = async (
   }
 };
 
+export const getUserWithPasswordById = async (
+  userId: string
+): Promise<User | null> => {
+  const queryString = `
+    SELECT * FROM users
+    WHERE user_id = $1 AND deleted_at IS NULL;
+  `;
+
+  try {
+    const result = await db.query(queryString, [userId]);
+    if (result.rows.length === 0) {
+      return null;
+    }
+    return result.rows[0];
+  } catch (err) {
+    throw err;
+  }
+};
+
 export const modifyUser = async (
   userId: string,
   detailsToUpdate: UpdateUserDto,
@@ -348,7 +367,7 @@ export const verifyUserEmail = async (
 
 export const getUserStats = async (): Promise<UserStats> => {
   const queryString = `
-    SELECT 
+    SELECT
       COUNT(*) as total,
       COUNT(*) FILTER (WHERE is_active = true AND deleted_at IS NULL) as active,
       COUNT(*) FILTER (WHERE is_active = false AND deleted_at IS NULL) as inactive,
@@ -370,6 +389,143 @@ export const getUserStats = async (): Promise<UserStats> => {
       unverified: parseInt(stats.unverified),
       deleted: parseInt(stats.deleted),
     };
+  } catch (err) {
+    throw err;
+  }
+};
+
+export type AuthProvider = "local" | "google" | "both";
+
+export const getUserByGoogleId = async (
+  googleId: string
+): Promise<Omit<User, "password_hash"> | null> => {
+  const queryString = `
+    SELECT * FROM users
+    WHERE google_id = $1 AND deleted_at IS NULL;
+  `;
+
+  try {
+    const result = await db.query(queryString, [googleId]);
+    if (result.rows.length === 0) {
+      return null;
+    }
+    return excludePasswordHash(result.rows[0]);
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const setGoogleId = async (
+  userId: string,
+  googleId: string,
+  client: PoolClient | Pool = db
+): Promise<Omit<User, "password_hash">> => {
+  const queryString = `
+    UPDATE users
+    SET google_id = $1, updated_at = NOW()
+    WHERE user_id = $2 AND deleted_at IS NULL
+    RETURNING *;
+  `;
+
+  try {
+    const result = await client.query(queryString, [googleId, userId]);
+    if (result.rows.length === 0) {
+      throw { status: 404, msg: "User not found" };
+    }
+    return excludePasswordHash(result.rows[0]);
+  } catch (err: any) {
+    if (err.code === "23505") {
+      throw { status: 409, msg: "Google account already linked to another user" };
+    }
+    throw err;
+  }
+};
+
+export const setAuthProvider = async (
+  userId: string,
+  provider: AuthProvider,
+  client: PoolClient | Pool = db
+): Promise<Omit<User, "password_hash">> => {
+  const queryString = `
+    UPDATE users
+    SET auth_provider = $1, updated_at = NOW()
+    WHERE user_id = $2 AND deleted_at IS NULL
+    RETURNING *;
+  `;
+
+  try {
+    const result = await client.query(queryString, [provider, userId]);
+    if (result.rows.length === 0) {
+      throw { status: 404, msg: "User not found" };
+    }
+    return excludePasswordHash(result.rows[0]);
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const createGoogleUser = async (
+  email: string,
+  googleId: string,
+  client: PoolClient | Pool = db
+): Promise<Omit<User, "password_hash">> => {
+  const queryString = `
+    INSERT INTO users
+    (email, google_id, auth_provider, email_verified, is_active)
+    VALUES ($1, $2, 'google', true, true)
+    RETURNING *;
+  `;
+
+  try {
+    const result = await client.query(queryString, [email, googleId]);
+    return excludePasswordHash(result.rows[0]);
+  } catch (err: any) {
+    if (err.code === "23505") {
+      if (err.constraint?.includes("google_id")) {
+        throw { status: 409, msg: "Google account already linked to another user" };
+      }
+      throw { status: 409, msg: "Email already exists" };
+    }
+    throw err;
+  }
+};
+
+export const unlinkGoogleAccount = async (
+  userId: string,
+  client: PoolClient | Pool = db
+): Promise<Omit<User, "password_hash">> => {
+  const queryString = `
+    UPDATE users
+    SET google_id = NULL, auth_provider = 'local', updated_at = NOW()
+    WHERE user_id = $1 AND deleted_at IS NULL
+    RETURNING *;
+  `;
+
+  try {
+    const result = await client.query(queryString, [userId]);
+    if (result.rows.length === 0) {
+      throw { status: 404, msg: "User not found" };
+    }
+    return excludePasswordHash(result.rows[0]);
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const getUserWithMfaStatus = async (
+  email: string
+): Promise<(User & { mfa_enabled: boolean }) | null> => {
+  const queryString = `
+    SELECT * FROM users
+    WHERE email = $1 AND deleted_at IS NULL;
+  `;
+
+  try {
+    const result = await db.query(queryString, [email]);
+    if (result.rows.length === 0) {
+      return null;
+    }
+    return result.rows[0];
   } catch (err) {
     throw err;
   }

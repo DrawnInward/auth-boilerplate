@@ -5,9 +5,14 @@ export const parseCookies = (
 
   if (cookieString) {
     cookieString.split("; ").forEach((cookie) => {
-      const [key, value] = cookie.split("=");
-      if (key && value) {
-        cookies[key] = value;
+      const index = cookie.indexOf("=");
+      if (index > -1) {
+        const key = cookie.substring(0, index);
+        const value = cookie.substring(index + 1);
+        if (key && value) {
+          // URL-decode the value (Express encodes cookie values)
+          cookies[key] = decodeURIComponent(value);
+        }
       }
     });
   }

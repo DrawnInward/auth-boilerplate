@@ -33,6 +33,7 @@ async function seed({
 
   try {
     log("Dropping existing tables...");
+    await db.query("DROP TABLE IF EXISTS mfa_backup_codes CASCADE");
     await db.query("DROP TABLE IF EXISTS invitations CASCADE");
     await db.query("DROP TABLE IF EXISTS organization_members CASCADE");
     await db.query("DROP TABLE IF EXISTS organizations CASCADE");
@@ -45,12 +46,16 @@ async function seed({
       CREATE TABLE users (
           user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           email VARCHAR(255) UNIQUE NOT NULL,
-          password_hash VARCHAR(255) NOT NULL,
+          password_hash VARCHAR(255),
           email_verified BOOLEAN DEFAULT false,
           deleted_at TIMESTAMPTZ NULL,
           is_active BOOLEAN DEFAULT true,
           deactivated_at TIMESTAMPTZ NULL,
           deactivated_by UUID NULL REFERENCES users(user_id),
+          mfa_enabled BOOLEAN DEFAULT false,
+          mfa_secret TEXT,
+          google_id VARCHAR(255) UNIQUE,
+          auth_provider VARCHAR(20) DEFAULT 'local' CHECK (auth_provider IN ('local', 'google', 'both')),
           created_at TIMESTAMPTZ DEFAULT NOW(),
           updated_at TIMESTAMPTZ DEFAULT NOW()
           );
@@ -68,6 +73,8 @@ async function seed({
           is_active BOOLEAN DEFAULT true,
           deactivated_at TIMESTAMPTZ NULL,
           deactivated_by UUID NULL REFERENCES admins(admin_id),
+          mfa_enabled BOOLEAN DEFAULT false,
+          mfa_secret TEXT,
           created_at TIMESTAMPTZ DEFAULT NOW(),
           updated_at TIMESTAMPTZ DEFAULT NOW()
           );
@@ -131,6 +138,18 @@ async function seed({
       );
     `);
 
+    log("Creating mfa_backup_codes table...");
+    await db.query(`
+      CREATE TABLE mfa_backup_codes (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        role_id UUID NOT NULL,
+        role_type VARCHAR(20) NOT NULL CHECK (role_type IN ('user', 'admin')),
+        code_hash VARCHAR(255) NOT NULL,
+        used_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+
     log("Creating indexes...");
     // User indexes
     await db.query(`CREATE INDEX idx_users_deleted_at ON users(deleted_at);`);
@@ -174,6 +193,14 @@ async function seed({
     );
     await db.query(
       `CREATE INDEX idx_invitations_org ON invitations(organization_id) WHERE organization_id IS NOT NULL;`,
+    );
+
+    // MFA and OAuth indexes
+    await db.query(
+      `CREATE INDEX idx_users_google_id ON users(google_id) WHERE google_id IS NOT NULL;`,
+    );
+    await db.query(
+      `CREATE INDEX idx_mfa_backup_codes_role ON mfa_backup_codes(role_id, role_type);`,
     );
 
     log("Inserting users...");

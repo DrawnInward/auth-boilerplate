@@ -17,8 +17,6 @@ import {
 import { sendSuccess, sendCreated } from "../../utils/responseUtils";
 import db from "../../database/db";
 
-// POST /api/admin/organizations
-// Create a new organization (admin specifies owner)
 export const createOrganizationHandler = async (
   req: Request,
   res: Response,
@@ -35,10 +33,8 @@ export const createOrganizationHandler = async (
       throw { status: 400, msg: "owner_id is required" };
     }
 
-    // Create the organization
     const newOrg = await createOrganization({ name, slug, owner_id }, client);
 
-    // Add the owner as member
     await addOrganizationMember(
       newOrg.id,
       { user_id: owner_id, role: "owner" },
@@ -57,8 +53,6 @@ export const createOrganizationHandler = async (
   }
 };
 
-// GET /api/admin/organizations
-// Get all organizations with optional filters
 export const getAllOrganizations = async (
   req: Request,
   res: Response,
@@ -87,8 +81,6 @@ export const getAllOrganizations = async (
   }
 };
 
-// GET /api/admin/organizations/stats
-// Get organization statistics
 export const getOrganizationStatsHandler = async (
   req: Request,
   res: Response,
@@ -103,8 +95,6 @@ export const getOrganizationStatsHandler = async (
   }
 };
 
-// GET /api/admin/organizations/:organizationId
-// Get a single organization by ID
 export const getOrganizationByIdHandler = async (
   req: Request,
   res: Response,
@@ -125,8 +115,6 @@ export const getOrganizationByIdHandler = async (
   }
 };
 
-// PUT /api/admin/organizations/:organizationId
-// Update an organization
 export const updateOrganization = async (
   req: Request,
   res: Response,
@@ -148,8 +136,6 @@ export const updateOrganization = async (
   }
 };
 
-// DELETE /api/admin/organizations/:organizationId
-// Delete an organization
 export const deleteOrganizationHandler = async (
   req: Request,
   res: Response,
@@ -170,8 +156,6 @@ export const deleteOrganizationHandler = async (
   }
 };
 
-// GET /api/admin/organizations/:organizationId/members
-// Get organization members
 export const getOrganizationMembersHandler = async (
   req: Request,
   res: Response,
@@ -181,7 +165,6 @@ export const getOrganizationMembersHandler = async (
     const organizationId = req.params.organizationId as string;
     const { limit, offset } = req.query;
 
-    // Verify organization exists
     const org = await getOrganizationById(organizationId);
     if (!org) {
       throw { status: 404, msg: "Organization not found" };
@@ -199,8 +182,6 @@ export const getOrganizationMembersHandler = async (
   }
 };
 
-// POST /api/admin/organizations/:organizationId/members
-// Add a member to organization
 export const addOrganizationMemberHandler = async (
   req: Request,
   res: Response,
@@ -210,7 +191,6 @@ export const addOrganizationMemberHandler = async (
     const organizationId = req.params.organizationId as string;
     const { user_id, role } = req.body;
 
-    // Verify organization exists
     const org = await getOrganizationById(organizationId);
     if (!org) {
       throw { status: 404, msg: "Organization not found" };
@@ -227,8 +207,6 @@ export const addOrganizationMemberHandler = async (
   }
 };
 
-// PUT /api/admin/organizations/:organizationId/members/:userId
-// Update member role
 export const updateOrganizationMemberHandler = async (
   req: Request,
   res: Response,
@@ -239,7 +217,6 @@ export const updateOrganizationMemberHandler = async (
     const userId = req.params.userId as string;
     const { role } = req.body;
 
-    // Verify organization exists
     const org = await getOrganizationById(organizationId);
     if (!org) {
       throw { status: 404, msg: "Organization not found" };
@@ -253,8 +230,6 @@ export const updateOrganizationMemberHandler = async (
   }
 };
 
-// DELETE /api/admin/organizations/:organizationId/members/:userId
-// Remove a member from organization
 export const removeOrganizationMemberHandler = async (
   req: Request,
   res: Response,
@@ -264,7 +239,6 @@ export const removeOrganizationMemberHandler = async (
     const organizationId = req.params.organizationId as string;
     const userId = req.params.userId as string;
 
-    // Verify organization exists
     const org = await getOrganizationById(organizationId);
     if (!org) {
       throw { status: 404, msg: "Organization not found" };

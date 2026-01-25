@@ -9,3 +9,5 @@ export * from "./AccessJWTPayload";
 export * from "./RefreshJWTPayload";
 export * from "./PaginationOptions";
 export * from "./RouteParams";
+export * from "./Mfa";
+export * from "./OAuth";

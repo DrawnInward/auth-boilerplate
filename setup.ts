@@ -1,9 +1,14 @@
 import { generateApiKey } from "./src/utils/generateApiKey";
+import crypto from "crypto";
 import fs from "fs";
 import { exec } from "child_process";
 import { promisify } from "util";
 
 const execAsync = promisify(exec);
+
+function generateEncryptionKey(): string {
+  return crypto.randomBytes(32).toString("hex");
+}
 
 async function setup() {
   const PROJECT_NAME = process.env.PROJECT_NAME || 'app';
@@ -14,10 +19,19 @@ async function setup() {
   const refreshKey = generateApiKey();
   const userAccessKey = generateApiKey();
   const adminAccessKey = generateApiKey();
+  const mfaChallengeKey = generateApiKey();
+  const mfaEncryptionKey = generateEncryptionKey();
 
   const envContent = `REFRESH_KEY="${refreshKey}"
 USER_ACCESS_KEY="${userAccessKey}"
 ADMIN_ACCESS_KEY="${adminAccessKey}"
+MFA_CHALLENGE_KEY="${mfaChallengeKey}"
+MFA_ENCRYPTION_KEY="${mfaEncryptionKey}"
+
+# Google OAuth (configure these with your Google Cloud credentials)
+# GOOGLE_CLIENT_ID=""
+# GOOGLE_CLIENT_SECRET=""
+# GOOGLE_CALLBACK_URL="http://localhost:3000/api/auth/google/callback"
 `;
 
   fs.writeFileSync(".env", envContent);
@@ -69,6 +83,8 @@ PGPASSWORD=${DB_PASSWORD}
 
   console.log("\nSetup complete!");
   console.log("Your API keys have been generated in .env");
+  console.log("\nNote: To enable Google OAuth, configure GOOGLE_CLIENT_ID,");
+  console.log("GOOGLE_CLIENT_SECRET, and GOOGLE_CALLBACK_URL in your .env file.");
 }
 
 setup().catch(console.error);

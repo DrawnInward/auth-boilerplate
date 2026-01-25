@@ -461,3 +461,22 @@ export const getRootAdmin = async (): Promise<Omit<
     throw err;
   }
 };
+
+export const getAdminWithMfaStatus = async (
+  email: string
+): Promise<(Admin & { mfa_enabled: boolean }) | null> => {
+  const queryString = `
+    SELECT * FROM admins
+    WHERE email = $1 AND deleted_at IS NULL;
+  `;
+
+  try {
+    const result = await db.query(queryString, [email]);
+    if (result.rows.length === 0) {
+      return null;
+    }
+    return result.rows[0];
+  } catch (err) {
+    throw err;
+  }
+};

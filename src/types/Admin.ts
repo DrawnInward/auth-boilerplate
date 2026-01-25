@@ -10,6 +10,8 @@ export const adminSchema = z.object({
   is_active: z.boolean().optional(),
   deactivated_at: z.string().nullable().optional(),
   deactivated_by: z.string().uuid().nullable().optional(),
+  mfa_enabled: z.boolean().optional(),
+  mfa_secret: z.string().nullable().optional(),
   created_at: z.string().optional(),
   updated_at: z.string().optional(),
 });
