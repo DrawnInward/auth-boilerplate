@@ -4,7 +4,7 @@ import { getAppName, getFrontendUrl } from "../../config";
 
 export async function sendPasswordResetEmail(
   email: string,
-  token: string
+  token: string,
 ): Promise<void> {
   const resetUrl = `${getFrontendUrl()}/reset-password/${token}`;
   const appName = getAppName();

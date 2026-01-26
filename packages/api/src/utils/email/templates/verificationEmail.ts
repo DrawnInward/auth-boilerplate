@@ -4,7 +4,7 @@ import { getAppName, getFrontendUrl } from "../../config";
 
 export async function sendVerificationEmail(
   email: string,
-  token: string
+  token: string,
 ): Promise<void> {
   const verifyUrl = `${getFrontendUrl()}/verify-email/${token}`;
   const appName = getAppName();
