@@ -1,0 +1,23 @@
+{
+  "name": "@auth-boilerplate/shared",
+  "version": "1.0.0",
+  "description": "Shared types and schemas for auth-boilerplate",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "zod": "^4.0.5"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  }
+}
