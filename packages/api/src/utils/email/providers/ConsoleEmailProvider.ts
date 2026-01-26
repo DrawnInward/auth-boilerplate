@@ -2,7 +2,7 @@ import { EmailOptions, EmailProvider } from "../../../interfaces/email";
 
 export class ConsoleEmailProvider implements EmailProvider {
   async send(options: EmailOptions): Promise<void> {
-    if ((process.env.NODE_ENV = "test")) return;
+    if (process.env.NODE_ENV === "test") return;
     console.log("\n========== EMAIL ==========");
     console.log(`To: ${options.to}`);
     console.log(`Subject: ${options.subject}`);

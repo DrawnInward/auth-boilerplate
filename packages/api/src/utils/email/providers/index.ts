@@ -11,11 +11,6 @@ export { SendGridEmailProvider } from "./SendGridEmailProvider";
 export function getEmailProvider(): EmailProvider {
   const provider = process.env.EMAIL_PROVIDER || "console";
 
-  // Always use console in test mode
-  if (process.env.NODE_ENV === "test") {
-    return new ConsoleEmailProvider();
-  }
-
   // In development, default to console unless explicitly set
   if (process.env.NODE_ENV !== "production" && provider === "console") {
     return new ConsoleEmailProvider();

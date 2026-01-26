@@ -44,10 +44,7 @@ function createLimiter(config: RateLimitConfig): RateLimitRequestHandler | Reque
     standardHeaders: true,
     legacyHeaders: false,
     skipSuccessfulRequests: false,
-    keyGenerator: (req) => {
-      // Trust X-Forwarded-For if behind a proxy (configure based on setup)
-      return (req.ip || req.socket.remoteAddress || "unknown") as string;
-    },
+    validate: { xForwardedForHeader: false },
   });
 }
 

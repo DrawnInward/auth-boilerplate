@@ -12,7 +12,7 @@ async function startServer() {
     console.log("\n=== Server started successfully ===\n");
 
     const shutdown = async () => {
-      console.log("\nShutting down gracefully...");
+      console.log("\nShutting down...");
       server.close(() => {
         console.log("Server closed");
         process.exit(0);

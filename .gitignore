@@ -34,6 +34,7 @@ pids/
 dist/
 build/
 out/
+dist-cjs/
 
 # --------------------
 # Coverage / testing

@@ -1,13 +1,19 @@
 import { z } from "zod";
 
 export const mfaVerifySetupSchema = z.object({
-  code: z.string().length(6, "Code must be 6 digits").regex(/^\d+$/, "Code must contain only digits"),
+  code: z
+    .string()
+    .length(6, "Code must be 6 digits")
+    .regex(/^\d+$/, "Code must contain only digits"),
 });
 
 export type MfaVerifySetupDto = z.infer<typeof mfaVerifySetupSchema>;
 
 export const mfaVerifySchema = z.object({
-  code: z.string().length(6, "Code must be 6 digits").regex(/^\d+$/, "Code must contain only digits"),
+  code: z
+    .string()
+    .length(6, "Code must be 6 digits")
+    .regex(/^\d+$/, "Code must contain only digits"),
 });
 
 export type MfaVerifyDto = z.infer<typeof mfaVerifySchema>;
@@ -35,4 +41,14 @@ export const mfaBackupCodesResponseSchema = z.object({
   backup_codes: z.array(z.string()),
 });
 
-export type MfaBackupCodesResponse = z.infer<typeof mfaBackupCodesResponseSchema>;
+export type MfaBackupCodesResponse = z.infer<
+  typeof mfaBackupCodesResponseSchema
+>;
+
+export const MfaRequiredResponseSchema = z.object({
+  status: z.string(),
+  mfa_required: z.boolean(),
+  masseag: z.string(),
+});
+
+export type MfaRequiredResponse = z.infer<typeof MfaRequiredResponseSchema>;
