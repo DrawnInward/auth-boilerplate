@@ -9,7 +9,7 @@ export async function sendOrgInviteEmail(
   role: string,
   inviterEmail?: string
 ): Promise<void> {
-  const acceptUrl = `${getFrontendUrl()}/accept-invite/${token}`;
+  const acceptUrl = `${getFrontendUrl()}/invitations/${token}`;
   const appName = getAppName();
 
   const inviterText = inviterEmail ? `${inviterEmail} has` : "You have been";

@@ -84,7 +84,10 @@ export const getOrganization = async (
   next: NextFunction,
 ) => {
   try {
-    const organization = req.organization;
+    const organization = {
+      ...req.organization,
+      role: req.organizationMembership?.role,
+    };
 
     return sendSuccess(
       res,

@@ -42,7 +42,7 @@ export const setup = async (
 
     await setMfaSecret(role_id, "user", secret);
 
-    return sendSuccess(res, { qrCode: qrCodeDataUrl }, "MFA setup initiated");
+    return sendSuccess(res, { qr_code: qrCodeDataUrl }, "MFA setup initiated");
   } catch (error) {
     next(error);
   }

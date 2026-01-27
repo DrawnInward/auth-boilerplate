@@ -104,7 +104,7 @@ export function OrganizationDetailPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-2xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2">
@@ -152,13 +152,13 @@ export function OrganizationDetailPage() {
 
         <TabsContent value="members">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
                 <CardTitle>Members</CardTitle>
                 <CardDescription>Manage organization members</CardDescription>
               </div>
               {canManage && (
-                <Button onClick={() => setInviteModalOpen(true)}>Invite Member</Button>
+                <Button onClick={() => setInviteModalOpen(true)} className="w-full sm:w-auto">Invite Member</Button>
               )}
             </CardHeader>
             <CardContent>
@@ -170,12 +170,12 @@ export function OrganizationDetailPage() {
         {canManage && (
           <TabsContent value="invitations">
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
+              <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
                   <CardTitle>Pending Invitations</CardTitle>
                   <CardDescription>Manage pending invitations</CardDescription>
                 </div>
-                <Button onClick={() => setInviteModalOpen(true)}>Send Invitation</Button>
+                <Button onClick={() => setInviteModalOpen(true)} className="w-full sm:w-auto">Send Invitation</Button>
               </CardHeader>
               <CardContent>
                 <InvitationsList orgId={id!} />
