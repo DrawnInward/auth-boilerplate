@@ -5,3 +5,4 @@ export { VerifyEmailPage } from "./VerifyEmailPage";
 export { CompleteRegistrationPage } from "./CompleteRegistrationPage";
 export { ForgotPasswordPage } from "./ForgotPasswordPage";
 export { ResetPasswordPage } from "./ResetPasswordPage";
+export { ConfirmEmailChangePage } from "./ConfirmEmailChangePage";

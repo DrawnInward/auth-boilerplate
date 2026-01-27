@@ -97,6 +97,60 @@ describe("Invitation Model CRUD Operations", () => {
       expect(token).toBeDefined();
     });
 
+    it("should create an email_change invitation with required fields", async () => {
+      const { invitation, token } = await createInvitation({
+        email: "test@example.com",
+        type: "email_change",
+        new_email: "newemail@example.com",
+        user_id: getUserUuid(1),
+      });
+
+      expect(invitation).toBeDefined();
+      expect(invitation.type).toBe("email_change");
+      expect(invitation.email).toBe("test@example.com");
+      expect(invitation.new_email).toBe("newemail@example.com");
+      expect(invitation.user_id).toBe(getUserUuid(1));
+      expect(invitation.is_existing_user).toBe(true);
+      expect(token).toBeDefined();
+    });
+
+    it("should throw error for email_change without new_email", async () => {
+      await expect(
+        createInvitation({
+          email: "test@example.com",
+          type: "email_change",
+          user_id: getUserUuid(1),
+        })
+      ).rejects.toMatchObject({
+        status: 400,
+        msg: "Email change requires new_email and user_id",
+      });
+    });
+
+    it("should throw error for email_change without user_id", async () => {
+      await expect(
+        createInvitation({
+          email: "test@example.com",
+          type: "email_change",
+          new_email: "newemail@example.com",
+        })
+      ).rejects.toMatchObject({
+        status: 400,
+        msg: "Email change requires new_email and user_id",
+      });
+    });
+
+    it("should lowercase new_email for email_change", async () => {
+      const { invitation } = await createInvitation({
+        email: "test@example.com",
+        type: "email_change",
+        new_email: "UPPERCASE@EXAMPLE.COM",
+        user_id: getUserUuid(1),
+      });
+
+      expect(invitation.new_email).toBe("uppercase@example.com");
+    });
+
     it("should detect existing user when creating invitation", async () => {
       const { invitation } = await createInvitation({
         email: "test@example.com", // Existing user
@@ -258,6 +312,34 @@ describe("Invitation Model CRUD Operations", () => {
       );
       expect(pending.length).toBeGreaterThanOrEqual(1);
     });
+
+    it("should invalidate pending email_change invitations", async () => {
+      await createInvitation({
+        email: "invalidatechange@example.com",
+        type: "email_change",
+        new_email: "new1@example.com",
+        user_id: getUserUuid(1),
+      });
+      await createInvitation({
+        email: "invalidatechange@example.com",
+        type: "email_change",
+        new_email: "new2@example.com",
+        user_id: getUserUuid(1),
+      });
+
+      const count = await invalidatePendingInvitations(
+        "invalidatechange@example.com",
+        "email_change"
+      );
+
+      expect(count).toBeGreaterThanOrEqual(2);
+
+      const pending = await getPendingInvitationsForEmail(
+        "invalidatechange@example.com",
+        "email_change"
+      );
+      expect(pending.length).toBe(0);
+    });
   });
 
   describe("listInvitationsByOrganization", () => {
@@ -399,6 +481,36 @@ describe("Invitation Model CRUD Operations", () => {
       ).rejects.toMatchObject({
         status: 404,
         msg: "Invalid or expired invitation",
+      });
+    });
+
+    it("should validate email_change token with correct type", async () => {
+      const { token } = await createInvitation({
+        email: "test@example.com",
+        type: "email_change",
+        new_email: "validatechange@example.com",
+        user_id: getUserUuid(1),
+      });
+
+      const invitation = await validateInvitationToken(token, "email_change");
+      expect(invitation).toBeDefined();
+      expect(invitation.type).toBe("email_change");
+      expect(invitation.new_email).toBe("validatechange@example.com");
+    });
+
+    it("should reject email_change token when expecting password_reset", async () => {
+      const { token } = await createInvitation({
+        email: "test@example.com",
+        type: "email_change",
+        new_email: "wrongtypechange@example.com",
+        user_id: getUserUuid(1),
+      });
+
+      await expect(
+        validateInvitationToken(token, "password_reset")
+      ).rejects.toMatchObject({
+        status: 400,
+        msg: "Invalid invitation type",
       });
     });
   });

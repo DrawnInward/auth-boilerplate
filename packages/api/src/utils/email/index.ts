@@ -6,6 +6,8 @@ export {
   sendPasswordResetEmail,
   sendOrgInviteEmail,
   sendMfaDisabledEmail,
-  sendMfaEnabledEmail
+  sendMfaEnabledEmail,
+  sendEmailChangeVerificationEmail,
+  sendEmailChangeNotificationEmail,
 } from "./templates";
 export { EmailOptions, ClickableLink } from "../../interfaces/email";

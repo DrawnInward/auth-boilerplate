@@ -13,6 +13,7 @@ import {
   setPasswordSchema,
   changePasswordSchema,
   updateProfileSchema,
+  requestEmailChangeSchema,
 } from "../../types";
 import {
   login,
@@ -28,6 +29,8 @@ import {
   getMe,
   changePassword,
   updateProfile,
+  requestEmailChange,
+  confirmEmailChange,
 } from "../../controllers/user/auth";
 
 const router = express.Router();
@@ -56,6 +59,10 @@ router.post("/mfa/login-backup", authLimiter, validateBody(mfaBackupVerifySchema
 router.get("/me", authoriseUser(["user"]), getMe);
 router.put("/change-password", authoriseUser(["user"]), validateBody(changePasswordSchema), changePassword);
 router.put("/profile", authoriseUser(["user"]), validateBody(updateProfileSchema), updateProfile);
+router.post("/request-email-change", authoriseUser(["user"]), validateBody(requestEmailChangeSchema), requestEmailChange);
+
+// Email change confirmation (public route with token)
+router.post("/confirm-email-change/:token", authLimiter, confirmEmailChange);
 
 // Set password for OAuth users
 router.post("/set-password", authoriseUser(["user"]), validateBody(setPasswordSchema), setPassword);

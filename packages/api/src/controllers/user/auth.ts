@@ -26,6 +26,8 @@ import { clearAuthCookies } from "../../utils/clearAuthCookies";
 import {
   sendVerificationEmail,
   sendPasswordResetEmail,
+  sendEmailChangeVerificationEmail,
+  sendEmailChangeNotificationEmail,
 } from "../../utils/email";
 import {
   createMfaChallengeToken,
@@ -627,7 +629,7 @@ export const changePassword = async (
 };
 
 // PUT /api/auth/profile
-// Update user profile (email)
+// Update user profile (placeholder for future profile fields)
 export const updateProfile = async (
   req: RequestWithUser,
   res: Response,
@@ -635,37 +637,140 @@ export const updateProfile = async (
 ) => {
   try {
     const { role_id } = req.user!;
-    const { email } = req.body;
-
-    if (email) {
-      // Check if email is already taken by another user
-      const existingUser = await getUser(email);
-      if (existingUser && existingUser.user_id !== role_id) {
-        throw { status: 409, msg: "Email already in use" };
-      }
-
-      // Update email
-      await db.query(
-        "UPDATE users SET email = $1, updated_at = NOW() WHERE user_id = $2",
-        [email, role_id]
-      );
-    }
 
     const user = await getUserById(role_id);
+    if (!user) {
+      throw { status: 404, msg: "User not found" };
+    }
 
     return sendSuccess(
       res,
       {
-        user_id: user!.user_id,
-        email: user!.email,
-        email_verified: user!.email_verified,
-        is_active: user!.is_active,
-        mfa_enabled: user!.mfa_enabled,
-        auth_provider: user!.auth_provider,
+        user_id: user.user_id,
+        email: user.email,
+        email_verified: user.email_verified,
+        is_active: user.is_active,
+        mfa_enabled: user.mfa_enabled,
+        auth_provider: user.auth_provider,
       },
-      "Profile updated successfully"
+      "Profile retrieved successfully"
     );
   } catch (error) {
     next(error);
+  }
+};
+
+// POST /api/auth/request-email-change
+// Request email change (requires password verification)
+export const requestEmailChange = async (
+  req: RequestWithUser,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { role_id } = req.user!;
+    const { newEmail, password } = req.body;
+
+    const user = await getUserWithPasswordById(role_id);
+    if (!user) {
+      throw { status: 404, msg: "User not found" };
+    }
+
+    if (!user.password_hash) {
+      throw { status: 400, msg: "Password not set. Please set a password first." };
+    }
+
+    // Verify password
+    const passwordMatch = await bcrypt.compare(password, user.password_hash);
+    if (!passwordMatch) {
+      throw { status: 401, msg: "Incorrect password" };
+    }
+
+    // Check if new email is the same as current
+    if (user.email?.toLowerCase() === newEmail.toLowerCase()) {
+      throw { status: 400, msg: "New email is the same as current email" };
+    }
+
+    // Check if new email is already taken
+    const existingUser = await getUser(newEmail);
+    if (existingUser) {
+      throw { status: 409, msg: "Email already in use" };
+    }
+
+    // Invalidate any existing email change invitations for this user
+    await invalidatePendingInvitations(user.email!, "email_change");
+
+    // Create email change invitation
+    const { token } = await createInvitation({
+      email: user.email!,
+      type: "email_change",
+      new_email: newEmail,
+      user_id: role_id,
+    });
+
+    // Send verification email to new address
+    await sendEmailChangeVerificationEmail(newEmail, token);
+
+    // Send notification email to old address
+    await sendEmailChangeNotificationEmail(user.email!, newEmail);
+
+    return sendSuccess(
+      res,
+      { newEmail },
+      "Verification email sent to your new email address"
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /api/auth/confirm-email-change/:token
+// Confirm email change with token (auto-confirms on valid token)
+export const confirmEmailChange = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const client = await db.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const token = req.params.token as string;
+
+    // Validate token
+    const invitation = await validateInvitationToken(token, "email_change", client);
+
+    if (!invitation.new_email || !invitation.user_id) {
+      throw { status: 400, msg: "Invalid email change invitation" };
+    }
+
+    // Check if new email is still available
+    const existingUser = await getUser(invitation.new_email);
+    if (existingUser) {
+      throw { status: 409, msg: "Email is no longer available" };
+    }
+
+    // Update user's email
+    await client.query(
+      "UPDATE users SET email = $1, updated_at = NOW() WHERE user_id = $2",
+      [invitation.new_email.toLowerCase(), invitation.user_id]
+    );
+
+    // Mark invitation as used
+    await markInvitationUsed(invitation.id!, client);
+
+    await client.query("COMMIT");
+
+    return sendSuccess(
+      res,
+      { email: invitation.new_email },
+      "Email changed successfully"
+    );
+  } catch (error) {
+    await client.query("ROLLBACK");
+    next(error);
+  } finally {
+    client.release();
   }
 };

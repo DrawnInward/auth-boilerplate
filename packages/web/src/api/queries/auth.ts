@@ -11,7 +11,8 @@ import type {
   ResetPasswordDto,
   MfaVerifyDto,
   MfaBackupVerifyDto,
-  MfaRequiredResponse
+  MfaRequiredResponse,
+  RequestEmailChangeDto,
 } from "@auth-boilerplate/shared";
 
 interface AuthResponse {
@@ -135,6 +136,30 @@ export function useUpdateProfile() {
   return useMutation({
     mutationFn: (data: UpdateProfileDto) =>
       api.put<AuthResponse>("/auth/profile", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["me"] });
+    },
+  });
+}
+
+export function useRequestEmailChange() {
+  return useMutation({
+    mutationFn: (data: RequestEmailChangeDto) =>
+      api.post<{ status: string; message: string; data: { newEmail: string } }>(
+        "/auth/request-email-change",
+        data
+      ),
+  });
+}
+
+export function useConfirmEmailChange() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (token: string) =>
+      api.post<{ status: string; message: string; data: { email: string } }>(
+        `/auth/confirm-email-change/${token}`
+      ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["me"] });
     },

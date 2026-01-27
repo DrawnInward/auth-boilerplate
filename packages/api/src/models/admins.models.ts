@@ -12,7 +12,7 @@ import { excludePasswordHash } from "../utils";
 
 export const createAdmin = async (
   newAdmin: CreateAdminDto,
-  client: PoolClient | Pool = db
+  client: PoolClient | Pool = db,
 ): Promise<Omit<Admin, "password_hash">> => {
   if (!newAdmin.email || !newAdmin.password_hash) {
     throw { status: 400, msg: "Email and password_hash are required" };
@@ -58,7 +58,7 @@ export const createAdmin = async (
 
 export const getAdmin = async (
   email: string,
-  options: { includeSoftDeleted?: boolean } = {}
+  options: { includeSoftDeleted?: boolean } = {},
 ): Promise<Omit<Admin, "password_hash"> | null> => {
   let queryString = `
     SELECT * FROM admins
@@ -81,7 +81,7 @@ export const getAdmin = async (
 };
 
 export const getAdminById = async (
-  adminId: string
+  adminId: string,
 ): Promise<Omit<Admin, "password_hash"> | null> => {
   const queryString = `
     SELECT * FROM admins
@@ -101,7 +101,7 @@ export const getAdminById = async (
 
 export const getAdmins = async (
   filters: GetAdminsOptions = {},
-  pagination: PaginationOptions = {}
+  pagination: PaginationOptions = {},
 ): Promise<Omit<Admin, "password_hash">[]> => {
   let queryString = `
     SELECT * FROM admins
@@ -151,7 +151,7 @@ export const getAdmins = async (
 };
 
 export const getAdminWithPassword = async (
-  email: string
+  email: string,
 ): Promise<Admin | null> => {
   const queryString = `
     SELECT * FROM admins
@@ -172,7 +172,7 @@ export const getAdminWithPassword = async (
 export const modifyAdmin = async (
   adminId: string,
   detailsToUpdate: UpdateAdminDto,
-  client: PoolClient | Pool = db
+  client: PoolClient | Pool = db,
 ): Promise<Omit<Admin, "password_hash">> => {
   if ("password_hash" in detailsToUpdate) {
     throw {
@@ -253,7 +253,7 @@ export const modifyAdmin = async (
 export const updateAdminPassword = async (
   adminId: string,
   newPasswordHash: string,
-  client: PoolClient | Pool = db
+  client: PoolClient | Pool = db,
 ): Promise<boolean> => {
   const queryString = `
     UPDATE admins
@@ -275,7 +275,7 @@ export const updateAdminPassword = async (
 
 export const deleteAdmin = async (
   adminId: string,
-  client: PoolClient | Pool = db
+  client: PoolClient | Pool = db,
 ): Promise<Omit<Admin, "password_hash">> => {
   const checkQuery = `
     SELECT deleted_at, root FROM admins WHERE admin_id = $1;
@@ -319,7 +319,7 @@ export const deleteAdmin = async (
 
 export const activateAdmin = async (
   adminId: string,
-  client: PoolClient | Pool = db
+  client: PoolClient | Pool = db,
 ): Promise<Omit<Admin, "password_hash">> => {
   const queryString = `
     UPDATE admins
@@ -345,7 +345,7 @@ export const activateAdmin = async (
 export const deactivateAdmin = async (
   adminId: string,
   deactivatorId: string,
-  client: PoolClient | Pool = db
+  client: PoolClient | Pool = db,
 ): Promise<Omit<Admin, "password_hash">> => {
   const checkRootQuery = `
     SELECT root FROM admins 
@@ -390,7 +390,7 @@ export const deactivateAdmin = async (
 
 export const verifyAdminEmail = async (
   adminId: string,
-  client: PoolClient | Pool = db
+  client: PoolClient | Pool = db,
 ): Promise<Omit<Admin, "password_hash">> => {
   const queryString = `
     UPDATE admins
@@ -463,7 +463,7 @@ export const getRootAdmin = async (): Promise<Omit<
 };
 
 export const getAdminWithMfaStatus = async (
-  email: string
+  email: string,
 ): Promise<(Admin & { mfa_enabled: boolean }) | null> => {
   const queryString = `
     SELECT * FROM admins

@@ -4,6 +4,7 @@ export const invitationTypeSchema = z.enum([
   "registration",
   "org_invite",
   "password_reset",
+  "email_change",
 ]);
 
 export type InvitationType = z.infer<typeof invitationTypeSchema>;
@@ -21,6 +22,8 @@ export const invitationSchema = z.object({
   role: orgInviteRoleSchema.nullable().optional(),
   invited_by: z.string().uuid().nullable().optional(),
   is_existing_user: z.boolean().optional(),
+  new_email: z.string().email().nullable().optional(),
+  user_id: z.string().uuid().nullable().optional(),
   expires_at: z.string(),
   used_at: z.string().nullable().optional(),
   created_at: z.string().optional(),
@@ -77,3 +80,10 @@ export const publicInvitationSchema = z.object({
 });
 
 export type PublicInvitation = z.infer<typeof publicInvitationSchema>;
+
+export const requestEmailChangeSchema = z.object({
+  newEmail: z.string().email("Invalid email address"),
+  password: z.string().min(1, "Password is required"),
+});
+
+export type RequestEmailChangeDto = z.infer<typeof requestEmailChangeSchema>;

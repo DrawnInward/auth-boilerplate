@@ -9,18 +9,26 @@ const EXPIRY_TIMES: Record<InvitationType, number> = {
   registration: 24 * 60 * 60 * 1000, // 24 hours
   org_invite: 7 * 24 * 60 * 60 * 1000, // 7 days
   password_reset: 60 * 60 * 1000, // 1 hour
+  email_change: 24 * 60 * 60 * 1000, // 24 hours
 };
 
 export const createInvitation = async (
   data: CreateInvitationDto,
   client: PoolClient | Pool = db,
 ): Promise<{ invitation: Invitation; token: string }> => {
-  const { email, type, organization_id, role, invited_by } = data;
+  const { email, type, organization_id, role, invited_by, new_email, user_id } = data;
 
   if (type === "org_invite" && (!organization_id || !role)) {
     throw {
       status: 400,
       msg: "Organization invite requires organization_id and role",
+    };
+  }
+
+  if (type === "email_change" && (!new_email || !user_id)) {
+    throw {
+      status: 400,
+      msg: "Email change requires new_email and user_id",
     };
   }
 
@@ -38,8 +46,8 @@ export const createInvitation = async (
 
   const queryString = `
     INSERT INTO invitations
-    (email, token_hash, type, organization_id, role, invited_by, is_existing_user, expires_at)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    (email, token_hash, type, organization_id, role, invited_by, is_existing_user, new_email, user_id, expires_at)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
     RETURNING *;
   `;
 
@@ -51,6 +59,8 @@ export const createInvitation = async (
     role || null,
     invited_by || null,
     isExistingUser,
+    new_email?.toLowerCase() || null,
+    user_id || null,
     expiresAt,
   ];
 

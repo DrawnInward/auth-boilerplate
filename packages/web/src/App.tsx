@@ -18,6 +18,7 @@ import {
   CompleteRegistrationPage,
   ForgotPasswordPage,
   ResetPasswordPage,
+  ConfirmEmailChangePage,
 } from "@/features/auth/pages";
 
 // User pages
@@ -61,6 +62,7 @@ function UserRoutes() {
         <Route path="/complete-registration" element={<CompleteRegistrationPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
+        <Route path="/confirm-email-change/:token" element={<ConfirmEmailChangePage />} />
         <Route path="/mfa-verify" element={<MfaVerifyPage />} />
         <Route path="/invitations/:token" element={<AcceptInvitePage />} />
       </Route>
