@@ -9,5 +9,6 @@ export {
   sendMfaEnabledEmail,
   sendEmailChangeVerificationEmail,
   sendEmailChangeNotificationEmail,
+  sendAdminInviteEmail,
 } from "./templates";
 export { EmailOptions, ClickableLink } from "../../interfaces/email";

@@ -5,6 +5,7 @@ import {
   requireOrgAdmin,
   requireOrgOwner,
 } from "../../middleware/organizationMiddleware";
+import { canCreateOrg } from "../../middleware/canCreateOrg";
 import { validateParams, validateBody } from "../../middleware/validate";
 import {
   organizationParamsSchema,
@@ -46,6 +47,7 @@ router.get("/", authoriseUser(["user"]), getMyOrganizations);
 router.post(
   "/",
   authoriseUser(["user"]),
+  canCreateOrg,
   validateBody(createOrganizationDtoSchema),
   createOrganizationHandler
 );

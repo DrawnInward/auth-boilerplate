@@ -5,6 +5,7 @@ export const invitationTypeSchema = z.enum([
   "org_invite",
   "password_reset",
   "email_change",
+  "admin_invite",
 ]);
 
 export const orgInviteRoleSchema = z.enum(["admin", "member", "viewer"]);

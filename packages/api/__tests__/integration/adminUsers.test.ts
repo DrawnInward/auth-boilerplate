@@ -3,8 +3,34 @@ import app from "../../src/app";
 import db from "../../src/database/db";
 import seed from "../../src/database/seed";
 import { testAdmins, testUsers } from "../../src/database/test-data";
+import { createUser } from "../../src/models/users.models";
 
 require("dotenv").config({ quiet: true });
+
+const getInvitationToken = async (email: string): Promise<string | null> => {
+  const result = await db.query(
+    `SELECT token_hash FROM invitations
+     WHERE email = $1 AND used_at IS NULL
+     ORDER BY created_at DESC LIMIT 1`,
+    [email.toLowerCase()],
+  );
+  return result.rows[0]?.token_hash || null;
+};
+
+const getInvitationByEmail = async (
+  email: string,
+  type?: string,
+): Promise<any> => {
+  let query = `SELECT * FROM invitations WHERE email = $1 AND used_at IS NULL`;
+  const values: any[] = [email.toLowerCase()];
+  if (type) {
+    query += ` AND type = $2`;
+    values.push(type);
+  }
+  query += ` ORDER BY created_at DESC LIMIT 1`;
+  const result = await db.query(query, values);
+  return result.rows[0] || null;
+};
 
 describe("Admin User Management Integration Tests", () => {
   let adminAccessToken: string;
@@ -32,98 +58,72 @@ describe("Admin User Management Integration Tests", () => {
   });
 
   describe("POST /api/admin/users", () => {
-    it("should create a new user with valid data", async () => {
-      const newUser = {
-        email: "newuser@test.com",
-        password: "TestPassword123",
-        email_verified: false,
-        is_active: true,
-      };
-
+    it("should create an invitation for a new user", async () => {
       const response = await request(app)
         .post("/api/admin/users")
         .set("Cookie", adminCookies)
-        .send(newUser)
+        .send({ email: "newuser@test.com" })
         .expect(201);
 
       expect(response.body.status).toBe("success");
-      expect(response.body.message).toBe("User created successfully");
-      expect(response.body.data).toHaveProperty("user_id");
-      expect(response.body.data.email).toBe(newUser.email);
-      expect(response.body.data.is_active).toBe(newUser.is_active);
-      expect(response.body.data).not.toHaveProperty("password");
-      expect(response.body.data).not.toHaveProperty("password_hash");
+      expect(response.body.message).toBe("Invitation sent successfully");
+      expect(response.body.data.email).toBe("newuser@test.com");
+      expect(response.body.data).toHaveProperty("expires_at");
+
+      // Verify invitation was created in database
+      const invitation = await getInvitationByEmail(
+        "newuser@test.com",
+        "admin_invite",
+      );
+      expect(invitation).not.toBeNull();
+      expect(invitation.type).toBe("admin_invite");
     });
 
-    it("should create a user with minimal required fields", async () => {
-      const newUser = {
-        email: "minimal@test.com",
-        password: "Password1",
-      };
-
+    it("should reject duplicate email for existing user", async () => {
       const response = await request(app)
         .post("/api/admin/users")
         .set("Cookie", adminCookies)
-        .send(newUser)
-        .expect(201);
-
-      expect(response.body.status).toBe("success");
-      expect(response.body.data.email).toBe(newUser.email);
-      expect(response.body.data.email_verified).toBe(false); // default
-      expect(response.body.data.is_active).toBe(true); // default
-    });
-
-    it("should reject duplicate email", async () => {
-      const duplicateUser = {
-        email: testUsers[0].email,
-        password: "Password1",
-      };
-
-      const response = await request(app)
-        .post("/api/admin/users")
-        .set("Cookie", adminCookies)
-        .send(duplicateUser)
+        .send({ email: testUsers[0].email })
         .expect(409);
 
       expect(response.body.status).toBe("error");
       expect(response.body.message).toBe("Email already exists");
     });
 
-    it("should reject missing password", async () => {
-      const response = await request(app)
+    it("should invalidate previous pending invitations", async () => {
+      // Create first invitation
+      await request(app)
         .post("/api/admin/users")
         .set("Cookie", adminCookies)
-        .send({
-          email: "nopassword@test.com",
-        })
-        .expect(400);
+        .send({ email: "duplicate-invite@test.com" })
+        .expect(201);
 
-      expect(response.body.status).toBe("error");
-      expect(response.body.message).toBe("Password is required");
+      const firstInvitation = await getInvitationByEmail(
+        "duplicate-invite@test.com",
+        "admin_invite",
+      );
+      expect(firstInvitation).not.toBeNull();
+
+      // Create second invitation for same email
+      await request(app)
+        .post("/api/admin/users")
+        .set("Cookie", adminCookies)
+        .send({ email: "duplicate-invite@test.com" })
+        .expect(201);
+
+      // Check first invitation was marked as used
+      const firstInviteAfter = await db.query(
+        "SELECT * FROM invitations WHERE id = $1",
+        [firstInvitation.id],
+      );
+      expect(firstInviteAfter.rows[0].used_at).not.toBeNull();
     });
 
     it("should reject invalid email format", async () => {
       const response = await request(app)
         .post("/api/admin/users")
         .set("Cookie", adminCookies)
-        .send({
-          email: "not-an-email",
-          password: "Password1",
-        })
-        .expect(400);
-
-      expect(response.body.status).toBe("error");
-      expect(response.body.message).toContain("validation");
-    });
-
-    it("should reject empty password", async () => {
-      const response = await request(app)
-        .post("/api/admin/users")
-        .set("Cookie", adminCookies)
-        .send({
-          email: "emptypass@test.com",
-          password: "",
-        })
+        .send({ email: "not-an-email" })
         .expect(400);
 
       expect(response.body.status).toBe("error");
@@ -133,39 +133,10 @@ describe("Admin User Management Integration Tests", () => {
     it("should reject request without authentication", async () => {
       const response = await request(app)
         .post("/api/admin/users")
-        .send({
-          email: "noauth@test.com",
-          password: "Password1",
-        })
+        .send({ email: "noauth@test.com" })
         .expect(401);
 
       expect(response.body.msg).toBe("Credentials missing");
-    });
-
-    it("should hash the password before storing", async () => {
-      const newUser = {
-        email: "hashtest@test.com",
-        password: "TestPassword123",
-      };
-
-      const response = await request(app)
-        .post("/api/admin/users")
-        .set("Cookie", adminCookies)
-        .send(newUser)
-        .expect(201);
-
-      // Password should not be in response
-      expect(response.body.data).not.toHaveProperty("password");
-      expect(response.body.data).not.toHaveProperty("password_hash");
-
-      // Verify in database that password is hashed
-      const dbUser = await db.query(
-        "SELECT password_hash FROM users WHERE email = $1",
-        [newUser.email]
-      );
-      expect(dbUser.rows[0].password_hash).toBeDefined();
-      expect(dbUser.rows[0].password_hash).not.toBe(newUser.password);
-      expect(dbUser.rows[0].password_hash).toMatch(/^\$2[aby]\$/); // bcrypt format
     });
   });
 
@@ -303,15 +274,16 @@ describe("Admin User Management Integration Tests", () => {
   describe("PUT /api/admin/users/:userId", () => {
     it("should update user email", async () => {
       // Create a user first
-      const createResponse = await request(app)
-        .post("/api/admin/users")
-        .set("Cookie", adminCookies)
-        .send({
-          email: "updatetest@test.com",
-          password: "Password1",
-        });
+      const createResponse = await createUser({
+        email: "updatetest@test.com",
+        password_hash:
+          "$2b$10$UOmUkN/DnL0BN0NX2.YXKeaKXCbmWSN0vWN0dD.bcDcbYPJiqI.Pm", // Hash of Password1,
+        email_verified: true,
+        is_active: true,
+        created_through: "admin_created",
+      });
 
-      const userId = createResponse.body.data.user_id;
+      const userId = createResponse.user_id;
 
       const response = await request(app)
         .put(`/api/admin/users/${userId}`)
@@ -326,40 +298,30 @@ describe("Admin User Management Integration Tests", () => {
       expect(response.body.data.email).toBe("updated@test.com");
     });
 
-    it("should update user password", async () => {
-      // Create a user first
-      const createResponse = await request(app)
-        .post("/api/admin/users")
-        .set("Cookie", adminCookies)
-        .send({
-          email: "passwordupdate@test.com",
-          password: "OldPassword123",
-        });
-
-      const userId = createResponse.body.data.user_id;
+    it("should send password reset email", async () => {
+      // Use an existing test user
+      const userId = testUsers[0].user_id;
 
       const response = await request(app)
-        .put(`/api/admin/users/reset-password/${userId}`)
+        .post(`/api/admin/users/reset-password/${userId}`)
         .set("Cookie", adminCookies)
-        .send({
-          password: "NewPassword456",
-        });
+        .expect(200);
+
       expect(response.body.status).toBe("success");
-      expect(response.body.data).not.toHaveProperty("password");
-      expect(response.body.data).not.toHaveProperty("password_hash");
+      expect(response.body.message).toBe("Password reset email sent");
+      expect(response.body.data).toHaveProperty("email");
+
+      // Verify password reset invitation was created
+      const invitation = await getInvitationByEmail(
+        testUsers[0].email,
+        "password_reset",
+      );
+      expect(invitation).not.toBeNull();
+      expect(invitation.type).toBe("password_reset");
     });
 
     it("should update is_active status", async () => {
-      // Create a user first
-      const createResponse = await request(app)
-        .post("/api/admin/users")
-        .set("Cookie", adminCookies)
-        .send({
-          email: "activetest@test.com",
-          password: "Password1",
-        });
-
-      const userId = createResponse.body.data.user_id;
+      const userId = testUsers[1].user_id;
 
       const response = await request(app)
         .put(`/api/admin/users/${userId}`)
@@ -371,19 +333,22 @@ describe("Admin User Management Integration Tests", () => {
 
       expect(response.body.status).toBe("success");
       expect(response.body.data.is_active).toBe(false);
+
+      // Reset for other tests
+      await request(app)
+        .put(`/api/admin/users/${userId}`)
+        .set("Cookie", adminCookies)
+        .send({ is_active: true });
     });
 
     it("should update multiple fields at once", async () => {
-      // Create a user first
-      const createResponse = await request(app)
-        .post("/api/admin/users")
-        .set("Cookie", adminCookies)
-        .send({
-          email: "multiupdate@test.com",
-          password: "Password1",
-        });
-
-      const userId = createResponse.body.data.user_id;
+      // Create a user directly in database for this test
+      const result = await db.query(
+        `INSERT INTO users (email, password_hash, email_verified, is_active)
+         VALUES ($1, $2, $3, $4) RETURNING user_id`,
+        ["multiupdate@test.com", "$2b$10$test", false, true],
+      );
+      const userId = result.rows[0].user_id;
 
       const response = await request(app)
         .put(`/api/admin/users/${userId}`)
@@ -416,29 +381,15 @@ describe("Admin User Management Integration Tests", () => {
     });
 
     it("should reject duplicate email", async () => {
-      // Create two users
-      const user1 = await request(app)
-        .post("/api/admin/users")
-        .set("Cookie", adminCookies)
-        .send({
-          email: "duplicate1@test.com",
-          password: "Password1",
-        });
+      // Use existing test users
+      const userId = testUsers[1].user_id;
 
-      await request(app)
-        .post("/api/admin/users")
-        .set("Cookie", adminCookies)
-        .send({
-          email: "duplicate2@test.com",
-          password: "Password1",
-        });
-
-      // Try to update user1 to have user2's email
+      // Try to update user to have another user's email
       const response = await request(app)
-        .put(`/api/admin/users/${user1.body.data.user_id}`)
+        .put(`/api/admin/users/${userId}`)
         .set("Cookie", adminCookies)
         .send({
-          email: "duplicate2@test.com",
+          email: testUsers[0].email,
         })
         .expect(409);
 
@@ -480,16 +431,13 @@ describe("Admin User Management Integration Tests", () => {
 
   describe("DELETE /api/admin/users/:userId", () => {
     it("should soft delete a user", async () => {
-      // Create a user first
-      const createResponse = await request(app)
-        .post("/api/admin/users")
-        .set("Cookie", adminCookies)
-        .send({
-          email: "deletetest@test.com",
-          password: "Password1",
-        });
-
-      const userId = createResponse.body.data.user_id;
+      // Create a user directly in database
+      const result = await db.query(
+        `INSERT INTO users (email, password_hash, email_verified, is_active)
+         VALUES ($1, $2, $3, $4) RETURNING user_id`,
+        ["deletetest@test.com", "$2b$10$test", true, true],
+      );
+      const userId = result.rows[0].user_id;
 
       const response = await request(app)
         .delete(`/api/admin/users/${userId}`)
@@ -507,7 +455,7 @@ describe("Admin User Management Integration Tests", () => {
         .set("Cookie", adminCookies);
 
       const deletedUser = listResponse.body.data.find(
-        (u: any) => u.user_id === userId
+        (u: any) => u.user_id === userId,
       );
       expect(deletedUser).toBeUndefined();
     });
@@ -524,16 +472,13 @@ describe("Admin User Management Integration Tests", () => {
     });
 
     it("should reject deleting already deleted user", async () => {
-      // Create and delete a user
-      const createResponse = await request(app)
-        .post("/api/admin/users")
-        .set("Cookie", adminCookies)
-        .send({
-          email: "doubledelete@test.com",
-          password: "Password1",
-        });
-
-      const userId = createResponse.body.data.user_id;
+      // Create a user directly in database
+      const result = await db.query(
+        `INSERT INTO users (email, password_hash, email_verified, is_active)
+         VALUES ($1, $2, $3, $4) RETURNING user_id`,
+        ["doubledelete@test.com", "$2b$10$test", true, true],
+      );
+      const userId = result.rows[0].user_id;
 
       await request(app)
         .delete(`/api/admin/users/${userId}`)
@@ -570,23 +515,62 @@ describe("Admin User Management Integration Tests", () => {
     });
   });
 
+  describe("Password Reset", () => {
+    it("should return 404 for non-existent user", async () => {
+      const fakeUuid = "00000000-0000-0000-0000-000000000000";
+      const response = await request(app)
+        .post(`/api/admin/users/reset-password/${fakeUuid}`)
+        .set("Cookie", adminCookies)
+        .expect(404);
+
+      expect(response.body.status).toBe("error");
+      expect(response.body.message).toBe("User not found");
+    });
+
+    it("should invalidate previous password reset invitations", async () => {
+      const userId = testUsers[0].user_id;
+
+      // Send first reset
+      await request(app)
+        .post(`/api/admin/users/reset-password/${userId}`)
+        .set("Cookie", adminCookies)
+        .expect(200);
+
+      const firstInvitation = await getInvitationByEmail(
+        testUsers[0].email,
+        "password_reset",
+      );
+      expect(firstInvitation).not.toBeNull();
+
+      // Send second reset
+      await request(app)
+        .post(`/api/admin/users/reset-password/${userId}`)
+        .set("Cookie", adminCookies)
+        .expect(200);
+
+      // Check first invitation was marked as used
+      const firstInviteAfter = await db.query(
+        "SELECT * FROM invitations WHERE id = $1",
+        [firstInvitation.id],
+      );
+      expect(firstInviteAfter.rows[0].used_at).not.toBeNull();
+    });
+  });
+
   describe("Security", () => {
     it("should never expose password_hash in any response", async () => {
-      const createResponse = await request(app)
+      const userId = testUsers[0].user_id;
+
+      // Check invite response (no password_hash expected in invitation)
+      const inviteResponse = await request(app)
         .post("/api/admin/users")
         .set("Cookie", adminCookies)
-        .send({
-          email: "securitytest@test.com",
-          password: "TestPassword123",
-        });
+        .send({ email: "securitytest@test.com" });
 
-      const userId = createResponse.body.data.user_id;
-
-      // Check create response
-      expect(JSON.stringify(createResponse.body)).not.toContain(
-        "password_hash"
+      expect(JSON.stringify(inviteResponse.body)).not.toContain(
+        "password_hash",
       );
-      expect(JSON.stringify(createResponse.body)).not.toContain("$2b$");
+      expect(JSON.stringify(inviteResponse.body)).not.toContain("$2b$");
 
       // Check get response
       const getResponse = await request(app)

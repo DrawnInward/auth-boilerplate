@@ -26,12 +26,11 @@ import { UserTable } from "../components";
 import { LoadingSpinner } from "@/components/shared";
 import { useApiError } from "@/hooks";
 
-const createUserSchema = z.object({
+const inviteUserSchema = z.object({
   email: z.string().email("Invalid email address"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
 });
 
-type CreateUserData = z.infer<typeof createUserSchema>;
+type InviteUserData = z.infer<typeof inviteUserSchema>;
 
 export function AdminUsersPage() {
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -39,17 +38,17 @@ export function AdminUsersPage() {
   const createUser = useAdminCreateUser();
   const { handleError } = useApiError();
 
-  const form = useForm<CreateUserData>({
-    resolver: zodResolver(createUserSchema),
-    defaultValues: { email: "", password: "" },
+  const form = useForm<InviteUserData>({
+    resolver: zodResolver(inviteUserSchema),
+    defaultValues: { email: "" },
   });
 
   const users = data?.data ?? [];
 
-  const handleCreate = async (formData: CreateUserData) => {
+  const handleInvite = async (formData: InviteUserData) => {
     try {
       await createUser.mutateAsync(formData);
-      toast.success("User created successfully");
+      toast.success("Invitation sent successfully");
       form.reset();
       setCreateModalOpen(false);
     } catch (error) {
@@ -64,7 +63,7 @@ export function AdminUsersPage() {
           <h1 className="text-3xl font-bold">Users</h1>
           <p className="text-muted-foreground">Manage user accounts</p>
         </div>
-        <Button onClick={() => setCreateModalOpen(true)}>Create User</Button>
+        <Button onClick={() => setCreateModalOpen(true)}>Invite User</Button>
       </div>
 
       <Card>
@@ -90,11 +89,13 @@ export function AdminUsersPage() {
       <Dialog open={createModalOpen} onOpenChange={setCreateModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create User</DialogTitle>
-            <DialogDescription>Create a new user account</DialogDescription>
+            <DialogTitle>Invite User</DialogTitle>
+            <DialogDescription>
+              Send an invitation email to create a new user account
+            </DialogDescription>
           </DialogHeader>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(handleCreate)} className="space-y-4">
+            <form onSubmit={form.handleSubmit(handleInvite)} className="space-y-4">
               <FormField
                 control={form.control}
                 name="email"
@@ -102,31 +103,21 @@ export function AdminUsersPage() {
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input type="email" {...field} />
+                      <Input type="email" placeholder="user@example.com" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Password</FormLabel>
-                    <FormControl>
-                      <Input type="password" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <p className="text-sm text-muted-foreground">
+                The user will receive an email with a link to set their password.
+              </p>
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="outline" onClick={() => setCreateModalOpen(false)}>
                   Cancel
                 </Button>
                 <Button type="submit" disabled={createUser.isPending}>
-                  {createUser.isPending ? "Creating..." : "Create"}
+                  {createUser.isPending ? "Sending..." : "Send Invitation"}
                 </Button>
               </div>
             </form>

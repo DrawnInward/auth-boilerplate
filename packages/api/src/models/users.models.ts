@@ -20,8 +20,8 @@ export const createUser = async (
 
   const queryString = `
     INSERT INTO users
-    (email, password_hash, email_verified, is_active)
-    VALUES ($1, $2, $3, $4)
+    (email, password_hash, email_verified, is_active, created_through, can_create_orgs)
+    VALUES ($1, $2, $3, $4, $5, $6)
     RETURNING *;
   `;
 
@@ -30,6 +30,8 @@ export const createUser = async (
     newUser.password_hash,
     newUser.email_verified || false,
     newUser.is_active !== undefined ? newUser.is_active : true,
+    newUser.created_through || "self_registered",
+    newUser.can_create_orgs ?? null,
   ];
 
   try {
@@ -184,7 +186,6 @@ export const modifyUser = async (
       msg: "Password updates not allowed. Use updatePassword function instead",
     };
   }
-  //TODO: take this greenlist out when you have tests for the validation middleware
   const allowedFields = [
     "email",
     "email_verified",
@@ -192,6 +193,7 @@ export const modifyUser = async (
     "deactivated_at",
     "deactivated_by",
     "deleted_at",
+    "can_create_orgs",
   ];
   const updates: string[] = [];
   const values: any[] = [];
@@ -526,6 +528,29 @@ export const getUserWithMfaStatus = async (
       return null;
     }
     return result.rows[0];
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const updateUserOrgPermission = async (
+  userId: string,
+  canCreateOrgs: boolean | null,
+  client: PoolClient | Pool = db
+): Promise<Omit<User, "password_hash">> => {
+  const queryString = `
+    UPDATE users
+    SET can_create_orgs = $1, updated_at = NOW()
+    WHERE user_id = $2 AND deleted_at IS NULL
+    RETURNING *;
+  `;
+
+  try {
+    const result = await client.query(queryString, [canCreateOrgs, userId]);
+    if (result.rows.length === 0) {
+      throw { status: 404, msg: "User not found" };
+    }
+    return excludePasswordHash(result.rows[0]);
   } catch (err) {
     throw err;
   }

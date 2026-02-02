@@ -56,6 +56,8 @@ async function seed({
           mfa_secret TEXT,
           google_id VARCHAR(255) UNIQUE,
           auth_provider VARCHAR(20) DEFAULT 'local' CHECK (auth_provider IN ('local', 'google', 'both')),
+          created_through VARCHAR(20) DEFAULT 'self_registered' CHECK (created_through IN ('self_registered', 'org_invited', 'admin_created')),
+          can_create_orgs BOOLEAN NULL,
           created_at TIMESTAMPTZ DEFAULT NOW(),
           updated_at TIMESTAMPTZ DEFAULT NOW()
           );
@@ -127,7 +129,7 @@ async function seed({
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         email VARCHAR(255) NOT NULL,
         token_hash VARCHAR(255) UNIQUE NOT NULL,
-        type VARCHAR(50) NOT NULL CHECK (type IN ('registration', 'org_invite', 'password_reset', 'email_change')),
+        type VARCHAR(50) NOT NULL CHECK (type IN ('registration', 'org_invite', 'password_reset', 'email_change', 'admin_invite')),
         organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
         role VARCHAR(20) CHECK (role IN ('admin', 'member', 'viewer')),
         invited_by UUID REFERENCES users(user_id) ON DELETE SET NULL,
@@ -208,8 +210,8 @@ async function seed({
     log("Inserting users...");
     for (const user of usersData) {
       const query = user.user_id
-        ? "INSERT INTO users (user_id, email, password_hash, email_verified, is_active) VALUES ($1, $2, $3, $4, $5)"
-        : "INSERT INTO users (email, password_hash, email_verified, is_active) VALUES ($1, $2, $3, $4)";
+        ? "INSERT INTO users (user_id, email, password_hash, email_verified, is_active, created_through, can_create_orgs) VALUES ($1, $2, $3, $4, $5, $6, $7)"
+        : "INSERT INTO users (email, password_hash, email_verified, is_active, created_through, can_create_orgs) VALUES ($1, $2, $3, $4, $5, $6)";
 
       const values = user.user_id
         ? [
@@ -218,12 +220,16 @@ async function seed({
             user.password_hash,
             user.email_verified,
             user.is_active || false,
+            user.created_through || "self_registered",
+            user.can_create_orgs ?? null,
           ]
         : [
             user.email,
             user.password_hash,
             user.email_verified,
             user.is_active || false,
+            user.created_through || "self_registered",
+            user.can_create_orgs ?? null,
           ];
 
       await db.query(query, values);

@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const authProviderSchema = z.enum(["local", "google", "both"]);
+export const createdThroughSchema = z.enum(["self_registered", "org_invited", "admin_created"]);
 
 export const userSchema = z.object({
   user_id: z.string().uuid().optional(),
@@ -15,6 +16,8 @@ export const userSchema = z.object({
   mfa_secret: z.string().nullable().optional(),
   google_id: z.string().nullable().optional(),
   auth_provider: authProviderSchema.optional(),
+  created_through: createdThroughSchema.optional(),
+  can_create_orgs: z.boolean().nullable().optional(),
   created_at: z.string().optional(),
   updated_at: z.string().optional(),
 });
@@ -47,6 +50,10 @@ export const updateUserSchema = userSchema
 export const loginUserSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1, "Password is required"),
+});
+
+export const adminInviteUserSchema = z.object({
+  email: z.string().email("Invalid email address"),
 });
 
 export const getUsersOptionsSchema = z.object({
@@ -84,3 +91,5 @@ export type UpdateUserDto = z.infer<typeof updateUserSchema>;
 export type LoginUserDto = z.infer<typeof loginUserSchema>;
 export type ChangePasswordDto = z.infer<typeof changePasswordSchema>;
 export type UpdateProfileDto = z.infer<typeof updateProfileSchema>;
+export type CreatedThrough = z.infer<typeof createdThroughSchema>;
+export type AdminInviteUserDto = z.infer<typeof adminInviteUserSchema>;

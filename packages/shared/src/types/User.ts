@@ -2,6 +2,13 @@ import { z } from "zod";
 export const authProviderSchema = z.enum(["local", "google", "both"]);
 export type AuthProvider = z.infer<typeof authProviderSchema>;
 
+export const createdThroughSchema = z.enum([
+  "self_registered",
+  "org_invited",
+  "admin_created",
+]);
+export type CreatedThrough = z.infer<typeof createdThroughSchema>;
+
 export const loginUserSchema = z.object({
   email: z.string().email("Invalid email address"),
   password: z.string().min(1, "Password is required"),
@@ -27,6 +34,8 @@ export const publicUserSchema = z.object({
   is_active: z.boolean(),
   mfa_enabled: z.boolean(),
   auth_provider: authProviderSchema,
+  created_through: createdThroughSchema.optional(),
+  can_create_orgs: z.boolean().optional(),
   created_at: z.string().optional(),
   updated_at: z.string().optional(),
 });

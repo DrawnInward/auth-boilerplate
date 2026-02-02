@@ -10,6 +10,7 @@ export const testUsers = [
     password_hash: hashedPassword,
     email_verified: true,
     is_active: true,
+    created_through: "self_registered" as const,
   },
   {
     user_id: TEST_UUIDS.USERS.ALICE,
@@ -17,6 +18,7 @@ export const testUsers = [
     password_hash: hashedPassword,
     email_verified: true,
     is_active: true,
+    created_through: "self_registered" as const,
   },
   {
     user_id: TEST_UUIDS.USERS.BOB,
@@ -24,5 +26,6 @@ export const testUsers = [
     password_hash: hashedPassword,
     email_verified: false,
     is_active: false,
+    created_through: "org_invited" as const,
   },
 ];

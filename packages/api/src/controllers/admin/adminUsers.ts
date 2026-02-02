@@ -1,14 +1,22 @@
 import { Request, Response, NextFunction } from "express";
 import { RequestWithUser } from "../../types";
 import {
-  createUser,
   getUsers,
   getUserById,
+  getUser,
   modifyUser,
   deleteUser,
-  updatePassword,
+  updateUserOrgPermission,
 } from "../../models/users.models";
+import {
+  createInvitation,
+  invalidatePendingInvitations,
+} from "../../models/invitations.models";
 import { sendSuccess, sendCreated } from "../../utils/responseUtils";
+import {
+  sendAdminInviteEmail,
+  sendPasswordResetEmail,
+} from "../../utils/email";
 import { hashPassword } from "../../utils";
 
 // POST /api/admin/users
@@ -18,23 +26,28 @@ export const createUserHandler = async (
   next: NextFunction,
 ) => {
   try {
-    const { email, password, email_verified, is_active } = req.body;
+    console.log("req.body: ", req.body);
+    const { email } = req.body;
 
-    if (!password) {
-      throw { status: 400, msg: "Password is required" };
+    const existingUser = await getUser(email);
+    if (existingUser) {
+      throw { status: 409, msg: "Email already exists" };
     }
 
-    // Hash the password
-    const password_hash = await hashPassword(password);
+    await invalidatePendingInvitations(email, "admin_invite");
 
-    const newUser = await createUser({
+    const { invitation, token } = await createInvitation({
       email,
-      password_hash,
-      email_verified,
-      is_active,
+      type: "admin_invite",
     });
 
-    return sendCreated(res, newUser, "User created successfully");
+    await sendAdminInviteEmail(email, token);
+
+    return sendCreated(
+      res,
+      { email: invitation.email, expires_at: invitation.expires_at },
+      "Invitation sent successfully",
+    );
   } catch (error) {
     next(error);
   }
@@ -111,27 +124,29 @@ export const updateUser = async (
   }
 };
 
-export const changeUserPassword = async (
+export const sendPasswordReset = async (
   req: Request,
   res: Response,
   next: NextFunction,
 ) => {
   try {
     const { userId } = req.params;
-    const password = req.body.password;
-    let password_hash;
 
-    // If password is provided, hash it
-    if (password) {
-      password_hash = await hashPassword(password);
-      delete req.body.password;
-    } else {
-      throw { status: 404, msg: "Password not Found" };
+    const user = await getUserById(userId as string);
+    if (!user) {
+      throw { status: 404, msg: "User not found" };
     }
 
-    const updatedUser = await updatePassword(userId as string, password_hash);
+    await invalidatePendingInvitations(user.email!, "password_reset");
 
-    return sendSuccess(res, updatedUser, "Password updated successfully");
+    const { token } = await createInvitation({
+      email: user.email!,
+      type: "password_reset",
+    });
+
+    await sendPasswordResetEmail(user.email!, token);
+
+    return sendSuccess(res, { email: user.email }, "Password reset email sent");
   } catch (error) {
     next(error);
   }
@@ -149,6 +164,42 @@ export const deleteUserHandler = async (
     const deletedUser = await deleteUser(userId as string);
 
     return sendSuccess(res, deletedUser, "User deleted successfully");
+  } catch (error) {
+    next(error);
+  }
+};
+
+// PATCH /api/admin/users/:userId/org-permission
+export const updateOrgPermission = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { userId } = req.params;
+    const { can_create_orgs } = req.body;
+
+    if (
+      can_create_orgs !== true &&
+      can_create_orgs !== false &&
+      can_create_orgs !== null
+    ) {
+      throw {
+        status: 400,
+        msg: "can_create_orgs must be true, false, or null",
+      };
+    }
+
+    const updatedUser = await updateUserOrgPermission(
+      userId as string,
+      can_create_orgs,
+    );
+
+    return sendSuccess(
+      res,
+      updatedUser,
+      "User org permission updated successfully",
+    );
   } catch (error) {
     next(error);
   }

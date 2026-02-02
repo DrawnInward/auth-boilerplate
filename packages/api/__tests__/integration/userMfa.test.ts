@@ -11,7 +11,6 @@ import {
   deleteAllBackupCodes,
 } from "../../src/models/mfa.models";
 import { hashBackupCodes } from "../../src/utils/backupCodes";
-import { encrypt } from "../../src/utils/encryption";
 import { getUserUuid } from "../../src/database/test-data/testUuids";
 
 require("dotenv").config({ quiet: true });
@@ -76,10 +75,9 @@ describe("User MFA Integration Tests", () => {
         .post("/api/auth/mfa/setup")
         .set("Cookie", authCookies)
         .expect(200);
-
       expect(response.body.status).toBe("success");
-      expect(response.body.data.qrCode).toBeDefined();
-      expect(response.body.data.qrCode).toContain("data:image/png;base64");
+      expect(response.body.data.qr_code).toBeDefined();
+      expect(response.body.data.qr_code).toContain("data:image/png;base64");
     });
 
     it("should fail if MFA already enabled", async () => {

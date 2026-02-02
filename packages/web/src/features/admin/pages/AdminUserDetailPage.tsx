@@ -28,13 +28,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   useAdminUser,
   useAdminUpdateUser,
   useAdminDeleteUser,
@@ -48,12 +41,7 @@ const updateUserSchema = z.object({
   is_active: z.boolean(),
 });
 
-const resetPasswordSchema = z.object({
-  password: z.string().min(8, "Password must be at least 8 characters"),
-});
-
 type UpdateUserData = z.infer<typeof updateUserSchema>;
-type ResetPasswordData = z.infer<typeof resetPasswordSchema>;
 
 export function AdminUserDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -78,11 +66,6 @@ export function AdminUserDetailPage() {
     },
   });
 
-  const passwordForm = useForm<ResetPasswordData>({
-    resolver: zodResolver(resetPasswordSchema),
-    defaultValues: { password: "" },
-  });
-
   if (isLoading) return <FullPageSpinner />;
   if (isError || !user) return <FullPageError message="User not found" />;
 
@@ -105,11 +88,10 @@ export function AdminUserDetailPage() {
     }
   };
 
-  const handleResetPassword = async (formData: ResetPasswordData) => {
+  const handleResetPassword = async () => {
     try {
-      await resetPassword.mutateAsync(formData);
-      toast.success("Password reset successfully");
-      passwordForm.reset();
+      await resetPassword.mutateAsync();
+      toast.success("Password reset email sent");
       setResetPasswordDialogOpen(false);
     } catch (error) {
       handleError(error);
@@ -164,7 +146,7 @@ export function AdminUserDetailPage() {
               className="w-full"
               onClick={() => setResetPasswordDialogOpen(true)}
             >
-              Reset Password
+              Send Password Reset
             </Button>
             <Button
               variant="destructive"
@@ -239,39 +221,22 @@ export function AdminUserDetailPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog open={resetPasswordDialogOpen} onOpenChange={setResetPasswordDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Reset Password</DialogTitle>
-            <DialogDescription>Set a new password for this user</DialogDescription>
-          </DialogHeader>
-          <Form {...passwordForm}>
-            <form onSubmit={passwordForm.handleSubmit(handleResetPassword)} className="space-y-4">
-              <FormField
-                control={passwordForm.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>New Password</FormLabel>
-                    <FormControl>
-                      <Input type="password" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <div className="flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => setResetPasswordDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={resetPassword.isPending}>
-                  {resetPassword.isPending ? "Resetting..." : "Reset Password"}
-                </Button>
-              </div>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
+      <AlertDialog open={resetPasswordDialogOpen} onOpenChange={setResetPasswordDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Send Password Reset Email</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will send a password reset email to {user.email}. The user will be able to set a new password using the link in the email.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleResetPassword} disabled={resetPassword.isPending}>
+              {resetPassword.isPending ? "Sending..." : "Send Reset Email"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

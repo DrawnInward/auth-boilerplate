@@ -2,14 +2,15 @@ import express from "express";
 
 import { validateParams, validateBody } from "../../middleware/validate";
 import { userParamsSchema } from "../../types/RouteParams";
-import { createUserSchema, updateUserSchema } from "../../types";
+import { adminInviteUserSchema, updateUserSchema } from "../../types";
 import {
   createUserHandler,
   getAllUsers,
   getUserByIdHandler,
   updateUser,
   deleteUserHandler,
-  changeUserPassword,
+  sendPasswordReset,
+  updateOrgPermission,
 } from "../../controllers/admin/adminUsers";
 import { authoriseUser } from "../../middleware/authoriseUser";
 
@@ -18,17 +19,17 @@ const router = express.Router();
 router.post(
   "/",
   authoriseUser(["admin"]),
-  validateBody(createUserSchema),
+  validateBody(adminInviteUserSchema),
   createUserHandler
 );
 
 router.get("/", authoriseUser(["admin"]), getAllUsers);
 
-router.put(
+router.post(
   "/reset-password/:userId",
   authoriseUser(["admin"]),
   validateParams(userParamsSchema),
-  changeUserPassword
+  sendPasswordReset
 );
 
 router.get(
@@ -51,6 +52,13 @@ router.delete(
   authoriseUser(["admin"]),
   validateParams(userParamsSchema),
   deleteUserHandler
+);
+
+router.patch(
+  "/:userId/org-permission",
+  authoriseUser(["admin"]),
+  validateParams(userParamsSchema),
+  updateOrgPermission
 );
 
 export default router;

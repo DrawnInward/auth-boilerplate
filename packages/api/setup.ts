@@ -28,6 +28,12 @@ ADMIN_ACCESS_KEY="${adminAccessKey}"
 MFA_CHALLENGE_KEY="${mfaChallengeKey}"
 MFA_ENCRYPTION_KEY="${mfaEncryptionKey}"
 
+# Registration modes
+# ACCOUNT_CREATION_MODE: open | invite_only | admin_only (default: open)
+# ORG_CREATION_MODE: open | self_registered_only | admin_only (default: open)
+ACCOUNT_CREATION_MODE=open
+ORG_CREATION_MODE=open
+
 # Google OAuth (configure these with your Google Cloud credentials)
 # GOOGLE_CLIENT_ID=""
 # GOOGLE_CLIENT_SECRET=""

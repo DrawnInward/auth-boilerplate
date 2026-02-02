@@ -6,7 +6,6 @@ import db from "../../database/db";
 import {
   createUser,
   getUser,
-  getUserWithPassword,
   getUserWithPasswordById,
   updatePassword,
   getUserWithMfaStatus,
@@ -35,16 +34,21 @@ import {
   verifyMfaChallengeToken,
   clearMfaChallengeCookie,
 } from "../../utils/mfaChallenge";
-import { getMfaSecret, getUnusedBackupCodes, markBackupCodeUsed } from "../../models/mfa.models";
+import {
+  getMfaSecret,
+  getUnusedBackupCodes,
+  markBackupCodeUsed,
+} from "../../models/mfa.models";
 import { verifyTotpCode } from "../../utils/totp";
 import { parseCookies } from "../../utils";
+import { getAccountCreationMode, getOrgCreationMode } from "../../utils/config";
 
 require("dotenv").config({ quiet: true });
 
 export const login = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { email, password } = req.body;
@@ -76,7 +80,7 @@ export const login = async (
       return sendSuccess(
         res,
         { mfa_required: true },
-        "MFA verification required"
+        "MFA verification required",
       );
     }
 
@@ -94,7 +98,7 @@ export const login = async (
         email_verified: user.email_verified,
       },
       accessKey,
-      { expiresIn: "15m" }
+      { expiresIn: "15m" },
     );
 
     const { token: refreshToken } = await addRefresh({
@@ -112,7 +116,7 @@ export const login = async (
         email_verified: user.email_verified,
         is_active: user.is_active,
       },
-      "User logged in successfully"
+      "User logged in successfully",
     );
   } catch (error) {
     next(error);
@@ -122,7 +126,7 @@ export const login = async (
 export const logout = async (
   req: RequestWithUser,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     if (req.user?.role_id) {
@@ -140,7 +144,7 @@ export const logout = async (
 export const mfaLoginVerify = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { code } = req.body;
@@ -180,7 +184,7 @@ export const mfaLoginVerify = async (
         email_verified: true,
       },
       accessKey,
-      { expiresIn: "15m" }
+      { expiresIn: "15m" },
     );
 
     const { token: refreshToken } = await addRefresh({
@@ -199,7 +203,7 @@ export const mfaLoginVerify = async (
 export const mfaLoginBackupVerify = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   const client = await db.connect();
 
@@ -219,7 +223,11 @@ export const mfaLoginBackupVerify = async (
       throw { status: 401, msg: "Invalid MFA challenge" };
     }
 
-    const unusedCodes = await getUnusedBackupCodes(payload.role_id, "user", client);
+    const unusedCodes = await getUnusedBackupCodes(
+      payload.role_id,
+      "user",
+      client,
+    );
     let matchedCode = null;
 
     for (const backupCode of unusedCodes) {
@@ -250,7 +258,7 @@ export const mfaLoginBackupVerify = async (
         email_verified: true,
       },
       accessKey,
-      { expiresIn: "15m" }
+      { expiresIn: "15m" },
     );
 
     const { token: refreshToken } = await addRefresh(
@@ -258,7 +266,7 @@ export const mfaLoginBackupVerify = async (
         role_id: payload.role_id,
         role_type: "user",
       },
-      client
+      client,
     );
 
     await client.query("COMMIT");
@@ -274,55 +282,47 @@ export const mfaLoginBackupVerify = async (
   }
 };
 
-// POST /api/auth/register
-// Submit email to start registration process
 export const register = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
-    // Check if self-registration is allowed
-    if (process.env.ALLOW_SELF_REGISTRATION === "false") {
+    const accountMode = getAccountCreationMode();
+    if (accountMode !== "open") {
       throw { status: 403, msg: "Self-registration is not allowed" };
     }
 
     const { email } = req.body;
 
-    // Check if user already exists
     const existingUser = await getUser(email);
     if (existingUser) {
       throw { status: 409, msg: "Email already registered" };
     }
 
-    // Invalidate any existing registration invitations for this email
     await invalidatePendingInvitations(email, "registration");
 
-    // Create new registration invitation
     const { invitation, token } = await createInvitation({
       email,
       type: "registration",
     });
 
-    // Send verification email
     await sendVerificationEmail(email, token);
 
     return sendCreated(
       res,
       { email: invitation.email },
-      "Registration email sent. Please check your inbox."
+      "Registration email sent. Please check your inbox.",
     );
   } catch (error) {
     next(error);
   }
 };
 
-// GET /api/auth/verify/:token
-// Validate a token and return invitation details
 export const verifyToken = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const token = req.params.token as string;
@@ -338,19 +338,17 @@ export const verifyToken = async (
         organization_id: invitation.organization_id,
         role: invitation.role,
       },
-      "Token is valid"
+      "Token is valid",
     );
   } catch (error) {
     next(error);
   }
 };
 
-// POST /api/auth/complete-registration
-// Complete registration with token and password
 export const completeRegistration = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   const client = await db.connect();
 
@@ -359,25 +357,28 @@ export const completeRegistration = async (
 
     const { token, password } = req.body;
 
-    // Validate token
-    const invitation = await validateInvitationToken(token, "registration", client);
+    const invitation = await validateInvitationToken(token, undefined, client);
 
-    // Create user
+    if (invitation.type !== "registration" && invitation.type !== "admin_invite") {
+      throw { status: 400, msg: "Invalid invitation type for registration" };
+    }
+
+    const createdThrough = invitation.type === "admin_invite" ? "admin_created" : "self_registered";
+
     const passwordHash = await hashPassword(password);
     const user = await createUser(
       {
         email: invitation.email,
         password_hash: passwordHash,
-        email_verified: true, // Email is verified through the token
+        email_verified: true,
         is_active: true,
+        created_through: createdThrough,
       },
-      client
+      client,
     );
 
-    // Mark invitation as used
     await markInvitationUsed(invitation.id!, client);
 
-    // Create tokens
     const accessKey = process.env.USER_ACCESS_KEY;
     if (!accessKey) {
       throw { status: 500, msg: "Server configuration error" };
@@ -390,7 +391,7 @@ export const completeRegistration = async (
         email_verified: user.email_verified,
       },
       accessKey,
-      { expiresIn: "15m" }
+      { expiresIn: "15m" },
     );
 
     const { token: refreshToken } = await addRefresh(
@@ -398,7 +399,7 @@ export const completeRegistration = async (
         role_id: user.user_id!,
         role_type: "user",
       },
-      client
+      client,
     );
 
     await client.query("COMMIT");
@@ -413,7 +414,7 @@ export const completeRegistration = async (
         email_verified: user.email_verified,
         is_active: user.is_active,
       },
-      "Registration completed successfully"
+      "Registration completed successfully",
     );
   } catch (error) {
     await client.query("ROLLBACK");
@@ -423,25 +424,18 @@ export const completeRegistration = async (
   }
 };
 
-// POST /api/auth/forgot-password
-// Request a password reset email
 export const forgotPassword = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { email } = req.body;
-
-    // Always return success to prevent email enumeration
-    // But only actually send email if user exists
     const user = await getUser(email);
 
     if (user) {
-      // Invalidate any existing password reset invitations
       await invalidatePendingInvitations(email, "password_reset");
 
-      // Create password reset invitation
       const { token } = await createInvitation({
         email,
         type: "password_reset",
@@ -455,19 +449,17 @@ export const forgotPassword = async (
     return sendSuccess(
       res,
       null,
-      "If an account exists with this email, a password reset link has been sent."
+      "If an account exists with this email, a password reset link has been sent.",
     );
   } catch (error) {
     next(error);
   }
 };
 
-// POST /api/auth/reset-password
-// Reset password with token and new password
 export const resetPassword = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   const client = await db.connect();
 
@@ -476,27 +468,21 @@ export const resetPassword = async (
 
     const { token, password } = req.body;
 
-    // Validate token
     const invitation = await validateInvitationToken(
       token,
       "password_reset",
-      client
+      client,
     );
-
-    // Find the user
     const user = await getUser(invitation.email);
     if (!user) {
       throw { status: 404, msg: "User not found" };
     }
 
-    // Update password
     const passwordHash = await hashPassword(password);
     await updatePassword(user.user_id!, passwordHash, client);
 
-    // Mark invitation as used
     await markInvitationUsed(invitation.id!, client);
 
-    // Revoke all existing refresh tokens for security
     await revokeUserTokens(user.user_id!, "user", client);
 
     await client.query("COMMIT");
@@ -513,7 +499,7 @@ export const resetPassword = async (
 export const setPassword = async (
   req: RequestWithUser,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   const client = await db.connect();
 
@@ -529,7 +515,10 @@ export const setPassword = async (
     }
 
     if (user.password_hash) {
-      throw { status: 400, msg: "Password already set. Use password reset instead." };
+      throw {
+        status: 400,
+        msg: "Password already set. Use password reset instead.",
+      };
     }
 
     const passwordHash = await hashPassword(password);
@@ -547,12 +536,10 @@ export const setPassword = async (
   }
 };
 
-// GET /api/auth/me
-// Get current authenticated user's profile
 export const getMe = async (
   req: RequestWithUser,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { role_id } = req.user!;
@@ -560,6 +547,20 @@ export const getMe = async (
     const user = await getUserById(role_id);
     if (!user) {
       throw { status: 404, msg: "User not found" };
+    }
+
+    let canCreateOrgs = false;
+    if (user.can_create_orgs === true) {
+      canCreateOrgs = true;
+    } else if (user.can_create_orgs === false) {
+      canCreateOrgs = false;
+    } else {
+      const mode = getOrgCreationMode();
+      if (mode === "open") {
+        canCreateOrgs = true;
+      } else if (mode === "self_registered_only") {
+        canCreateOrgs = user.created_through === "self_registered";
+      }
     }
 
     return sendSuccess(
@@ -572,22 +573,22 @@ export const getMe = async (
         mfa_enabled: user.mfa_enabled,
         auth_provider: user.auth_provider,
         google_id: user.google_id ? true : false,
+        created_through: user.created_through,
+        can_create_orgs: canCreateOrgs,
         created_at: user.created_at,
         updated_at: user.updated_at,
       },
-      "User profile retrieved successfully"
+      "User profile retrieved successfully",
     );
   } catch (error) {
     next(error);
   }
 };
 
-// PUT /api/auth/change-password
-// Change password (requires current password)
 export const changePassword = async (
   req: RequestWithUser,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   const client = await db.connect();
 
@@ -603,10 +604,16 @@ export const changePassword = async (
     }
 
     if (!user.password_hash) {
-      throw { status: 400, msg: "No password set. Use set-password endpoint instead." };
+      throw {
+        status: 400,
+        msg: "No password set. Use set-password endpoint instead.",
+      };
     }
 
-    const passwordMatch = await bcrypt.compare(current_password, user.password_hash);
+    const passwordMatch = await bcrypt.compare(
+      current_password,
+      user.password_hash,
+    );
     if (!passwordMatch) {
       throw { status: 401, msg: "Current password is incorrect" };
     }
@@ -614,7 +621,6 @@ export const changePassword = async (
     const passwordHash = await hashPassword(new_password);
     await updatePassword(role_id, passwordHash, client);
 
-    // Revoke all other refresh tokens for security
     await revokeUserTokens(role_id, "user", client);
 
     await client.query("COMMIT");
@@ -628,12 +634,10 @@ export const changePassword = async (
   }
 };
 
-// PUT /api/auth/profile
-// Update user profile (placeholder for future profile fields)
 export const updateProfile = async (
   req: RequestWithUser,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { role_id } = req.user!;
@@ -653,19 +657,17 @@ export const updateProfile = async (
         mfa_enabled: user.mfa_enabled,
         auth_provider: user.auth_provider,
       },
-      "Profile retrieved successfully"
+      "Profile retrieved successfully",
     );
   } catch (error) {
     next(error);
   }
 };
 
-// POST /api/auth/request-email-change
-// Request email change (requires password verification)
 export const requestEmailChange = async (
   req: RequestWithUser,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { role_id } = req.user!;
@@ -677,30 +679,26 @@ export const requestEmailChange = async (
     }
 
     if (!user.password_hash) {
-      throw { status: 400, msg: "Password not set. Please set a password first." };
+      throw {
+        status: 400,
+        msg: "Password not set. Please set a password first.",
+      };
     }
 
-    // Verify password
     const passwordMatch = await bcrypt.compare(password, user.password_hash);
     if (!passwordMatch) {
       throw { status: 401, msg: "Incorrect password" };
     }
 
-    // Check if new email is the same as current
     if (user.email?.toLowerCase() === newEmail.toLowerCase()) {
       throw { status: 400, msg: "New email is the same as current email" };
     }
 
-    // Check if new email is already taken
     const existingUser = await getUser(newEmail);
     if (existingUser) {
       throw { status: 409, msg: "Email already in use" };
     }
 
-    // Invalidate any existing email change invitations for this user
-    await invalidatePendingInvitations(user.email!, "email_change");
-
-    // Create email change invitation
     const { token } = await createInvitation({
       email: user.email!,
       type: "email_change",
@@ -708,28 +706,24 @@ export const requestEmailChange = async (
       user_id: role_id,
     });
 
-    // Send verification email to new address
     await sendEmailChangeVerificationEmail(newEmail, token);
 
-    // Send notification email to old address
     await sendEmailChangeNotificationEmail(user.email!, newEmail);
 
     return sendSuccess(
       res,
       { newEmail },
-      "Verification email sent to your new email address"
+      "Verification email sent to your new email address",
     );
   } catch (error) {
     next(error);
   }
 };
 
-// POST /api/auth/confirm-email-change/:token
-// Confirm email change with token (auto-confirms on valid token)
 export const confirmEmailChange = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   const client = await db.connect();
 
@@ -738,26 +732,25 @@ export const confirmEmailChange = async (
 
     const token = req.params.token as string;
 
-    // Validate token
-    const invitation = await validateInvitationToken(token, "email_change", client);
+    const invitation = await validateInvitationToken(
+      token,
+      "email_change",
+      client,
+    );
 
     if (!invitation.new_email || !invitation.user_id) {
       throw { status: 400, msg: "Invalid email change invitation" };
     }
 
-    // Check if new email is still available
     const existingUser = await getUser(invitation.new_email);
     if (existingUser) {
       throw { status: 409, msg: "Email is no longer available" };
     }
 
-    // Update user's email
     await client.query(
       "UPDATE users SET email = $1, updated_at = NOW() WHERE user_id = $2",
-      [invitation.new_email.toLowerCase(), invitation.user_id]
+      [invitation.new_email.toLowerCase(), invitation.user_id],
     );
-
-    // Mark invitation as used
     await markInvitationUsed(invitation.id!, client);
 
     await client.query("COMMIT");
@@ -765,7 +758,7 @@ export const confirmEmailChange = async (
     return sendSuccess(
       res,
       { email: invitation.new_email },
-      "Email changed successfully"
+      "Email changed successfully",
     );
   } catch (error) {
     await client.query("ROLLBACK");

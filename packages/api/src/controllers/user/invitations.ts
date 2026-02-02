@@ -263,6 +263,7 @@ export const acceptInvitation = async (
           password_hash: passwordHash,
           email_verified: true,
           is_active: true,
+          created_through: "org_invited",
         },
         client,
       );

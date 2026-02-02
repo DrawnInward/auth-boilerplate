@@ -10,5 +10,6 @@ export const devUsers = [
     password_hash: PASSWORD_HASH,
     email_verified: true,
     is_active: true,
+    created_through: "self_registered" as const,
   },
 ];

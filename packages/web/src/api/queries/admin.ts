@@ -134,12 +134,21 @@ export function useAdminUserStats() {
   });
 }
 
+interface InviteResponse {
+  status: string;
+  data: {
+    email: string;
+    expires_at: string;
+  };
+  message: string;
+}
+
 export function useAdminCreateUser() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: { email: string; password: string }) =>
-      api.post<UserResponse>("/admin/users", data),
+    mutationFn: (data: { email: string }) =>
+      api.post<InviteResponse>("/admin/users", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
     },
@@ -172,8 +181,10 @@ export function useAdminDeleteUser() {
 
 export function useAdminResetUserPassword(id: string) {
   return useMutation({
-    mutationFn: (data: { password: string }) =>
-      api.put<{ status: string }>(`/admin/users/${id}/reset-password`, data),
+    mutationFn: () =>
+      api.post<{ status: string; data: { email: string }; message: string }>(
+        `/admin/users/reset-password/${id}`,
+      ),
   });
 }
 

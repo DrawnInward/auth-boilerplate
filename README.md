@@ -58,6 +58,38 @@ Optional:
 - `PORT` - Server port (default: 3000)
 - `ALLOWED_ORIGIN` - CORS origin (default: http://localhost:5173)
 
+### Registration Modes
+
+Control who can create accounts and organizations:
+
+- `ACCOUNT_CREATION_MODE` - Who can create accounts
+  - `open` (default) - Anyone can self-register
+  - `invite_only` - Only invited users can join
+  - `admin_only` - Only admins can create users
+
+- `ORG_CREATION_MODE` - Who can create organizations
+  - `open` (default) - Any user can create organizations
+  - `self_registered_only` - Only self-registered users can create orgs
+  - `admin_only` - Only admins can provision organizations
+
+**Example configurations:**
+
+```bash
+# Open SaaS (default)
+ACCOUNT_CREATION_MODE=open
+ORG_CREATION_MODE=open
+
+# Enterprise B2B
+ACCOUNT_CREATION_MODE=invite_only
+ORG_CREATION_MODE=admin_only
+
+# Hybrid (users can sign up, but org-invited users can't create their own orgs)
+ACCOUNT_CREATION_MODE=open
+ORG_CREATION_MODE=self_registered_only
+```
+
+Admins can override org creation permission per-user via `PATCH /api/admin/users/:userId/org-permission`.
+
 ## Scripts
 
 ```bash
