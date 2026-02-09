@@ -40,16 +40,9 @@ export function useMe() {
 }
 
 export function useLogin() {
-  const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: (data: LoginUserDto) =>
       api.post<LoginResponse>("/auth/login", data),
-    onSuccess: (response) => {
-      if (!isMfaRequired(response)) {
-        queryClient.invalidateQueries({ queryKey: ["me"] });
-      }
-    },
   });
 }
 
@@ -59,32 +52,22 @@ export function useLogout() {
   return useMutation({
     mutationFn: () => api.post<{ status: string }>("/auth/logout"),
     onSuccess: () => {
-      queryClient.clear();
+      queryClient.setQueryData(["me"], null);
     },
   });
 }
 
 export function useMfaLoginVerify() {
-  const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: (data: MfaVerifyDto) =>
       api.post<AuthResponse>("/auth/mfa/login-verify", data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["me"] });
-    },
   });
 }
 
 export function useMfaLoginBackup() {
-  const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: (data: MfaBackupVerifyDto) =>
       api.post<AuthResponse>("/auth/mfa/login-backup", data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["me"] });
-    },
   });
 }
 

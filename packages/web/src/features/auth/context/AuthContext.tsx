@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import type { PublicUser, LoginUserDto, MfaVerifyDto, MfaBackupVerifyDto } from "@auth-boilerplate/shared";
 import { useMe, useLogin, useLogout, useMfaLoginVerify, useMfaLoginBackup, isMfaRequired } from "@/api/queries/auth";
 
@@ -19,6 +20,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
   const [mfaRequired, setMfaRequired] = useState(false);
 
   const { data, isLoading } = useMe();
@@ -38,11 +40,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         navigate("/mfa-verify");
       } else {
         setMfaRequired(false);
+        await queryClient.refetchQueries({ queryKey: ["me"] });
         const from = (location.state as { from?: Location })?.from?.pathname || "/dashboard";
         navigate(from);
       }
     },
-    [loginMutation, navigate, location.state]
+    [loginMutation, navigate, location.state, queryClient]
   );
 
   const logout = useCallback(async () => {
@@ -55,20 +58,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async (data: MfaVerifyDto) => {
       await mfaVerifyMutation.mutateAsync(data);
       setMfaRequired(false);
+      await queryClient.refetchQueries({ queryKey: ["me"] });
       const from = (location.state as { from?: Location })?.from?.pathname || "/dashboard";
       navigate(from);
     },
-    [mfaVerifyMutation, navigate, location.state]
+    [mfaVerifyMutation, location.state, queryClient, navigate]
   );
 
   const verifyMfaBackup = useCallback(
     async (data: MfaBackupVerifyDto) => {
       await mfaBackupMutation.mutateAsync(data);
       setMfaRequired(false);
+      await queryClient.refetchQueries({ queryKey: ["me"] });
       const from = (location.state as { from?: Location })?.from?.pathname || "/dashboard";
       navigate(from);
     },
-    [mfaBackupMutation, navigate, location.state]
+    [mfaBackupMutation, location.state, queryClient, navigate]
   );
 
   const value = useMemo(

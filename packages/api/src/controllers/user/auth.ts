@@ -45,6 +45,50 @@ import { getAccountCreationMode, getOrgCreationMode } from "../../utils/config";
 
 require("dotenv").config({ quiet: true });
 
+interface UserRecord {
+  user_id?: string;
+  email?: string;
+  email_verified?: boolean;
+  is_active?: boolean;
+  mfa_enabled?: boolean;
+  auth_provider?: string;
+  google_id?: string | null;
+  created_through?: string;
+  can_create_orgs?: boolean | null;
+  created_at?: Date | string;
+  updated_at?: Date | string;
+}
+
+function buildUserResponse(user: UserRecord) {
+  let canCreateOrgs = false;
+  if (user.can_create_orgs === true) {
+    canCreateOrgs = true;
+  } else if (user.can_create_orgs === false) {
+    canCreateOrgs = false;
+  } else {
+    const mode = getOrgCreationMode();
+    if (mode === "open") {
+      canCreateOrgs = true;
+    } else if (mode === "self_registered_only") {
+      canCreateOrgs = user.created_through === "self_registered";
+    }
+  }
+
+  return {
+    user_id: user.user_id,
+    email: user.email,
+    email_verified: user.email_verified,
+    is_active: user.is_active,
+    mfa_enabled: user.mfa_enabled,
+    auth_provider: user.auth_provider,
+    google_id: user.google_id ? true : false,
+    created_through: user.created_through,
+    can_create_orgs: canCreateOrgs,
+    created_at: user.created_at,
+    updated_at: user.updated_at,
+  };
+}
+
 export const login = async (
   req: Request,
   res: Response,
@@ -194,7 +238,12 @@ export const mfaLoginVerify = async (
 
     setAuthCookies(res, accessToken, refreshToken);
 
-    return sendSuccess(res, { user_id: payload.role_id }, "Login successful");
+    const user = await getUserById(payload.role_id);
+    if (!user) {
+      throw { status: 404, msg: "User not found" };
+    }
+
+    return sendSuccess(res, buildUserResponse(user), "Login successful");
   } catch (error) {
     next(error);
   }
@@ -273,7 +322,12 @@ export const mfaLoginBackupVerify = async (
 
     setAuthCookies(res, accessToken, refreshToken);
 
-    return sendSuccess(res, { user_id: payload.role_id }, "Login successful");
+    const user = await getUserById(payload.role_id);
+    if (!user) {
+      throw { status: 404, msg: "User not found" };
+    }
+
+    return sendSuccess(res, buildUserResponse(user), "Login successful");
   } catch (error) {
     await client.query("ROLLBACK");
     next(error);
@@ -549,35 +603,9 @@ export const getMe = async (
       throw { status: 404, msg: "User not found" };
     }
 
-    let canCreateOrgs = false;
-    if (user.can_create_orgs === true) {
-      canCreateOrgs = true;
-    } else if (user.can_create_orgs === false) {
-      canCreateOrgs = false;
-    } else {
-      const mode = getOrgCreationMode();
-      if (mode === "open") {
-        canCreateOrgs = true;
-      } else if (mode === "self_registered_only") {
-        canCreateOrgs = user.created_through === "self_registered";
-      }
-    }
-
     return sendSuccess(
       res,
-      {
-        user_id: user.user_id,
-        email: user.email,
-        email_verified: user.email_verified,
-        is_active: user.is_active,
-        mfa_enabled: user.mfa_enabled,
-        auth_provider: user.auth_provider,
-        google_id: user.google_id ? true : false,
-        created_through: user.created_through,
-        can_create_orgs: canCreateOrgs,
-        created_at: user.created_at,
-        updated_at: user.updated_at,
-      },
+      buildUserResponse(user),
       "User profile retrieved successfully",
     );
   } catch (error) {

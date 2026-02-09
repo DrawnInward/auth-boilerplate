@@ -26,7 +26,7 @@ export const createUser = async (
   `;
 
   const values = [
-    newUser.email,
+    newUser.email.toLowerCase(),
     newUser.password_hash,
     newUser.email_verified || false,
     newUser.is_active !== undefined ? newUser.is_active : true,
@@ -60,7 +60,7 @@ export const getUser = async (
   }
 
   try {
-    const result = await db.query(queryString, [email]);
+    const result = await db.query(queryString, [email.toLowerCase()]);
     if (result.rows.length === 0) {
       return null;
     }
@@ -145,7 +145,7 @@ export const getUserWithPassword = async (
   `;
 
   try {
-    const result = await db.query(queryString, [email]);
+    const result = await db.query(queryString, [email.toLowerCase()]);
     if (result.rows.length === 0) {
       return null;
     }
@@ -479,7 +479,7 @@ export const createGoogleUser = async (
   `;
 
   try {
-    const result = await client.query(queryString, [email, googleId]);
+    const result = await client.query(queryString, [email.toLowerCase(), googleId]);
     return excludePasswordHash(result.rows[0]);
   } catch (err: any) {
     if (err.code === "23505") {
@@ -523,7 +523,7 @@ export const getUserWithMfaStatus = async (
   `;
 
   try {
-    const result = await db.query(queryString, [email]);
+    const result = await db.query(queryString, [email.toLowerCase()]);
     if (result.rows.length === 0) {
       return null;
     }
