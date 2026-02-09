@@ -50,6 +50,6 @@ export function useMfaDisable() {
 export function useMfaRegenerateBackupCodes() {
   return useMutation({
     mutationFn: (data: MfaVerifySetupDto) =>
-      api.post<MfaBackupCodesApiResponse>("/auth/mfa/backup-codes", data),
+      api.post<MfaBackupCodesApiResponse>("/auth/mfa/backup/regenerate", data),
   });
 }

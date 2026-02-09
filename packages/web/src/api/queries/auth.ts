@@ -11,20 +11,24 @@ import type {
   ResetPasswordDto,
   MfaVerifyDto,
   MfaBackupVerifyDto,
-  MfaRequiredResponse,
   RequestEmailChangeDto,
 } from "@auth-boilerplate/shared";
 
 interface AuthResponse {
   status: string;
   data: PublicUser;
-  mfa_required?: boolean;
 }
 
-type LoginResponse = AuthResponse | MfaRequiredResponse;
+interface MfaRequiredApiResponse {
+  status: string;
+  data: { mfa_required: true };
+  message: string;
+}
 
-function isMfaRequired(response: LoginResponse): response is MfaRequiredResponse {
-  return "mfa_required" in response && response.mfa_required === true;
+type LoginResponse = AuthResponse | MfaRequiredApiResponse;
+
+function isMfaRequired(response: LoginResponse): response is MfaRequiredApiResponse {
+  return "data" in response && response.data && "mfa_required" in response.data && response.data.mfa_required === true;
 }
 
 export function useMe() {
@@ -55,8 +59,7 @@ export function useLogout() {
   return useMutation({
     mutationFn: () => api.post<{ status: string }>("/auth/logout"),
     onSuccess: () => {
-      queryClient.setQueryData(["me"], null);
-      queryClient.invalidateQueries({ queryKey: ["me"] });
+      queryClient.clear();
     },
   });
 }
@@ -167,4 +170,4 @@ export function useConfirmEmailChange() {
 }
 
 export { isMfaRequired };
-export type { LoginResponse, MfaRequiredResponse };
+export type { LoginResponse, MfaRequiredApiResponse };

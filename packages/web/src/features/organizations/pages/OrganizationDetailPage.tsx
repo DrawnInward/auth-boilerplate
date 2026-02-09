@@ -170,12 +170,9 @@ export function OrganizationDetailPage() {
         {canManage && (
           <TabsContent value="invitations">
             <Card>
-              <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
-                  <CardTitle>Pending Invitations</CardTitle>
-                  <CardDescription>Manage pending invitations</CardDescription>
-                </div>
-                <Button onClick={() => setInviteModalOpen(true)} className="w-full sm:w-auto">Send Invitation</Button>
+              <CardHeader>
+                <CardTitle>Pending Invitations</CardTitle>
+                <CardDescription>Manage pending invitations</CardDescription>
               </CardHeader>
               <CardContent>
                 <InvitationsList orgId={id!} />

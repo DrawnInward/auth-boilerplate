@@ -9,21 +9,25 @@ import type {
   OrganizationWithMemberCount,
   MfaVerifyDto,
   MfaBackupVerifyDto,
-  MfaRequiredResponse,
 } from "@auth-boilerplate/shared";
 
 interface AdminAuthResponse {
   status: string;
   data: PublicAdmin;
-  mfa_required?: boolean;
 }
 
-type AdminLoginResponse = AdminAuthResponse | MfaRequiredResponse;
+interface AdminMfaRequiredApiResponse {
+  status: string;
+  data: { mfa_required: true };
+  message: string;
+}
+
+type AdminLoginResponse = AdminAuthResponse | AdminMfaRequiredApiResponse;
 
 export function isAdminMfaRequired(
   response: AdminLoginResponse,
-): response is MfaRequiredResponse {
-  return "mfa_required" in response && response.mfa_required === true;
+): response is AdminMfaRequiredApiResponse {
+  return "data" in response && response.data && "mfa_required" in response.data && response.data.mfa_required === true;
 }
 
 export function useAdminMe() {
@@ -54,8 +58,7 @@ export function useAdminLogout() {
   return useMutation({
     mutationFn: () => api.post<{ status: string }>("/admin/auth/logout"),
     onSuccess: () => {
-      queryClient.setQueryData(["admin", "me"], null);
-      queryClient.invalidateQueries({ queryKey: ["admin"] });
+      queryClient.clear();
     },
   });
 }
@@ -279,4 +282,4 @@ export function useAdminDeleteOrganization() {
   });
 }
 
-export type { AdminLoginResponse, MfaRequiredResponse };
+export type { AdminLoginResponse, AdminMfaRequiredApiResponse };

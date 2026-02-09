@@ -93,7 +93,7 @@ export const verifySetup = async (
 
     return sendSuccess(
       res,
-      { backupCodes },
+      { backup_codes: backupCodes },
       "MFA enabled successfully. Save your backup codes securely."
     );
   } catch (error) {
@@ -266,7 +266,7 @@ export const regenerateBackupCodes = async (
 
     return sendSuccess(
       res,
-      { backupCodes },
+      { backup_codes: backupCodes },
       "Backup codes regenerated successfully"
     );
   } catch (error) {

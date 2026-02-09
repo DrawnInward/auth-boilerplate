@@ -9,4 +9,5 @@ export const clearAuthCookies = (res: Response): void => {
   // Set maxAge to 0 to clear cookies
   res.cookie("access_token", "", { ...cookieOptions, maxAge: 0 });
   res.cookie("refresh_token", "", { ...cookieOptions, maxAge: 0 });
+  res.cookie("mfa_challenge", "", { ...cookieOptions, maxAge: 0 });
 };
