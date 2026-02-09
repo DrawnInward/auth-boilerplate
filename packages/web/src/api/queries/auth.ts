@@ -138,17 +138,20 @@ export function useRequestEmailChange() {
   });
 }
 
-export function useConfirmEmailChange() {
+export function useConfirmEmailChange(token: string | undefined) {
   const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: (token: string) =>
-      api.post<{ status: string; message: string; data: { email: string } }>(
+  return useQuery({
+    queryKey: ["confirm-email-change", token],
+    queryFn: async () => {
+      const response = await api.post<{ status: string; message: string; data: { email: string } }>(
         `/auth/confirm-email-change/${token}`
-      ),
-    onSuccess: () => {
+      );
       queryClient.invalidateQueries({ queryKey: ["me"] });
+      return response;
     },
+    enabled: !!token,
+    retry: false,
   });
 }
 

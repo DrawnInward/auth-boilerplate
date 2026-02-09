@@ -1,38 +1,14 @@
-import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { useConfirmEmailChange } from "@/api/queries/auth";
 
-type Status = "loading" | "success" | "error";
-
 export function ConfirmEmailChangePage() {
   const { token } = useParams<{ token: string }>();
-  const confirmEmailChange = useConfirmEmailChange();
-  const [status, setStatus] = useState<Status>("loading");
-  const [newEmail, setNewEmail] = useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const { data, error, isLoading } = useConfirmEmailChange(token);
 
-  useEffect(() => {
-    if (!token) {
-      setStatus("error");
-      setErrorMessage("No verification token provided.");
-      return;
-    }
-
-    confirmEmailChange.mutateAsync(token)
-      .then((response) => {
-        setNewEmail(response.data?.email ?? null);
-        setStatus("success");
-      })
-      .catch((error) => {
-        setStatus("error");
-        setErrorMessage(error?.message || "Failed to confirm email change. The link may be invalid or expired.");
-      });
-  }, [token]);
-
-  if (status === "loading") {
+  if (isLoading) {
     return (
       <Card className="w-full max-w-md">
         <CardContent className="flex flex-col items-center justify-center py-12">
@@ -43,7 +19,8 @@ export function ConfirmEmailChangePage() {
     );
   }
 
-  if (status === "error") {
+  if (error || !data) {
+    const errorMessage = (error as any)?.message || "Failed to confirm email change. The link may be invalid or expired.";
     return (
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
@@ -64,7 +41,7 @@ export function ConfirmEmailChangePage() {
       <CardHeader className="text-center">
         <CardTitle>Email Changed Successfully</CardTitle>
         <CardDescription>
-          Your email has been updated to <strong>{newEmail}</strong>.
+          Your email has been updated to <strong>{data.data?.email}</strong>.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex justify-center">
