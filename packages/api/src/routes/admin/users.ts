@@ -11,6 +11,7 @@ import {
   deleteUserHandler,
   sendPasswordReset,
   updateOrgPermission,
+  disableUserMfa,
 } from "../../controllers/admin/adminUsers";
 import { authoriseUser } from "../../middleware/authoriseUser";
 
@@ -59,6 +60,13 @@ router.patch(
   authoriseUser(["admin"]),
   validateParams(userParamsSchema),
   updateOrgPermission
+);
+
+router.post(
+  "/:userId/disable-mfa",
+  authoriseUser(["admin"]),
+  validateParams(userParamsSchema),
+  disableUserMfa
 );
 
 export default router;

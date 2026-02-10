@@ -34,7 +34,7 @@ export function MfaVerifyForm({ onSubmitCode, onSubmitBackup, isLoading }: MfaVe
 
   if (useBackup) {
     return (
-      <Form {...backupForm}>
+      <Form {...backupForm} key="backup">
         <form onSubmit={backupForm.handleSubmit(onSubmitBackup)} className="space-y-4">
           <FormField
             control={backupForm.control}
@@ -66,7 +66,7 @@ export function MfaVerifyForm({ onSubmitCode, onSubmitBackup, isLoading }: MfaVe
   }
 
   return (
-    <Form {...codeForm}>
+    <Form {...codeForm} key="code">
       <form onSubmit={codeForm.handleSubmit(onSubmitCode)} className="space-y-4">
         <FormField
           control={codeForm.control}

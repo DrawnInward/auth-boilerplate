@@ -191,6 +191,20 @@ export function useAdminResetUserPassword(id: string) {
   });
 }
 
+export function useAdminDisableUserMfa(id: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () =>
+      api.post<{ status: string; message: string }>(
+        `/admin/users/${id}/disable-mfa`,
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "users", id] });
+    },
+  });
+}
+
 // Admin Organization Management
 interface OrgsResponse {
   status: string;

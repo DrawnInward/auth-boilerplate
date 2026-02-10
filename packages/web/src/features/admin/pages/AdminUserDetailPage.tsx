@@ -32,6 +32,7 @@ import {
   useAdminUpdateUser,
   useAdminDeleteUser,
   useAdminResetUserPassword,
+  useAdminDisableUserMfa,
 } from "@/api/queries/admin";
 import { FullPageSpinner, FullPageError } from "@/components/shared";
 import { useApiError } from "@/hooks";
@@ -52,9 +53,11 @@ export function AdminUserDetailPage() {
   const updateUser = useAdminUpdateUser(id!);
   const deleteUser = useAdminDeleteUser();
   const resetPassword = useAdminResetUserPassword(id!);
+  const disableMfa = useAdminDisableUserMfa(id!);
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
+  const [disableMfaDialogOpen, setDisableMfaDialogOpen] = useState(false);
 
   const user = data?.data;
 
@@ -93,6 +96,16 @@ export function AdminUserDetailPage() {
       await resetPassword.mutateAsync();
       toast.success("Password reset email sent");
       setResetPasswordDialogOpen(false);
+    } catch (error) {
+      handleError(error);
+    }
+  };
+
+  const handleDisableMfa = async () => {
+    try {
+      await disableMfa.mutateAsync();
+      toast.success("MFA disabled for user");
+      setDisableMfaDialogOpen(false);
     } catch (error) {
       handleError(error);
     }
@@ -148,6 +161,15 @@ export function AdminUserDetailPage() {
             >
               Send Password Reset
             </Button>
+            {user.mfa_enabled && (
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => setDisableMfaDialogOpen(true)}
+              >
+                Disable MFA
+              </Button>
+            )}
             <Button
               variant="destructive"
               className="w-full"
@@ -233,6 +255,23 @@ export function AdminUserDetailPage() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleResetPassword} disabled={resetPassword.isPending}>
               {resetPassword.isPending ? "Sending..." : "Send Reset Email"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={disableMfaDialogOpen} onOpenChange={setDisableMfaDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Disable MFA</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will disable MFA for {user.email} and delete all their backup codes. The user will need to set up MFA again if they want to use it.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDisableMfa} disabled={disableMfa.isPending}>
+              {disableMfa.isPending ? "Disabling..." : "Disable MFA"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

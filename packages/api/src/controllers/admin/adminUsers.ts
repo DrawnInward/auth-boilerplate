@@ -8,6 +8,8 @@ import {
   deleteUser,
   updateUserOrgPermission,
 } from "../../models/users.models";
+import { disableMfa, deleteAllBackupCodes } from "../../models/mfa.models";
+import db from "../../database/db";
 import {
   createInvitation,
   invalidatePendingInvitations,
@@ -16,6 +18,7 @@ import { sendSuccess, sendCreated } from "../../utils/responseUtils";
 import {
   sendAdminInviteEmail,
   sendPasswordResetEmail,
+  sendMfaDisabledEmail,
 } from "../../utils/email";
 import { hashPassword } from "../../utils";
 
@@ -202,5 +205,42 @@ export const updateOrgPermission = async (
     );
   } catch (error) {
     next(error);
+  }
+};
+
+export const disableUserMfa = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  const client = await db.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const { userId } = req.params;
+
+    const user = await getUserById(userId as string);
+    if (!user) {
+      throw { status: 404, msg: "User not found" };
+    }
+
+    if (!user.mfa_enabled) {
+      throw { status: 400, msg: "MFA is not enabled for this user" };
+    }
+
+    await disableMfa(userId as string, "user", client);
+    await deleteAllBackupCodes(userId as string, "user", client);
+
+    await client.query("COMMIT");
+
+    await sendMfaDisabledEmail(user.email!);
+
+    return sendSuccess(res, null, "MFA disabled for user");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    next(error);
+  } finally {
+    client.release();
   }
 };
