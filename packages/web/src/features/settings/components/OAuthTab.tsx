@@ -2,19 +2,34 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/features/auth/context/AuthContext";
+import { useConfig } from "@/api/queries/config";
 
 const GOOGLE_LINK_URL = import.meta.env.VITE_API_URL
-  ? `${import.meta.env.VITE_API_URL}/auth/google/link`
-  : "http://localhost:3000/api/auth/google/link";
+  ? `${import.meta.env.VITE_API_URL}/oauth/google`
+  : "http://localhost:3000/api/oauth/google";
 
 const GOOGLE_UNLINK_URL = import.meta.env.VITE_API_URL
-  ? `${import.meta.env.VITE_API_URL}/auth/google/unlink`
-  : "http://localhost:3000/api/auth/google/unlink";
+  ? `${import.meta.env.VITE_API_URL}/oauth/google/unlink`
+  : "http://localhost:3000/api/oauth/google/unlink";
 
 export function OAuthTab() {
   const { user } = useAuth();
+  const { data: config } = useConfig();
+
+  const googleEnabled = config?.data?.oauth?.google ?? false;
   const hasGoogle = user?.auth_provider === "google" || user?.auth_provider === "both";
   const hasLocal = user?.auth_provider === "local" || user?.auth_provider === "both";
+
+  if (!googleEnabled && !hasGoogle) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Connected Accounts</CardTitle>
+          <CardDescription>No external authentication providers are configured</CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
 
   return (
     <Card>
@@ -56,15 +71,15 @@ export function OAuthTab() {
               <Button variant="outline" asChild>
                 <a href={GOOGLE_UNLINK_URL}>Unlink</a>
               </Button>
-            ) : !hasGoogle ? (
+            ) : !hasGoogle && googleEnabled ? (
               <Button variant="outline" asChild>
                 <a href={GOOGLE_LINK_URL}>Link</a>
               </Button>
-            ) : (
+            ) : !hasLocal ? (
               <p className="text-xs text-muted-foreground">
                 Set a password first to unlink
               </p>
-            )}
+            ) : null}
           </div>
         </div>
 

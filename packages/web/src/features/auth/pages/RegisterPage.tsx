@@ -4,11 +4,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { RegisterForm } from "../components";
 import { useRegister } from "@/api/queries/auth";
 import { useApiError } from "@/hooks";
+import { useConfig } from "@/api/queries/config";
 
 export function RegisterPage() {
   const [emailSent, setEmailSent] = useState(false);
   const register = useRegister();
   const { handleError } = useApiError();
+  const { data: config, isLoading: configLoading } = useConfig();
+
+  const registrationOpen = config?.data?.registration?.accountCreationMode === "open";
 
   const handleSubmit = async (data: Parameters<typeof register.mutateAsync>[0]) => {
     try {
@@ -18,6 +22,28 @@ export function RegisterPage() {
       handleError(error);
     }
   };
+
+  if (configLoading) {
+    return null;
+  }
+
+  if (!registrationOpen) {
+    return (
+      <Card className="w-full max-w-md">
+        <CardHeader className="text-center">
+          <CardTitle>Registration unavailable</CardTitle>
+          <CardDescription>
+            Registration is currently by invitation only. Please contact an administrator for access.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="text-center text-sm text-muted-foreground">
+          <Link to="/login" className="text-primary hover:underline">
+            Back to sign in
+          </Link>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (emailSent) {
     return (

@@ -29,7 +29,6 @@ export const createUserHandler = async (
   next: NextFunction,
 ) => {
   try {
-    console.log("req.body: ", req.body);
     const { email } = req.body;
 
     const existingUser = await getUser(email);

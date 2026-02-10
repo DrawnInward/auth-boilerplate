@@ -4,8 +4,11 @@ import organizationRoutes from "./user/organizations";
 import invitationRoutes from "./user/invitations";
 import mfaRoutes from "./user/mfa.routes";
 import oauthRoutes from "./user/oauth.routes";
+import configRoutes from "./config.routes";
 
 const router = express.Router();
+
+router.use("/config", configRoutes);
 
 router.use("/auth", userAuthRoutes);
 

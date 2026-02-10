@@ -120,8 +120,8 @@ describe("User MFA Integration Tests", () => {
         .expect(200);
 
       expect(response.body.status).toBe("success");
-      expect(response.body.data.backupCodes).toBeDefined();
-      expect(response.body.data.backupCodes.length).toBe(10);
+      expect(response.body.data.backup_codes).toBeDefined();
+      expect(response.body.data.backup_codes.length).toBe(10);
 
       await db.query(
         "UPDATE users SET mfa_enabled = false, mfa_secret = NULL WHERE user_id = $1",
@@ -350,10 +350,10 @@ describe("User MFA Integration Tests", () => {
         .send({ code })
         .expect(200);
 
-      expect(response.body.data.backupCodes).toBeDefined();
-      expect(response.body.data.backupCodes.length).toBe(10);
+      expect(response.body.data.backup_codes).toBeDefined();
+      expect(response.body.data.backup_codes.length).toBe(10);
 
-      expect(response.body.data.backupCodes).not.toContain(testBackupCodes[0]);
+      expect(response.body.data.backup_codes).not.toContain(testBackupCodes[0]);
     });
 
     it("should reject invalid TOTP code", async () => {
