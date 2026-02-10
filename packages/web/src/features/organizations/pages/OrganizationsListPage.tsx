@@ -15,13 +15,13 @@ export function OrganizationsListPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col items-center text-center gap-4 sm:flex-row sm:items-center sm:justify-between sm:text-left">
         <div>
           <h1 className="text-3xl font-bold">Organizations</h1>
           <p className="text-muted-foreground">Manage your organizations</p>
         </div>
         {canCreateOrgs && (
-          <Button onClick={() => setCreateModalOpen(true)}>
+          <Button onClick={() => setCreateModalOpen(true)} className="w-full sm:w-auto">
             Create Organization
           </Button>
         )}

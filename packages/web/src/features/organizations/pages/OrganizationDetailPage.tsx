@@ -121,12 +121,14 @@ export function OrganizationDetailPage() {
       </div>
 
       <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="members">Members</TabsTrigger>
-          {canManage && <TabsTrigger value="invitations">Invitations</TabsTrigger>}
-          {isOwner && <TabsTrigger value="settings">Settings</TabsTrigger>}
-        </TabsList>
+        <div className="overflow-x-auto">
+          <TabsList>
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="members">Members</TabsTrigger>
+            {canManage && <TabsTrigger value="invitations">Invitations</TabsTrigger>}
+            {isOwner && <TabsTrigger value="settings">Settings</TabsTrigger>}
+          </TabsList>
+        </div>
 
         <TabsContent value="overview">
           <Card>
@@ -152,7 +154,7 @@ export function OrganizationDetailPage() {
 
         <TabsContent value="members">
           <Card>
-            <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <CardHeader className="flex flex-col items-center text-center sm:flex-row sm:items-center sm:justify-between sm:text-left gap-4">
               <div>
                 <CardTitle>Members</CardTitle>
                 <CardDescription>Manage organization members</CardDescription>

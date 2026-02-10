@@ -22,7 +22,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { useAdminUsers, useAdminCreateUser } from "@/api/queries/admin";
-import { UserTable } from "../components";
+import { UserTable, UserCards } from "../components";
 import { LoadingSpinner } from "@/components/shared";
 import { useApiError } from "@/hooks";
 
@@ -81,7 +81,14 @@ export function AdminUsersPage() {
           ) : users.length === 0 ? (
             <p className="py-8 text-center text-muted-foreground">No users found</p>
           ) : (
-            <UserTable users={users} />
+            <>
+              <div className="md:hidden">
+                <UserCards users={users} />
+              </div>
+              <div className="hidden md:block">
+                <UserTable users={users} />
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
