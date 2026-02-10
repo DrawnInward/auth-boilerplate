@@ -40,8 +40,8 @@ export const authoriseUser =
       const secretKey = isRefresh
         ? process.env.REFRESH_KEY
         : isAdminToken
-        ? process.env.ADMIN_ACCESS_KEY
-        : process.env.USER_ACCESS_KEY;
+          ? process.env.ADMIN_ACCESS_KEY
+          : process.env.USER_ACCESS_KEY;
 
       if (!secretKey) {
         throw {
@@ -56,12 +56,11 @@ export const authoriseUser =
         const refreshPayload = userDetails as RefreshJwtPayload;
         const { accessToken, newRefreshToken } = await createAccessToken(
           refreshPayload,
-          token
+          token,
         );
 
         setAuthCookies(res, accessToken, newRefreshToken);
 
-        // Use the correct key based on role_type from the refresh token
         const accessKey =
           refreshPayload.role_type === "admin"
             ? process.env.ADMIN_ACCESS_KEY!
@@ -73,17 +72,8 @@ export const authoriseUser =
       }
 
       if (!allowedRoles.includes(req.user.role_type)) {
-        if (process.env.NODE_ENV === "production") {
-          return res.status(403).json({
-            msg: "Insufficient permissions",
-          });
-        } else {
-          return res.status(403).json({
-            msg: "Insufficient permissions",
-          });
-        }
+        return res.status(403).json({ msg: "Insufficient permissions" });
       }
-
       next();
     } catch (error) {
       res.status(403).send({ msg: "Invalid Token" });
