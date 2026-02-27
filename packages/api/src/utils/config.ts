@@ -29,3 +29,8 @@ export const getOrgCreationMode = (): OrgCreationMode => {
   }
   return "open";
 };
+
+export const getRefreshTokenDays = (): number => {
+  const days = parseInt(process.env.REFRESH_TOKEN_DAYS || "7");
+  return isNaN(days) ? 7 : days;
+};

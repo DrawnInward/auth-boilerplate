@@ -191,9 +191,9 @@ describe("Refresh Token Model CRUD Operations", () => {
         beforeCreation.getTime()
       );
 
-      // Check expiration is approximately 3 months later
+      // Check expiration is approximately 7 days later (default REFRESH_TOKEN_DAYS)
       const expectedExpiration = new Date(issuedTime);
-      expectedExpiration.setMonth(issuedTime.getMonth() + 3);
+      expectedExpiration.setDate(issuedTime.getDate() + 7);
 
       expect(
         Math.abs(expirationTime.getTime() - expectedExpiration.getTime())

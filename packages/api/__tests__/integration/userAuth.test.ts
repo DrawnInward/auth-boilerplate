@@ -92,13 +92,13 @@ describe("User Authentication Integration Tests", () => {
       const response = await request(app)
         .post("/api/auth/login")
         .send({
-          email: "deactivated@example.com",
+          email: "bob@example.com",
           password: "Password1",
         })
-        .expect(401);
+        .expect(403);
 
       expect(response.body.status).toBe("error");
-      expect(response.body.message).toBe("Invalid credentials");
+      expect(response.body.message).toBe("Account is deactivated");
     });
 
     it("should reject login with missing email", async () => {

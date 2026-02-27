@@ -37,8 +37,6 @@ const getValidationErrorResponse = (
   }
 };
 
-// TODO: Probably want to make these error messages be consistent with your own at some point. Have a look at what they actually look like.
-
 export const validateBody =
   (schema: z.ZodTypeAny) =>
   async (req: Request, res: Response, next: NextFunction) => {

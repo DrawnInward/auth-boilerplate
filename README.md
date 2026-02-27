@@ -135,6 +135,12 @@ The setup script generates three env files in `packages/api/`:
 | `MFA_CHALLENGE_KEY` | Signs MFA challenge tokens |
 | `MFA_ENCRYPTION_KEY` | Encrypts MFA secrets in database (AES-256-GCM) |
 
+### Token Settings
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `REFRESH_TOKEN_DAYS` | `7` | Refresh token lifetime in days |
+
 ### Registration Modes
 
 Control who can create accounts and organizations:

@@ -7,6 +7,7 @@ import {
   UpdateRefreshTokenDto,
 } from "../types";
 import { determinateHash } from "../utils";
+import { getRefreshTokenDays } from "../utils/config";
 import { Pool, PoolClient } from "pg";
 dotenv.config({ quiet: true });
 
@@ -101,7 +102,7 @@ export const addRefresh = async (
   const { role_id, role_type } = newRefresh;
   const issued_time = new Date();
   const expiration_time = new Date(issued_time);
-  expiration_time.setMonth(issued_time.getMonth() + 3);
+  expiration_time.setDate(issued_time.getDate() + getRefreshTokenDays());
   const formattedExpiration_time = expiration_time.toISOString();
   const formattedIssued_time = issued_time.toISOString();
 
@@ -126,7 +127,7 @@ export const addRefresh = async (
     const refreshToken = jwt.sign(
       { refresh_id: refreshId, role_id, role_type },
       refreshKey,
-      { expiresIn: "7d" },
+      { expiresIn: `${getRefreshTokenDays()}d` },
     );
 
     const tokenHash = determinateHash(refreshToken);
