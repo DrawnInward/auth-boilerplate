@@ -7,16 +7,6 @@ import { createUser } from "../../src/models/users.models";
 
 require("dotenv").config({ quiet: true });
 
-const getInvitationToken = async (email: string): Promise<string | null> => {
-  const result = await db.query(
-    `SELECT token_hash FROM invitations
-     WHERE email = $1 AND used_at IS NULL
-     ORDER BY created_at DESC LIMIT 1`,
-    [email.toLowerCase()],
-  );
-  return result.rows[0]?.token_hash || null;
-};
-
 const getInvitationByEmail = async (
   email: string,
   type?: string,
@@ -33,7 +23,6 @@ const getInvitationByEmail = async (
 };
 
 describe("Admin User Management Integration Tests", () => {
-  let adminAccessToken: string;
   let adminCookies: string[];
 
   beforeAll(async () => {

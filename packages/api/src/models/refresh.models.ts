@@ -16,12 +16,8 @@ export const fetchRefresh = async (): Promise<RefreshToken[]> => {
     SELECT * FROM refresh; 
   `;
 
-  try {
-    const refresh = await db.query(queryString);
-    return refresh.rows;
-  } catch (err) {
-    throw err;
-  }
+  const refresh = await db.query(queryString);
+  return refresh.rows;
 };
 
 export const fetchRefreshById = async (id: string): Promise<RefreshToken> => {
@@ -30,16 +26,12 @@ export const fetchRefreshById = async (id: string): Promise<RefreshToken> => {
     WHERE refresh_id = $1; 
   `;
 
-  try {
-    const refresh = await db.query(queryString, [id]);
-    if (refresh.rows.length === 0) {
-      throw { status: 404, msg: "Refresh token not found" };
-    }
-
-    return refresh.rows[0];
-  } catch (err) {
-    throw err;
+  const refresh = await db.query(queryString, [id]);
+  if (refresh.rows.length === 0) {
+    throw { status: 404, msg: "Refresh token not found" };
   }
+
+  return refresh.rows[0];
 };
 
 export const fetchRefreshByTokenHash = async (
@@ -52,15 +44,11 @@ export const fetchRefreshByTokenHash = async (
     FOR UPDATE; 
   `;
 
-  try {
-    const refresh = await client.query(queryString, [tokenHash]);
-    if (refresh.rows.length === 0)
-      throw { status: 404, msg: "Refresh token not found" };
+  const refresh = await client.query(queryString, [tokenHash]);
+  if (refresh.rows.length === 0)
+    throw { status: 404, msg: "Refresh token not found" };
 
-    return refresh.rows[0];
-  } catch (err) {
-    throw err;
-  }
+  return refresh.rows[0];
 };
 
 export const modifyRefreshById = async (
@@ -80,12 +68,8 @@ export const modifyRefreshById = async (
     RETURNING *;
   `;
 
-  try {
-    const updatedRefresh = await client.query(queryString, [...values, id]);
-    return updatedRefresh.rows[0];
-  } catch (err) {
-    throw err;
-  }
+  const updatedRefresh = await client.query(queryString, [...values, id]);
+  return updatedRefresh.rows[0];
 };
 
 export const addRefresh = async (
@@ -106,48 +90,44 @@ export const addRefresh = async (
   const formattedExpiration_time = expiration_time.toISOString();
   const formattedIssued_time = issued_time.toISOString();
 
-  try {
-    const initialAddRefreshTokenQuery = await client.query(queryString, [
-      role_id,
-      role_type,
-      "placeholder_hash",
-      formattedExpiration_time,
-      formattedIssued_time,
-      null,
-      true,
-      null,
-    ]);
+  const initialAddRefreshTokenQuery = await client.query(queryString, [
+    role_id,
+    role_type,
+    "placeholder_hash",
+    formattedExpiration_time,
+    formattedIssued_time,
+    null,
+    true,
+    null,
+  ]);
 
-    const refreshId = initialAddRefreshTokenQuery.rows[0].refresh_id;
-    const refreshKey = process.env.REFRESH_KEY;
-    if (!refreshKey) {
-      throw { status: 500, msg: "Missing REFRESH_KEY environment variable" };
-    }
-
-    const refreshToken = jwt.sign(
-      { refresh_id: refreshId, role_id, role_type },
-      refreshKey,
-      { expiresIn: `${getRefreshTokenDays()}d` },
-    );
-
-    const tokenHash = determinateHash(refreshToken);
-
-    const updateRefreshTokenQuery = await client.query(
-      `
-      UPDATE refresh
-      SET token_hash = $1
-      WHERE refresh_id = $2 
-      RETURNING *;
-      `,
-      [tokenHash, refreshId],
-    );
-
-    const refreshTokenDetails = updateRefreshTokenQuery.rows[0];
-
-    return { token: refreshToken, refresh_id: refreshTokenDetails.refresh_id };
-  } catch (err) {
-    throw err;
+  const refreshId = initialAddRefreshTokenQuery.rows[0].refresh_id;
+  const refreshKey = process.env.REFRESH_KEY;
+  if (!refreshKey) {
+    throw { status: 500, msg: "Missing REFRESH_KEY environment variable" };
   }
+
+  const refreshToken = jwt.sign(
+    { refresh_id: refreshId, role_id, role_type },
+    refreshKey,
+    { expiresIn: `${getRefreshTokenDays()}d` },
+  );
+
+  const tokenHash = determinateHash(refreshToken);
+
+  const updateRefreshTokenQuery = await client.query(
+    `
+    UPDATE refresh
+    SET token_hash = $1
+    WHERE refresh_id = $2 
+    RETURNING *;
+    `,
+    [tokenHash, refreshId],
+  );
+
+  const refreshTokenDetails = updateRefreshTokenQuery.rows[0];
+
+  return { token: refreshToken, refresh_id: refreshTokenDetails.refresh_id };
 };
 
 export const removeRefreshById = async (id: string): Promise<void> => {
@@ -157,14 +137,10 @@ export const removeRefreshById = async (id: string): Promise<void> => {
     RETURNING refresh_id;
   `;
 
-  try {
-    const result = await db.query(queryString, [id]);
+  const result = await db.query(queryString, [id]);
 
-    if (result.rows.length === 0) {
-      throw { status: 404, msg: "Refresh token not found" };
-    }
-  } catch (err) {
-    throw err;
+  if (result.rows.length === 0) {
+    throw { status: 404, msg: "Refresh token not found" };
   }
 };
 

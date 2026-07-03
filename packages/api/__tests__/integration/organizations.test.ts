@@ -17,7 +17,6 @@ require("dotenv").config({ quiet: true });
 describe("Organization Integration Tests", () => {
   let ownerCookies: string;
   let adminCookies: string;
-  let memberCookies: string;
   let viewerCookies: string;
 
   beforeAll(async () => {
@@ -192,7 +191,7 @@ describe("Organization Integration Tests", () => {
 
     it("should reject update from member (non-admin)", async () => {
       // First need to login as Bob who is a member
-      const bobLogin = await request(app).post("/api/auth/login").send({
+      await request(app).post("/api/auth/login").send({
         email: "bob@example.com",
         password: "Password1",
       });

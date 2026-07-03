@@ -20,7 +20,7 @@ export function ConfirmEmailChangePage() {
   }
 
   if (error || !data) {
-    const errorMessage = (error as any)?.message || "Failed to confirm email change. The link may be invalid or expired.";
+    const errorMessage = (error instanceof Error ? error.message : undefined) || "Failed to confirm email change. The link may be invalid or expired.";
     return (
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">

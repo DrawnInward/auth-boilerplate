@@ -62,15 +62,11 @@ export const getOrganizationBySlug = async (
     WHERE slug = $1;
   `;
 
-  try {
-    const result = await db.query(queryString, [slug]);
-    if (result.rows.length === 0) {
-      return null;
-    }
-    return result.rows[0];
-  } catch (err) {
-    throw err;
+  const result = await db.query(queryString, [slug]);
+  if (result.rows.length === 0) {
+    return null;
   }
+  return result.rows[0];
 };
 
 export const getOrganizationById = async (
@@ -81,15 +77,11 @@ export const getOrganizationById = async (
     WHERE id = $1;
   `;
 
-  try {
-    const result = await db.query(queryString, [id]);
-    if (result.rows.length === 0) {
-      return null;
-    }
-    return result.rows[0];
-  } catch (err) {
-    throw err;
+  const result = await db.query(queryString, [id]);
+  if (result.rows.length === 0) {
+    return null;
   }
+  return result.rows[0];
 };
 
 export const getOrganizations = async (
@@ -135,12 +127,8 @@ export const getOrganizations = async (
     values.push(pagination.offset);
   }
 
-  try {
-    const result = await db.query(queryString, values);
-    return result.rows;
-  } catch (err) {
-    throw err;
-  }
+  const result = await db.query(queryString, values);
+  return result.rows;
 };
 
 export const getOrganizationsByUserId = async (
@@ -169,12 +157,8 @@ export const getOrganizationsByUserId = async (
     values.push(pagination.offset);
   }
 
-  try {
-    const result = await db.query(queryString, values);
-    return result.rows;
-  } catch (err) {
-    throw err;
-  }
+  const result = await db.query(queryString, values);
+  return result.rows;
 };
 
 export const modifyOrganization = async (
@@ -236,15 +220,11 @@ export const deleteOrganization = async (
     RETURNING *;
   `;
 
-  try {
-    const result = await client.query(queryString, [id]);
-    if (result.rows.length === 0) {
-      throw { status: 404, msg: "Organization not found" };
-    }
-    return result.rows[0];
-  } catch (err) {
-    throw err;
+  const result = await client.query(queryString, [id]);
+  if (result.rows.length === 0) {
+    throw { status: 404, msg: "Organization not found" };
   }
+  return result.rows[0];
 };
 
 export const getOrganizationStats = async (): Promise<OrganizationStats> => {
@@ -257,18 +237,14 @@ export const getOrganizationStats = async (): Promise<OrganizationStats> => {
     LEFT JOIN organization_members om ON o.id = om.organization_id;
   `;
 
-  try {
-    const result = await db.query(queryString);
-    const stats = result.rows[0];
+  const result = await db.query(queryString);
+  const stats = result.rows[0];
 
-    return {
-      total: parseInt(stats.total),
-      total_members: parseInt(stats.total_members),
-      created_last_30_days: parseInt(stats.created_last_30_days),
-    };
-  } catch (err) {
-    throw err;
-  }
+  return {
+    total: parseInt(stats.total),
+    total_members: parseInt(stats.total_members),
+    created_last_30_days: parseInt(stats.created_last_30_days),
+  };
 };
 
 export const getOrganizationWithMemberCount = async (
@@ -284,16 +260,12 @@ export const getOrganizationWithMemberCount = async (
     GROUP BY o.id;
   `;
 
-  try {
-    const result = await db.query(queryString, [id]);
-    if (result.rows.length === 0) {
-      return null;
-    }
-    return {
-      ...result.rows[0],
-      member_count: parseInt(result.rows[0].member_count),
-    };
-  } catch (err) {
-    throw err;
+  const result = await db.query(queryString, [id]);
+  if (result.rows.length === 0) {
+    return null;
   }
+  return {
+    ...result.rows[0],
+    member_count: parseInt(result.rows[0].member_count),
+  };
 };

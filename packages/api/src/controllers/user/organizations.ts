@@ -2,7 +2,6 @@ import { Response, NextFunction } from "express";
 import { RequestWithUser } from "../../types";
 import {
   createOrganization,
-  getOrganizationById,
   getOrganizationsByUserId,
   modifyOrganization,
   deleteOrganization,

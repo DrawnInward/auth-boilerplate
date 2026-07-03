@@ -1,14 +1,32 @@
 import { z } from "zod";
 
+// Single source for org role vocabularies. Zod enums and the type derive from
+// the arrays; the OrganizationRole map is kept for compatibility.
+export const ORGANIZATION_ROLES = [
+  "owner",
+  "admin",
+  "member",
+  "viewer",
+] as const;
+export const organizationRoleSchema = z.enum(ORGANIZATION_ROLES);
+export type OrganizationRoleType = (typeof ORGANIZATION_ROLES)[number];
+
+// Roles that can be granted to others — owner is never assignable.
+export const ASSIGNABLE_ORGANIZATION_ROLES = [
+  "admin",
+  "member",
+  "viewer",
+] as const;
+export const assignableOrganizationRoleSchema = z.enum(
+  ASSIGNABLE_ORGANIZATION_ROLES,
+);
+
 export const OrganizationRole = {
   OWNER: "owner",
   ADMIN: "admin",
   MEMBER: "member",
   VIEWER: "viewer",
 } as const;
-
-export type OrganizationRoleType =
-  (typeof OrganizationRole)[keyof typeof OrganizationRole];
 
 export const organizationSchema = z.object({
   id: z.string().uuid(),
@@ -25,7 +43,7 @@ export const organizationMemberSchema = z.object({
   id: z.string().uuid(),
   organization_id: z.string().uuid(),
   user_id: z.string().uuid(),
-  role: z.enum(["owner", "admin", "member", "viewer"]),
+  role: organizationRoleSchema,
   invited_by: z.string().uuid().nullable(),
   joined_at: z.date().optional(),
   created_at: z.date().optional(),
@@ -76,10 +94,7 @@ export type UpdateOrganizationDto = z.infer<typeof updateOrganizationDtoSchema>;
 
 export const addOrganizationMemberDtoSchema = z.object({
   user_id: z.string().uuid("User ID must be a valid UUID"),
-  role: z
-    .enum(["owner", "admin", "member", "viewer"])
-    .default("member")
-    .optional(),
+  role: organizationRoleSchema.default("member").optional(),
 });
 
 export type AddOrganizationMemberDto = z.infer<
@@ -87,7 +102,7 @@ export type AddOrganizationMemberDto = z.infer<
 >;
 
 export const updateMemberRoleDtoSchema = z.object({
-  role: z.enum(["admin", "member", "viewer"]),
+  role: assignableOrganizationRoleSchema,
 });
 
 export type UpdateMemberRoleDto = z.infer<typeof updateMemberRoleDtoSchema>;
@@ -120,7 +135,7 @@ export type OrganizationWithMemberCount = z.infer<
 >;
 
 export const organizationWithRoleSchema = organizationSchema.extend({
-  role: z.enum(["owner", "admin", "member", "viewer"]),
+  role: organizationRoleSchema,
 });
 
 export type OrganizationWithRole = z.infer<typeof organizationWithRoleSchema>;

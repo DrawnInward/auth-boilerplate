@@ -15,13 +15,9 @@ import {
   getUserStats,
 } from "../../src/models/users.models";
 import { testUsers } from "../../src/database/test-data";
-import {
-  getAdminUuid,
-  getUserUuid,
-} from "../../src/database/test-data/testUuids";
+import { getUserUuid } from "../../src/database/test-data/testUuids";
 
 describe("User Model CRUD Operations", () => {
-  let client: any;
 
   beforeAll(async () => {
     await seed({ usersData: testUsers });
@@ -40,7 +36,7 @@ describe("User Model CRUD Operations", () => {
         is_active: true,
       };
 
-      const createdUser = await createUser(newUser, client);
+      const createdUser = await createUser(newUser);
 
       expect(createdUser).toBeDefined();
       expect(createdUser.user_id).toBeDefined();

@@ -65,15 +65,11 @@ export const getOrganizationMember = async (
     WHERE organization_id = $1 AND user_id = $2;
   `;
 
-  try {
-    const result = await db.query(queryString, [organizationId, userId]);
-    if (result.rows.length === 0) {
-      return null;
-    }
-    return result.rows[0];
-  } catch (err) {
-    throw err;
+  const result = await db.query(queryString, [organizationId, userId]);
+  if (result.rows.length === 0) {
+    return null;
   }
+  return result.rows[0];
 };
 
 export const getOrganizationMemberById = async (
@@ -84,15 +80,11 @@ export const getOrganizationMemberById = async (
     WHERE id = $1;
   `;
 
-  try {
-    const result = await db.query(queryString, [memberId]);
-    if (result.rows.length === 0) {
-      return null;
-    }
-    return result.rows[0];
-  } catch (err) {
-    throw err;
+  const result = await db.query(queryString, [memberId]);
+  if (result.rows.length === 0) {
+    return null;
   }
+  return result.rows[0];
 };
 
 export const getOrganizationMembers = async (
@@ -121,12 +113,8 @@ export const getOrganizationMembers = async (
     values.push(pagination.offset);
   }
 
-  try {
-    const result = await db.query(queryString, values);
-    return result.rows;
-  } catch (err) {
-    throw err;
-  }
+  const result = await db.query(queryString, values);
+  return result.rows;
 };
 
 export const getUserMemberships = async (
@@ -153,12 +141,8 @@ export const getUserMemberships = async (
     values.push(pagination.offset);
   }
 
-  try {
-    const result = await db.query(queryString, values);
-    return result.rows;
-  } catch (err) {
-    throw err;
-  }
+  const result = await db.query(queryString, values);
+  return result.rows;
 };
 
 export const updateMemberRole = async (
@@ -307,12 +291,8 @@ export const getMemberCount = async (
     WHERE organization_id = $1;
   `;
 
-  try {
-    const result = await db.query(queryString, [organizationId]);
-    return parseInt(result.rows[0].count);
-  } catch (err) {
-    throw err;
-  }
+  const result = await db.query(queryString, [organizationId]);
+  return parseInt(result.rows[0].count);
 };
 
 export const isUserMemberOfOrg = async (

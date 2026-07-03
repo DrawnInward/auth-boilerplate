@@ -69,15 +69,11 @@ export const getAdmin = async (
     queryString += ` AND deleted_at IS NULL`;
   }
 
-  try {
-    const result = await db.query(queryString, [email]);
-    if (result.rows.length === 0) {
-      return null;
-    }
-    return excludePasswordHash(result.rows[0]);
-  } catch (err) {
-    throw err;
+  const result = await db.query(queryString, [email]);
+  if (result.rows.length === 0) {
+    return null;
   }
+  return excludePasswordHash(result.rows[0]);
 };
 
 export const getAdminById = async (
@@ -88,15 +84,11 @@ export const getAdminById = async (
     WHERE admin_id = $1 AND deleted_at IS NULL;
   `;
 
-  try {
-    const result = await db.query(queryString, [adminId]);
-    if (result.rows.length === 0) {
-      return null;
-    }
-    return excludePasswordHash(result.rows[0]);
-  } catch (err) {
-    throw err;
+  const result = await db.query(queryString, [adminId]);
+  if (result.rows.length === 0) {
+    return null;
   }
+  return excludePasswordHash(result.rows[0]);
 };
 
 export const getAdmins = async (
@@ -142,12 +134,8 @@ export const getAdmins = async (
     values.push(pagination.offset);
   }
 
-  try {
-    const result = await db.query(queryString, values);
-    return result.rows.map(excludePasswordHash);
-  } catch (err) {
-    throw err;
-  }
+  const result = await db.query(queryString, values);
+  return result.rows.map(excludePasswordHash);
 };
 
 export const getAdminWithPassword = async (
@@ -158,15 +146,11 @@ export const getAdminWithPassword = async (
     WHERE email = $1 AND deleted_at IS NULL;
   `;
 
-  try {
-    const result = await db.query(queryString, [email]);
-    if (result.rows.length === 0) {
-      return null;
-    }
-    return result.rows[0];
-  } catch (err) {
-    throw err;
+  const result = await db.query(queryString, [email]);
+  if (result.rows.length === 0) {
+    return null;
   }
+  return result.rows[0];
 };
 
 export const modifyAdmin = async (
@@ -262,15 +246,11 @@ export const updateAdminPassword = async (
     RETURNING admin_id;
   `;
 
-  try {
-    const result = await client.query(queryString, [newPasswordHash, adminId]);
-    if (result.rows.length === 0) {
-      throw { status: 404, msg: "Admin not found" };
-    }
-    return true;
-  } catch (err) {
-    throw err;
+  const result = await client.query(queryString, [newPasswordHash, adminId]);
+  if (result.rows.length === 0) {
+    throw { status: 404, msg: "Admin not found" };
   }
+  return true;
 };
 
 export const deleteAdmin = async (
@@ -281,40 +261,36 @@ export const deleteAdmin = async (
     SELECT deleted_at, root FROM admins WHERE admin_id = $1;
   `;
 
-  try {
-    const checkResult = await client.query(checkQuery, [adminId]);
+  const checkResult = await client.query(checkQuery, [adminId]);
 
-    if (checkResult.rows.length === 0) {
-      throw { status: 404, msg: "Admin not found" };
-    }
-
-    if (checkResult.rows[0].deleted_at !== null) {
-      throw { status: 409, msg: "Admin already deleted" };
-    }
-
-    if (checkResult.rows[0].root === true) {
-      const rootCountQuery = `
-        SELECT COUNT(*) as root_count FROM admins 
-        WHERE root = true AND deleted_at IS NULL;
-      `;
-      const rootCount = await client.query(rootCountQuery);
-      if (parseInt(rootCount.rows[0].root_count) === 1) {
-        throw { status: 409, msg: "Cannot delete the only root admin" };
-      }
-    }
-
-    const deleteQuery = `
-      UPDATE admins
-      SET deleted_at = NOW(), updated_at = NOW()
-      WHERE admin_id = $1
-      RETURNING *;
-    `;
-
-    const result = await client.query(deleteQuery, [adminId]);
-    return excludePasswordHash(result.rows[0]);
-  } catch (err) {
-    throw err;
+  if (checkResult.rows.length === 0) {
+    throw { status: 404, msg: "Admin not found" };
   }
+
+  if (checkResult.rows[0].deleted_at !== null) {
+    throw { status: 409, msg: "Admin already deleted" };
+  }
+
+  if (checkResult.rows[0].root === true) {
+    const rootCountQuery = `
+      SELECT COUNT(*) as root_count FROM admins 
+      WHERE root = true AND deleted_at IS NULL;
+    `;
+    const rootCount = await client.query(rootCountQuery);
+    if (parseInt(rootCount.rows[0].root_count) === 1) {
+      throw { status: 409, msg: "Cannot delete the only root admin" };
+    }
+  }
+
+  const deleteQuery = `
+    UPDATE admins
+    SET deleted_at = NOW(), updated_at = NOW()
+    WHERE admin_id = $1
+    RETURNING *;
+  `;
+
+  const result = await client.query(deleteQuery, [adminId]);
+  return excludePasswordHash(result.rows[0]);
 };
 
 export const activateAdmin = async (
@@ -331,15 +307,11 @@ export const activateAdmin = async (
     RETURNING *;
   `;
 
-  try {
-    const result = await client.query(queryString, [adminId]);
-    if (result.rows.length === 0) {
-      throw { status: 404, msg: "Admin not found" };
-    }
-    return excludePasswordHash(result.rows[0]);
-  } catch (err) {
-    throw err;
+  const result = await client.query(queryString, [adminId]);
+  if (result.rows.length === 0) {
+    throw { status: 404, msg: "Admin not found" };
   }
+  return excludePasswordHash(result.rows[0]);
 };
 
 export const deactivateAdmin = async (
@@ -377,15 +349,11 @@ export const deactivateAdmin = async (
     RETURNING *;
   `;
 
-  try {
-    const result = await client.query(queryString, [adminId, deactivatorId]);
-    if (result.rows.length === 0) {
-      throw { status: 404, msg: "Admin not found" };
-    }
-    return excludePasswordHash(result.rows[0]);
-  } catch (err) {
-    throw err;
+  const result = await client.query(queryString, [adminId, deactivatorId]);
+  if (result.rows.length === 0) {
+    throw { status: 404, msg: "Admin not found" };
   }
+  return excludePasswordHash(result.rows[0]);
 };
 
 export const verifyAdminEmail = async (
@@ -399,15 +367,11 @@ export const verifyAdminEmail = async (
     RETURNING *;
   `;
 
-  try {
-    const result = await client.query(queryString, [adminId]);
-    if (result.rows.length === 0) {
-      throw { status: 404, msg: "Admin not found" };
-    }
-    return excludePasswordHash(result.rows[0]);
-  } catch (err) {
-    throw err;
+  const result = await client.query(queryString, [adminId]);
+  if (result.rows.length === 0) {
+    throw { status: 404, msg: "Admin not found" };
   }
+  return excludePasswordHash(result.rows[0]);
 };
 
 export const getAdminStats = async (): Promise<AdminStats> => {
@@ -423,22 +387,18 @@ export const getAdminStats = async (): Promise<AdminStats> => {
     FROM admins;
   `;
 
-  try {
-    const result = await db.query(queryString);
-    const stats = result.rows[0];
+  const result = await db.query(queryString);
+  const stats = result.rows[0];
 
-    return {
-      total: parseInt(stats.total),
-      active: parseInt(stats.active),
-      inactive: parseInt(stats.inactive),
-      verified: parseInt(stats.verified),
-      unverified: parseInt(stats.unverified),
-      root_admins: parseInt(stats.root_admins),
-      deleted: parseInt(stats.deleted),
-    };
-  } catch (err) {
-    throw err;
-  }
+  return {
+    total: parseInt(stats.total),
+    active: parseInt(stats.active),
+    inactive: parseInt(stats.inactive),
+    verified: parseInt(stats.verified),
+    unverified: parseInt(stats.unverified),
+    root_admins: parseInt(stats.root_admins),
+    deleted: parseInt(stats.deleted),
+  };
 };
 
 export const getRootAdmin = async (): Promise<Omit<
@@ -451,15 +411,11 @@ export const getRootAdmin = async (): Promise<Omit<
     LIMIT 1;
   `;
 
-  try {
-    const result = await db.query(queryString);
-    if (result.rows.length === 0) {
-      return null;
-    }
-    return excludePasswordHash(result.rows[0]);
-  } catch (err) {
-    throw err;
+  const result = await db.query(queryString);
+  if (result.rows.length === 0) {
+    return null;
   }
+  return excludePasswordHash(result.rows[0]);
 };
 
 export const getAdminWithMfaStatus = async (
@@ -470,13 +426,9 @@ export const getAdminWithMfaStatus = async (
     WHERE email = $1 AND deleted_at IS NULL;
   `;
 
-  try {
-    const result = await db.query(queryString, [email]);
-    if (result.rows.length === 0) {
-      return null;
-    }
-    return result.rows[0];
-  } catch (err) {
-    throw err;
+  const result = await db.query(queryString, [email]);
+  if (result.rows.length === 0) {
+    return null;
   }
+  return result.rows[0];
 };

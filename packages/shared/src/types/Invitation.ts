@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ASSIGNABLE_ORGANIZATION_ROLES } from "./Organization";
 
 export const invitationTypeSchema = z.enum([
   "registration",
@@ -9,7 +10,7 @@ export const invitationTypeSchema = z.enum([
 
 export type InvitationType = z.infer<typeof invitationTypeSchema>;
 
-export const orgInviteRoleSchema = z.enum(["admin", "member", "viewer"]);
+export const orgInviteRoleSchema = z.enum(ASSIGNABLE_ORGANIZATION_ROLES);
 
 export type OrgInviteRole = z.infer<typeof orgInviteRoleSchema>;
 

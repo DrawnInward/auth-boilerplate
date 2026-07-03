@@ -59,15 +59,11 @@ export const getUser = async (
     queryString += ` AND deleted_at IS NULL`;
   }
 
-  try {
-    const result = await db.query(queryString, [email.toLowerCase()]);
-    if (result.rows.length === 0) {
-      return null;
-    }
-    return excludePasswordHash(result.rows[0]);
-  } catch (err) {
-    throw err;
+  const result = await db.query(queryString, [email.toLowerCase()]);
+  if (result.rows.length === 0) {
+    return null;
   }
+  return excludePasswordHash(result.rows[0]);
 };
 
 export const getUserById = async (
@@ -78,15 +74,11 @@ export const getUserById = async (
     WHERE user_id = $1 AND deleted_at IS NULL;
   `;
 
-  try {
-    const result = await db.query(queryString, [userId]);
-    if (result.rows.length === 0) {
-      return null;
-    }
-    return excludePasswordHash(result.rows[0]);
-  } catch (err) {
-    throw err;
+  const result = await db.query(queryString, [userId]);
+  if (result.rows.length === 0) {
+    return null;
   }
+  return excludePasswordHash(result.rows[0]);
 };
 
 export const getUsers = async (
@@ -128,12 +120,8 @@ export const getUsers = async (
     values.push(pagination.offset);
   }
 
-  try {
-    const result = await db.query(queryString, values);
-    return result.rows.map(excludePasswordHash);
-  } catch (err) {
-    throw err;
-  }
+  const result = await db.query(queryString, values);
+  return result.rows.map(excludePasswordHash);
 };
 
 export const getUserWithPassword = async (
@@ -144,15 +132,11 @@ export const getUserWithPassword = async (
     WHERE email = $1 AND deleted_at IS NULL;
   `;
 
-  try {
-    const result = await db.query(queryString, [email.toLowerCase()]);
-    if (result.rows.length === 0) {
-      return null;
-    }
-    return result.rows[0];
-  } catch (err) {
-    throw err;
+  const result = await db.query(queryString, [email.toLowerCase()]);
+  if (result.rows.length === 0) {
+    return null;
   }
+  return result.rows[0];
 };
 
 export const getUserWithPasswordById = async (
@@ -163,15 +147,11 @@ export const getUserWithPasswordById = async (
     WHERE user_id = $1 AND deleted_at IS NULL;
   `;
 
-  try {
-    const result = await db.query(queryString, [userId]);
-    if (result.rows.length === 0) {
-      return null;
-    }
-    return result.rows[0];
-  } catch (err) {
-    throw err;
+  const result = await db.query(queryString, [userId]);
+  if (result.rows.length === 0) {
+    return null;
   }
+  return result.rows[0];
 };
 
 export const modifyUser = async (
@@ -249,15 +229,11 @@ export const updatePassword = async (
     RETURNING user_id;
   `;
 
-  try {
-    const result = await client.query(queryString, [newPasswordHash, userId]);
-    if (result.rows.length === 0) {
-      throw { status: 404, msg: "User not found" };
-    }
-    return true;
-  } catch (err) {
-    throw err;
+  const result = await client.query(queryString, [newPasswordHash, userId]);
+  if (result.rows.length === 0) {
+    throw { status: 404, msg: "User not found" };
   }
+  return true;
 };
 
 export const deleteUser = async (
@@ -268,30 +244,26 @@ export const deleteUser = async (
     SELECT deleted_at FROM users WHERE user_id = $1;
   `;
 
-  try {
-    const checkResult = await client.query(checkQuery, [userId]);
+  const checkResult = await client.query(checkQuery, [userId]);
 
-    if (checkResult.rows.length === 0) {
-      throw { status: 404, msg: "User not found" };
-    }
-
-    if (checkResult.rows[0].deleted_at !== null) {
-      throw { status: 409, msg: "User already deleted" };
-    }
-
-    // Perform soft delete
-    const deleteQuery = `
-      UPDATE users
-      SET deleted_at = NOW(), updated_at = NOW()
-      WHERE user_id = $1
-      RETURNING *;
-    `;
-
-    const result = await client.query(deleteQuery, [userId]);
-    return excludePasswordHash(result.rows[0]);
-  } catch (err) {
-    throw err;
+  if (checkResult.rows.length === 0) {
+    throw { status: 404, msg: "User not found" };
   }
+
+  if (checkResult.rows[0].deleted_at !== null) {
+    throw { status: 409, msg: "User already deleted" };
+  }
+
+  // Perform soft delete
+  const deleteQuery = `
+    UPDATE users
+    SET deleted_at = NOW(), updated_at = NOW()
+    WHERE user_id = $1
+    RETURNING *;
+  `;
+
+  const result = await client.query(deleteQuery, [userId]);
+  return excludePasswordHash(result.rows[0]);
 };
 
 export const activateUser = async (
@@ -308,15 +280,11 @@ export const activateUser = async (
     RETURNING *;
   `;
 
-  try {
-    const result = await client.query(queryString, [userId]);
-    if (result.rows.length === 0) {
-      throw { status: 404, msg: "User not found" };
-    }
-    return excludePasswordHash(result.rows[0]);
-  } catch (err) {
-    throw err;
+  const result = await client.query(queryString, [userId]);
+  if (result.rows.length === 0) {
+    throw { status: 404, msg: "User not found" };
   }
+  return excludePasswordHash(result.rows[0]);
 };
 
 export const deactivateUser = async (
@@ -334,15 +302,11 @@ export const deactivateUser = async (
     RETURNING *;
   `;
 
-  try {
-    const result = await client.query(queryString, [userId, deactivatorId]);
-    if (result.rows.length === 0) {
-      throw { status: 404, msg: "User not found" };
-    }
-    return excludePasswordHash(result.rows[0]);
-  } catch (err) {
-    throw err;
+  const result = await client.query(queryString, [userId, deactivatorId]);
+  if (result.rows.length === 0) {
+    throw { status: 404, msg: "User not found" };
   }
+  return excludePasswordHash(result.rows[0]);
 };
 
 export const verifyUserEmail = async (
@@ -356,15 +320,11 @@ export const verifyUserEmail = async (
     RETURNING *;
   `;
 
-  try {
-    const result = await client.query(queryString, [userId]);
-    if (result.rows.length === 0) {
-      throw { status: 404, msg: "User not found" };
-    }
-    return excludePasswordHash(result.rows[0]);
-  } catch (err) {
-    throw err;
+  const result = await client.query(queryString, [userId]);
+  if (result.rows.length === 0) {
+    throw { status: 404, msg: "User not found" };
   }
+  return excludePasswordHash(result.rows[0]);
 };
 
 export const getUserStats = async (): Promise<UserStats> => {
@@ -379,21 +339,17 @@ export const getUserStats = async (): Promise<UserStats> => {
     FROM users;
   `;
 
-  try {
-    const result = await db.query(queryString);
-    const stats = result.rows[0];
+  const result = await db.query(queryString);
+  const stats = result.rows[0];
 
-    return {
-      total: parseInt(stats.total),
-      active: parseInt(stats.active),
-      inactive: parseInt(stats.inactive),
-      verified: parseInt(stats.verified),
-      unverified: parseInt(stats.unverified),
-      deleted: parseInt(stats.deleted),
-    };
-  } catch (err) {
-    throw err;
-  }
+  return {
+    total: parseInt(stats.total),
+    active: parseInt(stats.active),
+    inactive: parseInt(stats.inactive),
+    verified: parseInt(stats.verified),
+    unverified: parseInt(stats.unverified),
+    deleted: parseInt(stats.deleted),
+  };
 };
 
 export type AuthProvider = "local" | "google" | "both";
@@ -406,15 +362,11 @@ export const getUserByGoogleId = async (
     WHERE google_id = $1 AND deleted_at IS NULL;
   `;
 
-  try {
-    const result = await db.query(queryString, [googleId]);
-    if (result.rows.length === 0) {
-      return null;
-    }
-    return excludePasswordHash(result.rows[0]);
-  } catch (err) {
-    throw err;
+  const result = await db.query(queryString, [googleId]);
+  if (result.rows.length === 0) {
+    return null;
   }
+  return excludePasswordHash(result.rows[0]);
 };
 
 export const setGoogleId = async (
@@ -455,15 +407,11 @@ export const setAuthProvider = async (
     RETURNING *;
   `;
 
-  try {
-    const result = await client.query(queryString, [provider, userId]);
-    if (result.rows.length === 0) {
-      throw { status: 404, msg: "User not found" };
-    }
-    return excludePasswordHash(result.rows[0]);
-  } catch (err) {
-    throw err;
+  const result = await client.query(queryString, [provider, userId]);
+  if (result.rows.length === 0) {
+    throw { status: 404, msg: "User not found" };
   }
+  return excludePasswordHash(result.rows[0]);
 };
 
 export const createGoogleUser = async (
@@ -503,15 +451,11 @@ export const unlinkGoogleAccount = async (
     RETURNING *;
   `;
 
-  try {
-    const result = await client.query(queryString, [userId]);
-    if (result.rows.length === 0) {
-      throw { status: 404, msg: "User not found" };
-    }
-    return excludePasswordHash(result.rows[0]);
-  } catch (err) {
-    throw err;
+  const result = await client.query(queryString, [userId]);
+  if (result.rows.length === 0) {
+    throw { status: 404, msg: "User not found" };
   }
+  return excludePasswordHash(result.rows[0]);
 };
 
 export const getUserWithMfaStatus = async (
@@ -522,15 +466,11 @@ export const getUserWithMfaStatus = async (
     WHERE email = $1 AND deleted_at IS NULL;
   `;
 
-  try {
-    const result = await db.query(queryString, [email.toLowerCase()]);
-    if (result.rows.length === 0) {
-      return null;
-    }
-    return result.rows[0];
-  } catch (err) {
-    throw err;
+  const result = await db.query(queryString, [email.toLowerCase()]);
+  if (result.rows.length === 0) {
+    return null;
   }
+  return result.rows[0];
 };
 
 export const updateUserOrgPermission = async (
@@ -545,13 +485,9 @@ export const updateUserOrgPermission = async (
     RETURNING *;
   `;
 
-  try {
-    const result = await client.query(queryString, [canCreateOrgs, userId]);
-    if (result.rows.length === 0) {
-      throw { status: 404, msg: "User not found" };
-    }
-    return excludePasswordHash(result.rows[0]);
-  } catch (err) {
-    throw err;
+  const result = await client.query(queryString, [canCreateOrgs, userId]);
+  if (result.rows.length === 0) {
+    throw { status: 404, msg: "User not found" };
   }
+  return excludePasswordHash(result.rows[0]);
 };

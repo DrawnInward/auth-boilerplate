@@ -92,15 +92,11 @@ export const getInvitationByTokenHash = async (
     FOR UPDATE;
   `;
 
-  try {
-    const result = await client.query(queryString, [tokenHash]);
-    if (result.rows.length === 0) {
-      return null;
-    }
-    return result.rows[0];
-  } catch (err) {
-    throw err;
+  const result = await client.query(queryString, [tokenHash]);
+  if (result.rows.length === 0) {
+    return null;
   }
+  return result.rows[0];
 };
 
 export const getInvitationById = async (
@@ -112,15 +108,11 @@ export const getInvitationById = async (
     WHERE id = $1;
   `;
 
-  try {
-    const result = await client.query(queryString, [id]);
-    if (result.rows.length === 0) {
-      return null;
-    }
-    return result.rows[0];
-  } catch (err) {
-    throw err;
+  const result = await client.query(queryString, [id]);
+  if (result.rows.length === 0) {
+    return null;
   }
+  return result.rows[0];
 };
 
 export const markInvitationUsed = async (
@@ -134,15 +126,11 @@ export const markInvitationUsed = async (
     RETURNING *;
   `;
 
-  try {
-    const result = await client.query(queryString, [id]);
-    if (result.rows.length === 0) {
-      throw { status: 404, msg: "Invitation not found" };
-    }
-    return result.rows[0];
-  } catch (err) {
-    throw err;
+  const result = await client.query(queryString, [id]);
+  if (result.rows.length === 0) {
+    throw { status: 404, msg: "Invitation not found" };
   }
+  return result.rows[0];
 };
 
 export const invalidatePendingInvitations = async (
@@ -157,12 +145,8 @@ export const invalidatePendingInvitations = async (
     RETURNING id;
   `;
 
-  try {
-    const result = await client.query(queryString, [email.toLowerCase(), type]);
-    return result.rowCount || 0;
-  } catch (err) {
-    throw err;
-  }
+  const result = await client.query(queryString, [email.toLowerCase(), type]);
+  return result.rowCount || 0;
 };
 
 export const listInvitationsByOrganization = async (
@@ -190,12 +174,8 @@ export const listInvitationsByOrganization = async (
     values.push(pagination.offset);
   }
 
-  try {
-    const result = await client.query(queryString, values);
-    return result.rows;
-  } catch (err) {
-    throw err;
-  }
+  const result = await client.query(queryString, values);
+  return result.rows;
 };
 
 export const deleteInvitation = async (
@@ -208,12 +188,8 @@ export const deleteInvitation = async (
     RETURNING id;
   `;
 
-  try {
-    const result = await client.query(queryString, [id]);
-    return (result.rowCount || 0) > 0;
-  } catch (err) {
-    throw err;
-  }
+  const result = await client.query(queryString, [id]);
+  return (result.rowCount || 0) > 0;
 };
 
 export const cleanupExpiredInvitations = async (
@@ -225,12 +201,8 @@ export const cleanupExpiredInvitations = async (
     RETURNING id;
   `;
 
-  try {
-    const result = await client.query(queryString);
-    return result.rowCount || 0;
-  } catch (err) {
-    throw err;
-  }
+  const result = await client.query(queryString);
+  return result.rowCount || 0;
 };
 
 export const validateInvitationToken = async (
@@ -279,10 +251,6 @@ export const getPendingInvitationsForEmail = async (
 
   queryString += ` ORDER BY created_at DESC`;
 
-  try {
-    const result = await client.query(queryString, values);
-    return result.rows;
-  } catch (err) {
-    throw err;
-  }
+  const result = await client.query(queryString, values);
+  return result.rows;
 };
