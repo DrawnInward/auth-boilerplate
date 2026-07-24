@@ -42,6 +42,8 @@ import {
 import { verifyTotpCode } from "../../utils/totp";
 import { parseCookies } from "../../utils";
 import { getAccountCreationMode, getOrgCreationMode } from "../../utils/config";
+import { httpError } from "../../utils/httpError";
+import { withTransaction } from "../../utils/withTransaction";
 
 require("dotenv").config({ quiet: true });
 
@@ -100,21 +102,21 @@ export const login = async (
     const user = await getUserWithMfaStatus(email);
 
     if (!user) {
-      throw { status: 401, msg: "Invalid credentials" };
+      throw httpError(401, "Invalid credentials");
     }
 
     if (!user.is_active) {
-      throw { status: 403, msg: "Account is deactivated" };
+      throw httpError(403, "Account is deactivated");
     }
 
     if (!user.password_hash) {
-      throw { status: 401, msg: "Invalid credentials" };
+      throw httpError(401, "Invalid credentials");
     }
 
     const passwordMatch = await bcrypt.compare(password, user.password_hash);
 
     if (!passwordMatch) {
-      throw { status: 401, msg: "Invalid credentials" };
+      throw httpError(401, "Invalid credentials");
     }
 
     if (user.mfa_enabled) {
@@ -132,7 +134,7 @@ export const login = async (
     const refreshKey = process.env.REFRESH_KEY;
 
     if (!accessKey || !refreshKey) {
-      throw { status: 500, msg: "Server configuration error" };
+      throw httpError(500, "Server configuration error");
     }
 
     const accessToken = jwt.sign(
@@ -196,21 +198,21 @@ export const mfaLoginVerify = async (
     const challengeToken = cookies.mfa_challenge;
 
     if (!challengeToken) {
-      throw { status: 401, msg: "MFA challenge not found" };
+      throw httpError(401, "MFA challenge not found");
     }
 
     const payload = verifyMfaChallengeToken(challengeToken);
     if (payload.role_type !== "user") {
-      throw { status: 401, msg: "Invalid MFA challenge" };
+      throw httpError(401, "Invalid MFA challenge");
     }
 
     const secret = await getMfaSecret(payload.role_id, "user");
     if (!secret) {
-      throw { status: 400, msg: "MFA not configured" };
+      throw httpError(400, "MFA not configured");
     }
 
     if (!verifyTotpCode(secret, code)) {
-      throw { status: 401, msg: "Invalid verification code" };
+      throw httpError(401, "Invalid verification code");
     }
 
     clearMfaChallengeCookie(res);
@@ -218,7 +220,7 @@ export const mfaLoginVerify = async (
     const accessKey = process.env.USER_ACCESS_KEY;
 
     if (!accessKey) {
-      throw { status: 500, msg: "Server configuration error" };
+      throw httpError(500, "Server configuration error");
     }
 
     const accessToken = jwt.sign(
@@ -240,7 +242,7 @@ export const mfaLoginVerify = async (
 
     const user = await getUserById(payload.role_id);
     if (!user) {
-      throw { status: 404, msg: "User not found" };
+      throw httpError(404, "User not found");
     }
 
     return sendSuccess(res, buildUserResponse(user), "Login successful");
@@ -254,85 +256,83 @@ export const mfaLoginBackupVerify = async (
   res: Response,
   next: NextFunction,
 ) => {
-  const client = await db.connect();
-
   try {
-    await client.query("BEGIN");
+    const { accessToken, refreshToken, payload } = await withTransaction(
+      db,
+      async (client) => {
+        const { code } = req.body;
+        const cookies = parseCookies(req.headers.cookie);
+        const challengeToken = cookies.mfa_challenge;
 
-    const { code } = req.body;
-    const cookies = parseCookies(req.headers.cookie);
-    const challengeToken = cookies.mfa_challenge;
+        if (!challengeToken) {
+          throw httpError(401, "MFA challenge not found");
+        }
 
-    if (!challengeToken) {
-      throw { status: 401, msg: "MFA challenge not found" };
-    }
+        const payload = verifyMfaChallengeToken(challengeToken);
+        if (payload.role_type !== "user") {
+          throw httpError(401, "Invalid MFA challenge");
+        }
 
-    const payload = verifyMfaChallengeToken(challengeToken);
-    if (payload.role_type !== "user") {
-      throw { status: 401, msg: "Invalid MFA challenge" };
-    }
+        const unusedCodes = await getUnusedBackupCodes(
+          payload.role_id,
+          "user",
+          client,
+        );
+        let matchedCode = null;
 
-    const unusedCodes = await getUnusedBackupCodes(
-      payload.role_id,
-      "user",
-      client,
-    );
-    let matchedCode = null;
+        for (const backupCode of unusedCodes) {
+          if (await bcrypt.compare(code, backupCode.code_hash)) {
+            matchedCode = backupCode;
+            break;
+          }
+        }
 
-    for (const backupCode of unusedCodes) {
-      if (await bcrypt.compare(code, backupCode.code_hash)) {
-        matchedCode = backupCode;
-        break;
-      }
-    }
+        if (!matchedCode) {
+          throw httpError(401, "Invalid backup code");
+        }
 
-    if (!matchedCode) {
-      throw { status: 401, msg: "Invalid backup code" };
-    }
+        await markBackupCodeUsed(matchedCode.id, client);
 
-    await markBackupCodeUsed(matchedCode.id, client);
+        clearMfaChallengeCookie(res);
 
-    clearMfaChallengeCookie(res);
+        const accessKey = process.env.USER_ACCESS_KEY;
 
-    const accessKey = process.env.USER_ACCESS_KEY;
+        if (!accessKey) {
+          throw httpError(500, "Server configuration error");
+        }
 
-    if (!accessKey) {
-      throw { status: 500, msg: "Server configuration error" };
-    }
+        const accessToken = jwt.sign(
+          {
+            role_id: payload.role_id,
+            role_type: "user",
+            email_verified: true,
+          },
+          accessKey,
+          { expiresIn: "15m" },
+        );
 
-    const accessToken = jwt.sign(
-      {
-        role_id: payload.role_id,
-        role_type: "user",
-        email_verified: true,
+        const { token: refreshToken } = await addRefresh(
+          {
+            role_id: payload.role_id,
+            role_type: "user",
+          },
+          client,
+        );
+
+        return { accessToken, refreshToken, payload };
       },
-      accessKey,
-      { expiresIn: "15m" },
     );
-
-    const { token: refreshToken } = await addRefresh(
-      {
-        role_id: payload.role_id,
-        role_type: "user",
-      },
-      client,
-    );
-
-    await client.query("COMMIT");
 
     setAuthCookies(res, accessToken, refreshToken);
 
     const user = await getUserById(payload.role_id);
     if (!user) {
-      throw { status: 404, msg: "User not found" };
+      throw httpError(404, "User not found");
     }
 
     return sendSuccess(res, buildUserResponse(user), "Login successful");
   } catch (error) {
-    await client.query("ROLLBACK");
     next(error);
-  } finally {
-    client.release();
   }
 };
 
@@ -344,14 +344,14 @@ export const register = async (
   try {
     const accountMode = getAccountCreationMode();
     if (accountMode !== "open") {
-      throw { status: 403, msg: "Self-registration is not allowed" };
+      throw httpError(403, "Self-registration is not allowed");
     }
 
     const { email } = req.body;
 
     const existingUser = await getUser(email);
     if (existingUser) {
-      throw { status: 409, msg: "Email already registered" };
+      throw httpError(409, "Email already registered");
     }
 
     await invalidatePendingInvitations(email, "registration");
@@ -404,59 +404,70 @@ export const completeRegistration = async (
   res: Response,
   next: NextFunction,
 ) => {
-  const client = await db.connect();
-
   try {
-    await client.query("BEGIN");
+    const { accessToken, refreshToken, user } = await withTransaction(
+      db,
+      async (client) => {
+        const { token, password } = req.body;
 
-    const { token, password } = req.body;
+        const invitation = await validateInvitationToken(
+          token,
+          undefined,
+          client,
+        );
 
-    const invitation = await validateInvitationToken(token, undefined, client);
+        if (
+          invitation.type !== "registration" &&
+          invitation.type !== "admin_invite"
+        ) {
+          throw httpError(400, "Invalid invitation type for registration");
+        }
 
-    if (invitation.type !== "registration" && invitation.type !== "admin_invite") {
-      throw { status: 400, msg: "Invalid invitation type for registration" };
-    }
+        const createdThrough =
+          invitation.type === "admin_invite"
+            ? "admin_created"
+            : "self_registered";
 
-    const createdThrough = invitation.type === "admin_invite" ? "admin_created" : "self_registered";
+        const passwordHash = await hashPassword(password);
+        const user = await createUser(
+          {
+            email: invitation.email,
+            password_hash: passwordHash,
+            email_verified: true,
+            is_active: true,
+            created_through: createdThrough,
+          },
+          client,
+        );
 
-    const passwordHash = await hashPassword(password);
-    const user = await createUser(
-      {
-        email: invitation.email,
-        password_hash: passwordHash,
-        email_verified: true,
-        is_active: true,
-        created_through: createdThrough,
+        await markInvitationUsed(invitation.id!, client);
+
+        const accessKey = process.env.USER_ACCESS_KEY;
+        if (!accessKey) {
+          throw httpError(500, "Server configuration error");
+        }
+
+        const accessToken = jwt.sign(
+          {
+            role_id: user.user_id,
+            role_type: "user",
+            email_verified: user.email_verified,
+          },
+          accessKey,
+          { expiresIn: "15m" },
+        );
+
+        const { token: refreshToken } = await addRefresh(
+          {
+            role_id: user.user_id!,
+            role_type: "user",
+          },
+          client,
+        );
+
+        return { accessToken, refreshToken, user };
       },
-      client,
     );
-
-    await markInvitationUsed(invitation.id!, client);
-
-    const accessKey = process.env.USER_ACCESS_KEY;
-    if (!accessKey) {
-      throw { status: 500, msg: "Server configuration error" };
-    }
-
-    const accessToken = jwt.sign(
-      {
-        role_id: user.user_id,
-        role_type: "user",
-        email_verified: user.email_verified,
-      },
-      accessKey,
-      { expiresIn: "15m" },
-    );
-
-    const { token: refreshToken } = await addRefresh(
-      {
-        role_id: user.user_id!,
-        role_type: "user",
-      },
-      client,
-    );
-
-    await client.query("COMMIT");
 
     setAuthCookies(res, accessToken, refreshToken);
 
@@ -471,10 +482,7 @@ export const completeRegistration = async (
       "Registration completed successfully",
     );
   } catch (error) {
-    await client.query("ROLLBACK");
     next(error);
-  } finally {
-    client.release();
   }
 };
 
@@ -515,38 +523,31 @@ export const resetPassword = async (
   res: Response,
   next: NextFunction,
 ) => {
-  const client = await db.connect();
-
   try {
-    await client.query("BEGIN");
+    await withTransaction(db, async (client) => {
+      const { token, password } = req.body;
 
-    const { token, password } = req.body;
+      const invitation = await validateInvitationToken(
+        token,
+        "password_reset",
+        client,
+      );
+      const user = await getUser(invitation.email);
+      if (!user) {
+        throw httpError(404, "User not found");
+      }
 
-    const invitation = await validateInvitationToken(
-      token,
-      "password_reset",
-      client,
-    );
-    const user = await getUser(invitation.email);
-    if (!user) {
-      throw { status: 404, msg: "User not found" };
-    }
+      const passwordHash = await hashPassword(password);
+      await updatePassword(user.user_id!, passwordHash, client);
 
-    const passwordHash = await hashPassword(password);
-    await updatePassword(user.user_id!, passwordHash, client);
+      await markInvitationUsed(invitation.id!, client);
 
-    await markInvitationUsed(invitation.id!, client);
-
-    await revokeUserTokens(user.user_id!, "user", client);
-
-    await client.query("COMMIT");
+      await revokeUserTokens(user.user_id!, "user", client);
+    });
 
     return sendSuccess(res, null, "Password reset successfully");
   } catch (error) {
-    await client.query("ROLLBACK");
     next(error);
-  } finally {
-    client.release();
   }
 };
 
@@ -555,38 +556,31 @@ export const setPassword = async (
   res: Response,
   next: NextFunction,
 ) => {
-  const client = await db.connect();
-
   try {
-    await client.query("BEGIN");
+    await withTransaction(db, async (client) => {
+      const { role_id } = req.user!;
+      const { password } = req.body;
 
-    const { role_id } = req.user!;
-    const { password } = req.body;
+      const user = await getUserWithPasswordById(role_id);
+      if (!user) {
+        throw httpError(404, "User not found");
+      }
 
-    const user = await getUserWithPasswordById(role_id);
-    if (!user) {
-      throw { status: 404, msg: "User not found" };
-    }
+      if (user.password_hash) {
+        throw httpError(
+          400,
+          "Password already set. Use password reset instead.",
+        );
+      }
 
-    if (user.password_hash) {
-      throw {
-        status: 400,
-        msg: "Password already set. Use password reset instead.",
-      };
-    }
-
-    const passwordHash = await hashPassword(password);
-    await updatePassword(role_id, passwordHash, client);
-    await setAuthProvider(role_id, "both", client);
-
-    await client.query("COMMIT");
+      const passwordHash = await hashPassword(password);
+      await updatePassword(role_id, passwordHash, client);
+      await setAuthProvider(role_id, "both", client);
+    });
 
     return sendSuccess(res, null, "Password set successfully");
   } catch (error) {
-    await client.query("ROLLBACK");
     next(error);
-  } finally {
-    client.release();
   }
 };
 
@@ -600,7 +594,7 @@ export const getMe = async (
 
     const user = await getUserById(role_id);
     if (!user) {
-      throw { status: 404, msg: "User not found" };
+      throw httpError(404, "User not found");
     }
 
     return sendSuccess(
@@ -618,47 +612,40 @@ export const changePassword = async (
   res: Response,
   next: NextFunction,
 ) => {
-  const client = await db.connect();
-
   try {
-    await client.query("BEGIN");
+    await withTransaction(db, async (client) => {
+      const { role_id } = req.user!;
+      const { current_password, new_password } = req.body;
 
-    const { role_id } = req.user!;
-    const { current_password, new_password } = req.body;
+      const user = await getUserWithPasswordById(role_id);
+      if (!user) {
+        throw httpError(404, "User not found");
+      }
 
-    const user = await getUserWithPasswordById(role_id);
-    if (!user) {
-      throw { status: 404, msg: "User not found" };
-    }
+      if (!user.password_hash) {
+        throw httpError(
+          400,
+          "No password set. Use set-password endpoint instead.",
+        );
+      }
 
-    if (!user.password_hash) {
-      throw {
-        status: 400,
-        msg: "No password set. Use set-password endpoint instead.",
-      };
-    }
+      const passwordMatch = await bcrypt.compare(
+        current_password,
+        user.password_hash,
+      );
+      if (!passwordMatch) {
+        throw httpError(401, "Current password is incorrect");
+      }
 
-    const passwordMatch = await bcrypt.compare(
-      current_password,
-      user.password_hash,
-    );
-    if (!passwordMatch) {
-      throw { status: 401, msg: "Current password is incorrect" };
-    }
+      const passwordHash = await hashPassword(new_password);
+      await updatePassword(role_id, passwordHash, client);
 
-    const passwordHash = await hashPassword(new_password);
-    await updatePassword(role_id, passwordHash, client);
-
-    await revokeUserTokens(role_id, "user", client);
-
-    await client.query("COMMIT");
+      await revokeUserTokens(role_id, "user", client);
+    });
 
     return sendSuccess(res, null, "Password changed successfully");
   } catch (error) {
-    await client.query("ROLLBACK");
     next(error);
-  } finally {
-    client.release();
   }
 };
 
@@ -672,7 +659,7 @@ export const updateProfile = async (
 
     const user = await getUserById(role_id);
     if (!user) {
-      throw { status: 404, msg: "User not found" };
+      throw httpError(404, "User not found");
     }
 
     return sendSuccess(
@@ -703,28 +690,25 @@ export const requestEmailChange = async (
 
     const user = await getUserWithPasswordById(role_id);
     if (!user) {
-      throw { status: 404, msg: "User not found" };
+      throw httpError(404, "User not found");
     }
 
     if (!user.password_hash) {
-      throw {
-        status: 400,
-        msg: "Password not set. Please set a password first.",
-      };
+      throw httpError(400, "Password not set. Please set a password first.");
     }
 
     const passwordMatch = await bcrypt.compare(password, user.password_hash);
     if (!passwordMatch) {
-      throw { status: 401, msg: "Incorrect password" };
+      throw httpError(401, "Incorrect password");
     }
 
     if (user.email?.toLowerCase() === newEmail.toLowerCase()) {
-      throw { status: 400, msg: "New email is the same as current email" };
+      throw httpError(400, "New email is the same as current email");
     }
 
     const existingUser = await getUser(newEmail);
     if (existingUser) {
-      throw { status: 409, msg: "Email already in use" };
+      throw httpError(409, "Email already in use");
     }
 
     const { token } = await createInvitation({
@@ -753,35 +737,33 @@ export const confirmEmailChange = async (
   res: Response,
   next: NextFunction,
 ) => {
-  const client = await db.connect();
-
   try {
-    await client.query("BEGIN");
+    const { invitation } = await withTransaction(db, async (client) => {
+      const token = req.params.token as string;
 
-    const token = req.params.token as string;
+      const invitation = await validateInvitationToken(
+        token,
+        "email_change",
+        client,
+      );
 
-    const invitation = await validateInvitationToken(
-      token,
-      "email_change",
-      client,
-    );
+      if (!invitation.new_email || !invitation.user_id) {
+        throw httpError(400, "Invalid email change invitation");
+      }
 
-    if (!invitation.new_email || !invitation.user_id) {
-      throw { status: 400, msg: "Invalid email change invitation" };
-    }
+      const existingUser = await getUser(invitation.new_email);
+      if (existingUser) {
+        throw httpError(409, "Email is no longer available");
+      }
 
-    const existingUser = await getUser(invitation.new_email);
-    if (existingUser) {
-      throw { status: 409, msg: "Email is no longer available" };
-    }
+      await client.query(
+        "UPDATE users SET email = $1, updated_at = NOW() WHERE user_id = $2",
+        [invitation.new_email.toLowerCase(), invitation.user_id],
+      );
+      await markInvitationUsed(invitation.id!, client);
 
-    await client.query(
-      "UPDATE users SET email = $1, updated_at = NOW() WHERE user_id = $2",
-      [invitation.new_email.toLowerCase(), invitation.user_id],
-    );
-    await markInvitationUsed(invitation.id!, client);
-
-    await client.query("COMMIT");
+      return { invitation };
+    });
 
     return sendSuccess(
       res,
@@ -789,9 +771,6 @@ export const confirmEmailChange = async (
       "Email changed successfully",
     );
   } catch (error) {
-    await client.query("ROLLBACK");
     next(error);
-  } finally {
-    client.release();
   }
 };

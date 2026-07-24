@@ -1,6 +1,7 @@
 import db from "../database/db";
 import { Pool, PoolClient } from "pg";
 import { encrypt, decrypt } from "../utils/encryption";
+import { httpError } from "../utils/httpError";
 
 export type RoleType = "user" | "admin";
 
@@ -65,7 +66,7 @@ export async function setMfaSecret(
   );
 
   if (result.rows.length === 0) {
-    throw { status: 404, msg: `${roleType === "user" ? "User" : "Admin"} not found` };
+    throw httpError(404, `${roleType === "user" ? "User" : "Admin"} not found`);
   }
 }
 
@@ -83,7 +84,7 @@ export async function enableMfa(
   );
 
   if (result.rows.length === 0) {
-    throw { status: 404, msg: `${roleType === "user" ? "User" : "Admin"} not found` };
+    throw httpError(404, `${roleType === "user" ? "User" : "Admin"} not found`);
   }
 }
 
@@ -101,7 +102,7 @@ export async function disableMfa(
   );
 
   if (result.rows.length === 0) {
-    throw { status: 404, msg: `${roleType === "user" ? "User" : "Admin"} not found` };
+    throw httpError(404, `${roleType === "user" ? "User" : "Admin"} not found`);
   }
 }
 

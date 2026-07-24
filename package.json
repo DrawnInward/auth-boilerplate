@@ -11,6 +11,7 @@
     "build:shared": "npm run build -w @auth-boilerplate/shared",
     "test": "npm run test -w @auth-boilerplate/api",
     "seed": "npm run seed -w @auth-boilerplate/api",
+    "migrate": "npm run migrate -w @auth-boilerplate/api",
     "setup": "npm run setup -w @auth-boilerplate/api"
   }
 }

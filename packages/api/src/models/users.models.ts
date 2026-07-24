@@ -9,13 +9,15 @@ import {
 } from "../types";
 import { PaginationOptions } from "../types/PaginationOptions";
 import { excludePasswordHash } from "../utils";
+import { isUniqueViolation, violatedConstraint } from "../utils/pgErrors";
+import { httpError } from "../utils/httpError";
 
 export const createUser = async (
   newUser: CreateUserDto,
   client: PoolClient | Pool = db
 ): Promise<Omit<User, "password_hash">> => {
   if (!newUser.email || !newUser.password_hash) {
-    throw { status: 400, msg: "Email and password_hash are required" };
+    throw httpError(400, "Email and password_hash are required");
   }
 
   const queryString = `
@@ -38,9 +40,9 @@ export const createUser = async (
     const result = await client.query(queryString, values);
     return excludePasswordHash(result.rows[0]);
   } catch (err: any) {
-    if (err.code === "23505") {
+    if (isUniqueViolation(err)) {
       // Unique constraint violation
-      throw { status: 409, msg: "Email already exists" };
+      throw httpError(409, "Email already exists");
     }
     throw err;
   }
@@ -161,10 +163,7 @@ export const modifyUser = async (
 ): Promise<Omit<User, "password_hash">> => {
   // Prevent password_hash updates through this function
   if ("password_hash" in detailsToUpdate) {
-    throw {
-      status: 403,
-      msg: "Password updates not allowed. Use updatePassword function instead",
-    };
+    throw httpError(403, "Password updates not allowed. Use updatePassword function instead");
   }
   const allowedFields = [
     "email",
@@ -188,7 +187,7 @@ export const modifyUser = async (
   });
 
   if (updates.length === 0) {
-    throw { status: 400, msg: "No valid fields to update" };
+    throw httpError(400, "No valid fields to update");
   }
 
   updates.push(`updated_at = NOW()`);
@@ -205,13 +204,13 @@ export const modifyUser = async (
   try {
     const result = await client.query(queryString, values);
     if (result.rows.length === 0) {
-      throw { status: 404, msg: "User not found" };
+      throw httpError(404, "User not found");
     }
     return excludePasswordHash(result.rows[0]);
   } catch (err: any) {
-    if (err.code === "23505") {
+    if (isUniqueViolation(err)) {
       // Unique constraint violation
-      throw { status: 409, msg: "Email already exists" };
+      throw httpError(409, "Email already exists");
     }
     throw err;
   }
@@ -231,7 +230,7 @@ export const updatePassword = async (
 
   const result = await client.query(queryString, [newPasswordHash, userId]);
   if (result.rows.length === 0) {
-    throw { status: 404, msg: "User not found" };
+    throw httpError(404, "User not found");
   }
   return true;
 };
@@ -247,11 +246,11 @@ export const deleteUser = async (
   const checkResult = await client.query(checkQuery, [userId]);
 
   if (checkResult.rows.length === 0) {
-    throw { status: 404, msg: "User not found" };
+    throw httpError(404, "User not found");
   }
 
   if (checkResult.rows[0].deleted_at !== null) {
-    throw { status: 409, msg: "User already deleted" };
+    throw httpError(409, "User already deleted");
   }
 
   // Perform soft delete
@@ -282,7 +281,7 @@ export const activateUser = async (
 
   const result = await client.query(queryString, [userId]);
   if (result.rows.length === 0) {
-    throw { status: 404, msg: "User not found" };
+    throw httpError(404, "User not found");
   }
   return excludePasswordHash(result.rows[0]);
 };
@@ -304,7 +303,7 @@ export const deactivateUser = async (
 
   const result = await client.query(queryString, [userId, deactivatorId]);
   if (result.rows.length === 0) {
-    throw { status: 404, msg: "User not found" };
+    throw httpError(404, "User not found");
   }
   return excludePasswordHash(result.rows[0]);
 };
@@ -322,7 +321,7 @@ export const verifyUserEmail = async (
 
   const result = await client.query(queryString, [userId]);
   if (result.rows.length === 0) {
-    throw { status: 404, msg: "User not found" };
+    throw httpError(404, "User not found");
   }
   return excludePasswordHash(result.rows[0]);
 };
@@ -384,12 +383,12 @@ export const setGoogleId = async (
   try {
     const result = await client.query(queryString, [googleId, userId]);
     if (result.rows.length === 0) {
-      throw { status: 404, msg: "User not found" };
+      throw httpError(404, "User not found");
     }
     return excludePasswordHash(result.rows[0]);
   } catch (err: any) {
-    if (err.code === "23505") {
-      throw { status: 409, msg: "Google account already linked to another user" };
+    if (isUniqueViolation(err)) {
+      throw httpError(409, "Google account already linked to another user");
     }
     throw err;
   }
@@ -409,7 +408,7 @@ export const setAuthProvider = async (
 
   const result = await client.query(queryString, [provider, userId]);
   if (result.rows.length === 0) {
-    throw { status: 404, msg: "User not found" };
+    throw httpError(404, "User not found");
   }
   return excludePasswordHash(result.rows[0]);
 };
@@ -430,11 +429,11 @@ export const createGoogleUser = async (
     const result = await client.query(queryString, [email.toLowerCase(), googleId]);
     return excludePasswordHash(result.rows[0]);
   } catch (err: any) {
-    if (err.code === "23505") {
-      if (err.constraint?.includes("google_id")) {
-        throw { status: 409, msg: "Google account already linked to another user" };
+    if (isUniqueViolation(err)) {
+      if (violatedConstraint(err)?.includes("google_id")) {
+        throw httpError(409, "Google account already linked to another user");
       }
-      throw { status: 409, msg: "Email already exists" };
+      throw httpError(409, "Email already exists");
     }
     throw err;
   }
@@ -453,7 +452,7 @@ export const unlinkGoogleAccount = async (
 
   const result = await client.query(queryString, [userId]);
   if (result.rows.length === 0) {
-    throw { status: 404, msg: "User not found" };
+    throw httpError(404, "User not found");
   }
   return excludePasswordHash(result.rows[0]);
 };
@@ -487,7 +486,7 @@ export const updateUserOrgPermission = async (
 
   const result = await client.query(queryString, [canCreateOrgs, userId]);
   if (result.rows.length === 0) {
-    throw { status: 404, msg: "User not found" };
+    throw httpError(404, "User not found");
   }
   return excludePasswordHash(result.rows[0]);
 };

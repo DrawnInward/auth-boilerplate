@@ -1,7 +1,7 @@
 import express from "express";
 
 import { validateParams, validateBody } from "../../middleware/validate";
-import { userParamsSchema } from "../../types/RouteParams";
+import { userParamsSchema } from "@auth-boilerplate/shared";
 import { adminInviteUserSchema, updateUserSchema } from "../../types";
 import {
   createUserHandler,
@@ -12,7 +12,7 @@ import {
   sendPasswordReset,
   updateOrgPermission,
   disableUserMfa,
-} from "../../controllers/admin/adminUsers";
+} from "../../controllers/admin/adminUsers.controller";
 import { authoriseUser } from "../../middleware/authoriseUser";
 
 const router = express.Router();

@@ -9,13 +9,15 @@ import {
 } from "../types";
 import { PaginationOptions } from "../types/PaginationOptions";
 import { excludePasswordHash } from "../utils";
+import { isUniqueViolation } from "../utils/pgErrors";
+import { httpError } from "../utils/httpError";
 
 export const createAdmin = async (
   newAdmin: CreateAdminDto,
   client: PoolClient | Pool = db,
 ): Promise<Omit<Admin, "password_hash">> => {
   if (!newAdmin.email || !newAdmin.password_hash) {
-    throw { status: 400, msg: "Email and password_hash are required" };
+    throw httpError(400, "Email and password_hash are required");
   }
 
   if (newAdmin.root) {
@@ -26,7 +28,7 @@ export const createAdmin = async (
     `;
     const existingRoot = await client.query(existingRootQuery);
     if (existingRoot.rows.length > 0) {
-      throw { status: 409, msg: "Root admin already exists" };
+      throw httpError(409, "Root admin already exists");
     }
   }
 
@@ -49,8 +51,8 @@ export const createAdmin = async (
     const result = await client.query(queryString, values);
     return excludePasswordHash(result.rows[0]);
   } catch (err: any) {
-    if (err.code === "23505") {
-      throw { status: 409, msg: "Email already exists" };
+    if (isUniqueViolation(err)) {
+      throw httpError(409, "Email already exists");
     }
     throw err;
   }
@@ -159,10 +161,7 @@ export const modifyAdmin = async (
   client: PoolClient | Pool = db,
 ): Promise<Omit<Admin, "password_hash">> => {
   if ("password_hash" in detailsToUpdate) {
-    throw {
-      status: 403,
-      msg: "Password updates not allowed. Use updateAdminPassword function instead",
-    };
+    throw httpError(403, "Password updates not allowed. Use updateAdminPassword function instead");
   }
 
   if ("root" in detailsToUpdate) {
@@ -174,13 +173,10 @@ export const modifyAdmin = async (
       `;
       const existingRoot = await client.query(existingRootQuery, [adminId]);
       if (existingRoot.rows.length > 0) {
-        throw { status: 409, msg: "Root admin already exists" };
+        throw httpError(409, "Root admin already exists");
       }
     } else if (detailsToUpdate.root === false) {
-      throw {
-        status: 409,
-        msg: "Cannot remove root status from the only root admin",
-      };
+      throw httpError(409, "Cannot remove root status from the only root admin");
     }
   }
 
@@ -206,7 +202,7 @@ export const modifyAdmin = async (
   });
 
   if (updates.length === 0) {
-    throw { status: 400, msg: "No valid fields to update" };
+    throw httpError(400, "No valid fields to update");
   }
 
   updates.push(`updated_at = NOW()`);
@@ -223,12 +219,12 @@ export const modifyAdmin = async (
   try {
     const result = await client.query(queryString, values);
     if (result.rows.length === 0) {
-      throw { status: 404, msg: "Admin not found" };
+      throw httpError(404, "Admin not found");
     }
     return excludePasswordHash(result.rows[0]);
   } catch (err: any) {
-    if (err.code === "23505") {
-      throw { status: 409, msg: "Email already exists" };
+    if (isUniqueViolation(err)) {
+      throw httpError(409, "Email already exists");
     }
     throw err;
   }
@@ -248,7 +244,7 @@ export const updateAdminPassword = async (
 
   const result = await client.query(queryString, [newPasswordHash, adminId]);
   if (result.rows.length === 0) {
-    throw { status: 404, msg: "Admin not found" };
+    throw httpError(404, "Admin not found");
   }
   return true;
 };
@@ -264,11 +260,11 @@ export const deleteAdmin = async (
   const checkResult = await client.query(checkQuery, [adminId]);
 
   if (checkResult.rows.length === 0) {
-    throw { status: 404, msg: "Admin not found" };
+    throw httpError(404, "Admin not found");
   }
 
   if (checkResult.rows[0].deleted_at !== null) {
-    throw { status: 409, msg: "Admin already deleted" };
+    throw httpError(409, "Admin already deleted");
   }
 
   if (checkResult.rows[0].root === true) {
@@ -278,7 +274,7 @@ export const deleteAdmin = async (
     `;
     const rootCount = await client.query(rootCountQuery);
     if (parseInt(rootCount.rows[0].root_count) === 1) {
-      throw { status: 409, msg: "Cannot delete the only root admin" };
+      throw httpError(409, "Cannot delete the only root admin");
     }
   }
 
@@ -309,7 +305,7 @@ export const activateAdmin = async (
 
   const result = await client.query(queryString, [adminId]);
   if (result.rows.length === 0) {
-    throw { status: 404, msg: "Admin not found" };
+    throw httpError(404, "Admin not found");
   }
   return excludePasswordHash(result.rows[0]);
 };
@@ -332,10 +328,7 @@ export const deactivateAdmin = async (
     `;
     const rootCount = await client.query(rootCountQuery);
     if (parseInt(rootCount.rows[0].root_count) === 1) {
-      throw {
-        status: 409,
-        msg: "Cannot deactivate the only active root admin",
-      };
+      throw httpError(409, "Cannot deactivate the only active root admin");
     }
   }
 
@@ -351,7 +344,7 @@ export const deactivateAdmin = async (
 
   const result = await client.query(queryString, [adminId, deactivatorId]);
   if (result.rows.length === 0) {
-    throw { status: 404, msg: "Admin not found" };
+    throw httpError(404, "Admin not found");
   }
   return excludePasswordHash(result.rows[0]);
 };
@@ -369,7 +362,7 @@ export const verifyAdminEmail = async (
 
   const result = await client.query(queryString, [adminId]);
   if (result.rows.length === 0) {
-    throw { status: 404, msg: "Admin not found" };
+    throw httpError(404, "Admin not found");
   }
   return excludePasswordHash(result.rows[0]);
 };

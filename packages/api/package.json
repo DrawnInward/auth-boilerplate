@@ -5,8 +5,9 @@
   "main": "dist/src/server.js",
   "scripts": {
     "dev": "ts-node ./src/server.ts",
-    "build": "tsc",
+    "build": "tsc && cp -r src/database/migrations dist/src/database/migrations",
     "seed": "ts-node ./run-seed.ts",
+    "migrate": "ts-node ./run-migrate.ts",
     "test": "jest --runInBand",
     "setup": "ts-node ./setup.ts",
     "apiGen": "ts-node ./src/utils/generateApiKey.ts"
@@ -24,6 +25,8 @@
     "jsonwebtoken": "^9.0.2",
     "otpauth": "^9.4.1",
     "pg": "^8.16.3",
+    "pino": "^10.3.1",
+    "pino-http": "^11.0.0",
     "qrcode": "^1.5.4",
     "uuid": "^9.0.0",
     "zod": "^4.0.5"

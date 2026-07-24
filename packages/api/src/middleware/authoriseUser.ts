@@ -3,6 +3,7 @@ import { Response, NextFunction } from "express";
 import { AccessJwtPayload, RefreshJwtPayload, RequestWithUser } from "../types";
 import { parseCookies, setAuthCookies } from "../utils";
 import { createAccessToken } from "../models/refresh.models";
+import { httpError } from "../utils/httpError";
 
 require("dotenv").config({ quiet: true });
 
@@ -44,10 +45,7 @@ export const authoriseUser =
           : process.env.USER_ACCESS_KEY;
 
       if (!secretKey) {
-        throw {
-          status: 500,
-          msg: `Missing environment variable.`,
-        };
+        throw httpError(500, `Missing environment variable.`);
       }
 
       const userDetails = jwt.verify(token, secretKey);

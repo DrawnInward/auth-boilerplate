@@ -1,6 +1,9 @@
 import { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { ValidationErrorResponse } from "../types/ValidationErrorResponse";
+import { childLogger } from "../utils/logger";
+
+const log = childLogger("validate");
 
 require("dotenv").config({quiet: true});
 
@@ -55,7 +58,7 @@ export const validateBody =
       req.body = result.data;
       next();
     } catch (error) {
-      console.error("Unexpected error in body validation:", error);
+      log.error({ err: error }, "Unexpected error in body validation");
       next(error);
     }
   };
@@ -78,7 +81,7 @@ export const validateParams =
       req.params = result.data as { [key: string]: string };
       next();
     } catch (error) {
-      console.error("Unexpected error in params validation:", error);
+      log.error({ err: error }, "Unexpected error in params validation");
       next(error);
     }
   };
@@ -98,11 +101,20 @@ export const validateQuery =
             )
           );
       }
-      // Note: req.query is read-only in Express, so we just validate without reassigning
-      // Controllers should handle the query params directly from req.query
+      // req.query is read-only in Express 5, so the parsed (coerced, defaulted)
+      // output is stashed on res.locals instead. Controllers read it via
+      // getValidatedQuery — never by re-parsing the schema themselves, which
+      // would duplicate the contract and silently drift from it.
+      res.locals.query = result.data;
       next();
     } catch (error) {
-      console.error("Unexpected error in query validation:", error);
+      log.error({ err: error }, "Unexpected error in query validation");
       next(error);
     }
   };
+
+// The typed accessor for whatever validateQuery parsed. Typing is the caller's
+// assertion: pass the schema's inferred type, e.g.
+// getValidatedQuery<OrganizationsQuery>(res).
+export const getValidatedQuery = <T>(res: Response): T =>
+  res.locals.query as T;

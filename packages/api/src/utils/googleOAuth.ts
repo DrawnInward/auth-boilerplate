@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { httpError } from "./httpError";
 
 export interface GoogleTokenResponse {
   access_token: string;
@@ -25,7 +26,7 @@ function getGoogleConfig() {
   const callbackUrl = process.env.GOOGLE_CALLBACK_URL;
 
   if (!clientId || !clientSecret || !callbackUrl) {
-    throw { status: 500, msg: "Google OAuth not configured" };
+    throw httpError(500, "Google OAuth not configured");
   }
 
   return { clientId, clientSecret, callbackUrl };
@@ -72,7 +73,7 @@ export async function exchangeCodeForTokens(
 
   if (!response.ok) {
     const error = (await response.json()) as { error_description?: string };
-    throw { status: 401, msg: error.error_description || "Failed to exchange code" };
+    throw httpError(401, error.error_description || "Failed to exchange code");
   }
 
   return (await response.json()) as GoogleTokenResponse;
@@ -91,7 +92,7 @@ export async function getGoogleUserInfo(
   );
 
   if (!response.ok) {
-    throw { status: 401, msg: "Failed to get user info from Google" };
+    throw httpError(401, "Failed to get user info from Google");
   }
 
   return (await response.json()) as GoogleUserInfo;

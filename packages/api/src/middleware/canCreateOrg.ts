@@ -2,6 +2,7 @@ import { Response, NextFunction } from "express";
 import { RequestWithUser } from "../types";
 import { getUserById } from "../models/users.models";
 import { getOrgCreationMode } from "../utils/config";
+import { httpError } from "../utils/httpError";
 
 export const canCreateOrg = async (
   req: RequestWithUser,
@@ -10,12 +11,12 @@ export const canCreateOrg = async (
 ) => {
   try {
     if (!req.user || req.user.role_type !== "user") {
-      throw { status: 403, msg: "Only users can create organizations" };
+      throw httpError(403, "Only users can create organizations");
     }
 
     const user = await getUserById(req.user.role_id);
     if (!user) {
-      throw { status: 404, msg: "User not found" };
+      throw httpError(404, "User not found");
     }
 
     if (user.can_create_orgs === true) {
@@ -23,7 +24,7 @@ export const canCreateOrg = async (
     }
 
     if (user.can_create_orgs === false) {
-      throw { status: 403, msg: "You are not allowed to create organizations" };
+      throw httpError(403, "You are not allowed to create organizations");
     }
 
     const mode = getOrgCreationMode();
@@ -33,14 +34,14 @@ export const canCreateOrg = async (
     }
 
     if (mode === "admin_only") {
-      throw { status: 403, msg: "Only administrators can create organizations" };
+      throw httpError(403, "Only administrators can create organizations");
     }
 
     if (mode === "self_registered_only") {
       if (user.created_through === "self_registered") {
         return next();
       }
-      throw { status: 403, msg: "Only self-registered users can create organizations" };
+      throw httpError(403, "Only self-registered users can create organizations");
     }
 
     return next();

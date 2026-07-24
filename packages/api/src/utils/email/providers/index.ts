@@ -1,6 +1,9 @@
 import { EmailProvider } from "../../../interfaces/email";
 import { ConsoleEmailProvider } from "./ConsoleEmailProvider";
 import { SendGridEmailProvider } from "./SendGridEmailProvider";
+import { childLogger } from "../../logger";
+
+const log = childLogger("emailProviders");
 
 export { ConsoleEmailProvider } from "./ConsoleEmailProvider";
 export { SendGridEmailProvider } from "./SendGridEmailProvider";
@@ -19,7 +22,7 @@ export function getEmailProvider(): EmailProvider {
   switch (provider) {
     case "sendgrid":
       if (!process.env.SENDGRID_API_KEY) {
-        console.warn("SENDGRID_API_KEY not set, falling back to console");
+        log.warn("SENDGRID_API_KEY not set, falling back to console");
         return new ConsoleEmailProvider();
       }
       return new SendGridEmailProvider();

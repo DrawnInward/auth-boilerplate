@@ -15,6 +15,8 @@ import {
 } from "../../models/organizationMembers.models";
 import { sendSuccess, sendCreated } from "../../utils/responseUtils";
 import db from "../../database/db";
+import { httpError } from "../../utils/httpError";
+import { withTransaction } from "../../utils/withTransaction";
 
 export const getMyOrganizations = async (
   req: RequestWithUser,
@@ -46,34 +48,29 @@ export const createOrganizationHandler = async (
   res: Response,
   next: NextFunction,
 ) => {
-  const client = await db.connect();
-
   try {
-    await client.query("BEGIN");
-
     const userId = req.user!.role_id;
     const { name, slug } = req.body;
 
-    const newOrg = await createOrganization(
-      { name, slug, owner_id: userId },
-      client,
-    );
+    const newOrg = await withTransaction(db, async (client) => {
+      const org = await createOrganization(
+        { name, slug, owner_id: userId },
+        client,
+      );
 
-    await addOrganizationMember(
-      newOrg.id,
-      { user_id: userId, role: "owner" },
-      null,
-      client,
-    );
+      await addOrganizationMember(
+        org.id,
+        { user_id: userId, role: "owner" },
+        null,
+        client,
+      );
 
-    await client.query("COMMIT");
+      return org;
+    });
 
     return sendCreated(res, newOrg, "Organization created successfully");
   } catch (error) {
-    await client.query("ROLLBACK");
     next(error);
-  } finally {
-    client.release();
   }
 };
 
@@ -174,10 +171,10 @@ export const addMember = async (
     const invitedBy = req.user!.role_id;
 
     if (role === "owner") {
-      throw {
-        status: 400,
-        msg: "Cannot add member as owner. Use transfer ownership.",
-      };
+      throw httpError(
+        400,
+        "Cannot add member as owner. Use transfer ownership.",
+      );
     }
 
     const newMember = await addOrganizationMember(
@@ -223,13 +220,9 @@ export const removeMember = async (
     // Allow users to remove themselves (leave org)
     // Or admins/owners to remove others
     if (userId !== currentUserId) {
-
       const currentUserRole = req.organizationMembership!.role;
       if (currentUserRole !== "owner" && currentUserRole !== "admin") {
-        throw {
-          status: 403,
-          msg: "Only owners and admins can remove other members",
-        };
+        throw httpError(403, "Only owners and admins can remove other members");
       }
     }
 

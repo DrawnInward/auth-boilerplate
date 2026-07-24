@@ -1,14 +1,13 @@
 import { z } from "zod";
+import {
+  invitationTypeSchema,
+  orgInviteRoleSchema,
+} from "@auth-boilerplate/shared";
 
-export const invitationTypeSchema = z.enum([
-  "registration",
-  "org_invite",
-  "password_reset",
-  "email_change",
-  "admin_invite",
-]);
-
-export const orgInviteRoleSchema = z.enum(["admin", "member", "viewer"]);
+// Vocabularies are defined once in the shared package (which mirrors the DB
+// CHECK constraints) and re-exported here for the API's internal row schemas —
+// never re-typed, or the two copies drift apart silently.
+export { invitationTypeSchema, orgInviteRoleSchema };
 
 export const invitationSchema = z.object({
   id: z.string().uuid().optional(),

@@ -16,47 +16,44 @@ import {
 } from "../../models/organizationMembers.models";
 import { sendSuccess, sendCreated } from "../../utils/responseUtils";
 import db from "../../database/db";
+import { httpError } from "../../utils/httpError";
+import { withTransaction } from "../../utils/withTransaction";
 
 export const createOrganizationHandler = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
-  const client = await db.connect();
-
   try {
-    await client.query("BEGIN");
-
     const { name, slug, owner_id } = req.body;
 
     if (!owner_id) {
-      throw { status: 400, msg: "owner_id is required" };
+      throw httpError(400, "owner_id is required");
     }
 
-    const newOrg = await createOrganization({ name, slug, owner_id }, client);
+    const newOrg = await withTransaction(db, async (client) => {
+      const org = await createOrganization({ name, slug, owner_id }, client);
 
-    await addOrganizationMember(
-      newOrg.id,
-      { user_id: owner_id, role: "owner" },
-      null,
-      client
-    );
+      await addOrganizationMember(
+        org.id,
+        { user_id: owner_id, role: "owner" },
+        null,
+        client,
+      );
 
-    await client.query("COMMIT");
+      return org;
+    });
 
     return sendCreated(res, newOrg, "Organization created successfully");
   } catch (error) {
-    await client.query("ROLLBACK");
     next(error);
-  } finally {
-    client.release();
   }
 };
 
 export const getAllOrganizations = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { owner_id, user_id, limit, offset } = req.query;
@@ -74,7 +71,7 @@ export const getAllOrganizations = async (
     return sendSuccess(
       res,
       organizations,
-      "Organizations retrieved successfully"
+      "Organizations retrieved successfully",
     );
   } catch (error) {
     next(error);
@@ -84,7 +81,7 @@ export const getAllOrganizations = async (
 export const getOrganizationStatsHandler = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const stats = await getOrganizationStats();
@@ -98,7 +95,7 @@ export const getOrganizationStatsHandler = async (
 export const getOrganizationByIdHandler = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const organizationId = req.params.organizationId as string;
@@ -106,10 +103,14 @@ export const getOrganizationByIdHandler = async (
     const organization = await getOrganizationWithMemberCount(organizationId);
 
     if (!organization) {
-      throw { status: 404, msg: "Organization not found" };
+      throw httpError(404, "Organization not found");
     }
 
-    return sendSuccess(res, organization, "Organization retrieved successfully");
+    return sendSuccess(
+      res,
+      organization,
+      "Organization retrieved successfully",
+    );
   } catch (error) {
     next(error);
   }
@@ -118,18 +119,21 @@ export const getOrganizationByIdHandler = async (
 export const updateOrganization = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const organizationId = req.params.organizationId as string;
     const updates = req.body;
 
-    const updatedOrganization = await modifyOrganization(organizationId, updates);
+    const updatedOrganization = await modifyOrganization(
+      organizationId,
+      updates,
+    );
 
     return sendSuccess(
       res,
       updatedOrganization,
-      "Organization updated successfully"
+      "Organization updated successfully",
     );
   } catch (error) {
     next(error);
@@ -139,7 +143,7 @@ export const updateOrganization = async (
 export const deleteOrganizationHandler = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const organizationId = req.params.organizationId as string;
@@ -149,7 +153,7 @@ export const deleteOrganizationHandler = async (
     return sendSuccess(
       res,
       deletedOrganization,
-      "Organization deleted successfully"
+      "Organization deleted successfully",
     );
   } catch (error) {
     next(error);
@@ -159,7 +163,7 @@ export const deleteOrganizationHandler = async (
 export const getOrganizationMembersHandler = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const organizationId = req.params.organizationId as string;
@@ -167,7 +171,7 @@ export const getOrganizationMembersHandler = async (
 
     const org = await getOrganizationById(organizationId);
     if (!org) {
-      throw { status: 404, msg: "Organization not found" };
+      throw httpError(404, "Organization not found");
     }
 
     const pagination: any = {};
@@ -185,7 +189,7 @@ export const getOrganizationMembersHandler = async (
 export const addOrganizationMemberHandler = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const organizationId = req.params.organizationId as string;
@@ -193,7 +197,7 @@ export const addOrganizationMemberHandler = async (
 
     const org = await getOrganizationById(organizationId);
     if (!org) {
-      throw { status: 404, msg: "Organization not found" };
+      throw httpError(404, "Organization not found");
     }
 
     const newMember = await addOrganizationMember(organizationId, {
@@ -210,7 +214,7 @@ export const addOrganizationMemberHandler = async (
 export const updateOrganizationMemberHandler = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const organizationId = req.params.organizationId as string;
@@ -219,7 +223,7 @@ export const updateOrganizationMemberHandler = async (
 
     const org = await getOrganizationById(organizationId);
     if (!org) {
-      throw { status: 404, msg: "Organization not found" };
+      throw httpError(404, "Organization not found");
     }
 
     const updatedMember = await updateMemberRole(organizationId, userId, role);
@@ -233,7 +237,7 @@ export const updateOrganizationMemberHandler = async (
 export const removeOrganizationMemberHandler = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const organizationId = req.params.organizationId as string;
@@ -241,10 +245,13 @@ export const removeOrganizationMemberHandler = async (
 
     const org = await getOrganizationById(organizationId);
     if (!org) {
-      throw { status: 404, msg: "Organization not found" };
+      throw httpError(404, "Organization not found");
     }
 
-    const removedMember = await removeOrganizationMember(organizationId, userId);
+    const removedMember = await removeOrganizationMember(
+      organizationId,
+      userId,
+    );
 
     return sendSuccess(res, removedMember, "Member removed successfully");
   } catch (error) {

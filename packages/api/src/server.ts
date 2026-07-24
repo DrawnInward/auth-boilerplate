@@ -1,27 +1,27 @@
 import app from "./app";
+import { childLogger } from "./utils/logger";
+
+const log = childLogger("server");
 
 const PORT = process.env.PORT || 3000;
 
 async function startServer() {
   try {
-    console.log("=== Auth Boilerplate Backend ===\n");
     const server = app.listen(PORT, () => {
-      console.log(`✓ HTTP Server listening on port ${PORT}`);
+      log.info({ port: PORT }, "HTTP server listening");
     });
 
-    console.log("\n=== Server started successfully ===\n");
-
     const shutdown = async () => {
-      console.log("\nShutting down...");
+      log.info("Shutting down");
       server.close(() => {
-        console.log("Server closed");
+        log.info("Server closed");
         process.exit(0);
       });
     };
     process.on("SIGTERM", shutdown);
     process.on("SIGINT", shutdown);
   } catch (error) {
-    console.error("Failed to start server:", error);
+    log.error({ err: error }, "Failed to start server");
     process.exit(1);
   }
 }

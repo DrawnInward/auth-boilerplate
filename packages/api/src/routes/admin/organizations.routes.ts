@@ -4,8 +4,6 @@ import { validateParams, validateBody } from "../../middleware/validate";
 import {
   organizationParamsSchema,
   organizationMemberParamsSchema,
-} from "../../types/RouteParams";
-import {
   createOrganizationDtoSchema,
   updateOrganizationDtoSchema,
   addOrganizationMemberDtoSchema,
@@ -22,7 +20,7 @@ import {
   addOrganizationMemberHandler,
   updateOrganizationMemberHandler,
   removeOrganizationMemberHandler,
-} from "../../controllers/admin/adminOrganizations";
+} from "../../controllers/admin/adminOrganizations.controller";
 
 const router = express.Router();
 

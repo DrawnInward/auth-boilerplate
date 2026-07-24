@@ -7,13 +7,11 @@ import {
 } from "../../middleware/organizationMiddleware";
 import { canCreateOrg } from "../../middleware/canCreateOrg";
 import { validateParams, validateBody } from "../../middleware/validate";
+import { inviteMemberSchema } from "../../types/Invitation";
 import {
   organizationParamsSchema,
   organizationMemberParamsSchema,
   organizationInvitationParamsSchema,
-} from "../../types/RouteParams";
-import { inviteMemberSchema } from "../../types/Invitation";
-import {
   createOrganizationDtoSchema,
   updateOrganizationDtoSchema,
   addOrganizationMemberDtoSchema,
@@ -31,12 +29,12 @@ import {
   removeMember,
   transferOwnershipHandler,
   leaveOrganization,
-} from "../../controllers/user/organizations";
+} from "../../controllers/user/organizations.controller";
 import {
   inviteMember,
   listInvitations,
   cancelInvitation,
-} from "../../controllers/user/invitations";
+} from "../../controllers/user/invitations.controller";
 
 const router = express.Router();
 

@@ -2,7 +2,10 @@ import { Request, Response, NextFunction } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import db from "../../database/db";
-import { getAdminWithMfaStatus, getAdminById } from "../../models/admins.models";
+import {
+  getAdminWithMfaStatus,
+  getAdminById,
+} from "../../models/admins.models";
 import { addRefresh, revokeUserTokens } from "../../models/refresh.models";
 import { sendSuccess } from "../../utils/responseUtils";
 import { setAuthCookies, parseCookies } from "../../utils";
@@ -13,30 +16,40 @@ import {
   verifyMfaChallengeToken,
   clearMfaChallengeCookie,
 } from "../../utils/mfaChallenge";
-import { getMfaSecret, getUnusedBackupCodes, markBackupCodeUsed } from "../../models/mfa.models";
+import {
+  getMfaSecret,
+  getUnusedBackupCodes,
+  markBackupCodeUsed,
+} from "../../models/mfa.models";
 import { verifyTotpCode } from "../../utils/totp";
 import { RequestWithUser } from "../../types";
+import { httpError } from "../../utils/httpError";
+import { withTransaction } from "../../utils/withTransaction";
 
 require("dotenv").config({ quiet: true });
 
-export const login = async (req: Request, res: Response, next: NextFunction) => {
+export const login = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
   try {
     const { email, password } = req.body;
 
     const admin = await getAdminWithMfaStatus(email);
 
     if (!admin) {
-      throw { status: 401, msg: "Invalid credentials" };
+      throw httpError(401, "Invalid credentials");
     }
 
     if (!admin.is_active) {
-      throw { status: 403, msg: "Account is deactivated" };
+      throw httpError(403, "Account is deactivated");
     }
 
     const passwordMatch = await bcrypt.compare(password, admin.password_hash);
 
     if (!passwordMatch) {
-      throw { status: 401, msg: "Invalid credentials" };
+      throw httpError(401, "Invalid credentials");
     }
 
     if (admin.mfa_enabled) {
@@ -46,7 +59,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
       return sendSuccess(
         res,
         { mfa_required: true },
-        "MFA verification required"
+        "MFA verification required",
       );
     }
 
@@ -54,7 +67,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     const refreshKey = process.env.REFRESH_KEY;
 
     if (!accessKey || !refreshKey) {
-      throw { status: 500, msg: "Server configuration error" };
+      throw httpError(500, "Server configuration error");
     }
 
     const accessToken = jwt.sign(
@@ -64,7 +77,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
         root: admin.root,
       },
       accessKey,
-      { expiresIn: "15m" }
+      { expiresIn: "15m" },
     );
 
     const { token: refreshToken } = await addRefresh({
@@ -83,7 +96,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
         email_verified: admin.email_verified,
         is_active: admin.is_active,
       },
-      "Admin logged in successfully"
+      "Admin logged in successfully",
     );
   } catch (error) {
     next(error);
@@ -93,7 +106,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
 export const mfaLoginVerify = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { code } = req.body;
@@ -101,21 +114,21 @@ export const mfaLoginVerify = async (
     const challengeToken = cookies.mfa_challenge;
 
     if (!challengeToken) {
-      throw { status: 401, msg: "MFA challenge not found" };
+      throw httpError(401, "MFA challenge not found");
     }
 
     const payload = verifyMfaChallengeToken(challengeToken);
     if (payload.role_type !== "admin") {
-      throw { status: 401, msg: "Invalid MFA challenge" };
+      throw httpError(401, "Invalid MFA challenge");
     }
 
     const secret = await getMfaSecret(payload.role_id, "admin");
     if (!secret) {
-      throw { status: 400, msg: "MFA not configured" };
+      throw httpError(400, "MFA not configured");
     }
 
     if (!verifyTotpCode(secret, code)) {
-      throw { status: 401, msg: "Invalid verification code" };
+      throw httpError(401, "Invalid verification code");
     }
 
     clearMfaChallengeCookie(res);
@@ -124,7 +137,7 @@ export const mfaLoginVerify = async (
     const accessKey = process.env.ADMIN_ACCESS_KEY;
 
     if (!accessKey) {
-      throw { status: 500, msg: "Server configuration error" };
+      throw httpError(500, "Server configuration error");
     }
 
     const accessToken = jwt.sign(
@@ -134,7 +147,7 @@ export const mfaLoginVerify = async (
         root: admin?.root || false,
       },
       accessKey,
-      { expiresIn: "15m" }
+      { expiresIn: "15m" },
     );
 
     const { token: refreshToken } = await addRefresh({
@@ -153,79 +166,81 @@ export const mfaLoginVerify = async (
 export const mfaLoginBackupVerify = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
-  const client = await db.connect();
-
   try {
-    await client.query("BEGIN");
-
     const { code } = req.body;
     const cookies = parseCookies(req.headers.cookie);
     const challengeToken = cookies.mfa_challenge;
 
     if (!challengeToken) {
-      throw { status: 401, msg: "MFA challenge not found" };
+      throw httpError(401, "MFA challenge not found");
     }
 
     const payload = verifyMfaChallengeToken(challengeToken);
     if (payload.role_type !== "admin") {
-      throw { status: 401, msg: "Invalid MFA challenge" };
+      throw httpError(401, "Invalid MFA challenge");
     }
 
-    const unusedCodes = await getUnusedBackupCodes(payload.role_id, "admin", client);
-    let matchedCode = null;
+    const { accessToken, refreshToken } = await withTransaction(
+      db,
+      async (client) => {
+        const unusedCodes = await getUnusedBackupCodes(
+          payload.role_id,
+          "admin",
+          client,
+        );
+        let matchedCode = null;
 
-    for (const backupCode of unusedCodes) {
-      if (await bcrypt.compare(code, backupCode.code_hash)) {
-        matchedCode = backupCode;
-        break;
-      }
-    }
+        for (const backupCode of unusedCodes) {
+          if (await bcrypt.compare(code, backupCode.code_hash)) {
+            matchedCode = backupCode;
+            break;
+          }
+        }
 
-    if (!matchedCode) {
-      throw { status: 401, msg: "Invalid backup code" };
-    }
+        if (!matchedCode) {
+          throw httpError(401, "Invalid backup code");
+        }
 
-    await markBackupCodeUsed(matchedCode.id, client);
+        await markBackupCodeUsed(matchedCode.id, client);
 
-    clearMfaChallengeCookie(res);
+        clearMfaChallengeCookie(res);
 
-    const admin = await getAdminById(payload.role_id);
-    const accessKey = process.env.ADMIN_ACCESS_KEY;
+        const admin = await getAdminById(payload.role_id);
+        const accessKey = process.env.ADMIN_ACCESS_KEY;
 
-    if (!accessKey) {
-      throw { status: 500, msg: "Server configuration error" };
-    }
+        if (!accessKey) {
+          throw httpError(500, "Server configuration error");
+        }
 
-    const accessToken = jwt.sign(
-      {
-        role_id: payload.role_id,
-        role_type: "admin",
-        root: admin?.root || false,
+        const accessToken = jwt.sign(
+          {
+            role_id: payload.role_id,
+            role_type: "admin",
+            root: admin?.root || false,
+          },
+          accessKey,
+          { expiresIn: "15m" },
+        );
+
+        const { token: refreshToken } = await addRefresh(
+          {
+            role_id: payload.role_id,
+            role_type: "admin",
+          },
+          client,
+        );
+
+        return { accessToken, refreshToken };
       },
-      accessKey,
-      { expiresIn: "15m" }
     );
-
-    const { token: refreshToken } = await addRefresh(
-      {
-        role_id: payload.role_id,
-        role_type: "admin",
-      },
-      client
-    );
-
-    await client.query("COMMIT");
 
     setAuthCookies(res, accessToken, refreshToken);
 
     return sendSuccess(res, { admin_id: payload.role_id }, "Login successful");
   } catch (error) {
-    await client.query("ROLLBACK");
     next(error);
-  } finally {
-    client.release();
   }
 };
 
@@ -234,14 +249,14 @@ export const mfaLoginBackupVerify = async (
 export const getMe = async (
   req: RequestWithUser,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { role_id } = req.user!;
 
     const admin = await getAdminById(role_id);
     if (!admin) {
-      throw { status: 404, msg: "Admin not found" };
+      throw httpError(404, "Admin not found");
     }
 
     return sendSuccess(
@@ -256,7 +271,7 @@ export const getMe = async (
         created_at: admin.created_at,
         updated_at: admin.updated_at,
       },
-      "Admin profile retrieved successfully"
+      "Admin profile retrieved successfully",
     );
   } catch (error) {
     next(error);
@@ -268,7 +283,7 @@ export const getMe = async (
 export const logout = async (
   req: RequestWithUser,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     if (req.user?.role_id) {

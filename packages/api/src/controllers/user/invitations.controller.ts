@@ -27,6 +27,8 @@ import { addRefresh } from "../../models/refresh.models";
 import { sendSuccess, sendCreated } from "../../utils/responseUtils";
 import { sendOrgInviteEmail } from "../../utils/email";
 import { setAuthCookies, hashPassword } from "../../utils";
+import { httpError } from "../../utils/httpError";
+import { withTransaction } from "../../utils/withTransaction";
 
 require("dotenv").config({ quiet: true });
 
@@ -42,7 +44,7 @@ export const inviteMember = async (
 
     const organization = await getOrganizationById(organizationId);
     if (!organization) {
-      throw { status: 404, msg: "Organization not found" };
+      throw httpError(404, "Organization not found");
     }
 
     const existingUser = await getUser(email);
@@ -52,10 +54,7 @@ export const inviteMember = async (
         existingUser.user_id!,
       );
       if (isMember) {
-        throw {
-          status: 409,
-          msg: "User is already a member of this organization",
-        };
+        throw httpError(409, "User is already a member of this organization");
       }
     }
 
@@ -133,7 +132,6 @@ export const listInvitations = async (
   }
 };
 
-
 export const cancelInvitation = async (
   req: RequestWithUser,
   res: Response,
@@ -145,18 +143,15 @@ export const cancelInvitation = async (
 
     const invitation = await getInvitationById(invitationId);
     if (!invitation) {
-      throw { status: 404, msg: "Invitation not found" };
+      throw httpError(404, "Invitation not found");
     }
 
     if (invitation.organization_id !== organizationId) {
-      throw {
-        status: 403,
-        msg: "Invitation does not belong to this organization",
-      };
+      throw httpError(403, "Invitation does not belong to this organization");
     }
 
     if (invitation.used_at) {
-      throw { status: 400, msg: "Invitation has already been used" };
+      throw httpError(400, "Invitation has already been used");
     }
 
     await deleteInvitation(invitationId);
@@ -207,106 +202,105 @@ export const acceptInvitation = async (
   res: Response,
   next: NextFunction,
 ) => {
-  const client = await db.connect();
-
   try {
-    await client.query("BEGIN");
-
     const token = req.params.token as string;
     const { password } = req.body;
 
-    const invitation = await validateInvitationToken(
-      token,
-      "org_invite",
-      client,
-    );
+    const { invitation, userId, accessToken, refreshToken } =
+      await withTransaction(db, async (client) => {
+        const invitation = await validateInvitationToken(
+          token,
+          "org_invite",
+          client,
+        );
 
-    if (!invitation.organization_id || !invitation.role) {
-      throw { status: 400, msg: "Invalid organization invitation" };
-    }
+        if (!invitation.organization_id || !invitation.role) {
+          throw httpError(400, "Invalid organization invitation");
+        }
 
-    let userId: string;
+        let userId: string;
 
-    if (invitation.is_existing_user) {
-      // Existing user - verify password
-      if (!password) {
-        throw {
-          status: 400,
-          msg: "Password is required to verify your identity",
-        };
-      }
+        if (invitation.is_existing_user) {
+          // Existing user - verify password
+          if (!password) {
+            throw httpError(
+              400,
+              "Password is required to verify your identity",
+            );
+          }
 
-      const user = await getUserWithPassword(invitation.email);
-      if (!user) {
-        throw { status: 404, msg: "User not found" };
-      }
+          const user = await getUserWithPassword(invitation.email);
+          if (!user) {
+            throw httpError(404, "User not found");
+          }
 
-      const passwordMatch = await bcrypt.compare(password, user.password_hash!);
-      if (!passwordMatch) {
-        throw { status: 401, msg: "Invalid password" };
-      }
+          const passwordMatch = await bcrypt.compare(
+            password,
+            user.password_hash!,
+          );
+          if (!passwordMatch) {
+            throw httpError(401, "Invalid password");
+          }
 
-      userId = user.user_id!;
-    } else {
-      // New user - create account
-      if (!password) {
-        throw {
-          status: 400,
-          msg: "Password is required to create your account",
-        };
-      }
+          userId = user.user_id!;
+        } else {
+          // New user - create account
+          if (!password) {
+            throw httpError(400, "Password is required to create your account");
+          }
 
-      const passwordHash = await hashPassword(password);
-      const user = await createUser(
-        {
-          email: invitation.email,
-          password_hash: passwordHash,
-          email_verified: true,
-          is_active: true,
-          created_through: "org_invited",
-        },
-        client,
-      );
+          const passwordHash = await hashPassword(password);
+          const user = await createUser(
+            {
+              email: invitation.email,
+              password_hash: passwordHash,
+              email_verified: true,
+              is_active: true,
+              created_through: "org_invited",
+            },
+            client,
+          );
 
-      userId = user.user_id!;
-    }
+          userId = user.user_id!;
+        }
 
-    await addOrganizationMember(
-      invitation.organization_id,
-      {
-        user_id: userId,
-        role: invitation.role as "admin" | "member" | "viewer",
-      },
-      invitation.invited_by || null,
-      client,
-    );
+        await addOrganizationMember(
+          invitation.organization_id,
+          {
+            user_id: userId,
+            role: invitation.role as "admin" | "member" | "viewer",
+          },
+          invitation.invited_by || null,
+          client,
+        );
 
-    await markInvitationUsed(invitation.id!, client);
+        await markInvitationUsed(invitation.id!, client);
 
-    const accessKey = process.env.USER_ACCESS_KEY;
-    if (!accessKey) {
-      throw { status: 500, msg: "Server configuration error" };
-    }
+        const accessKey = process.env.USER_ACCESS_KEY;
+        if (!accessKey) {
+          throw httpError(500, "Server configuration error");
+        }
 
-    const accessToken = jwt.sign(
-      {
-        role_id: userId,
-        role_type: "user",
-        email_verified: true,
-      },
-      accessKey,
-      { expiresIn: "15m" },
-    );
+        const accessToken = jwt.sign(
+          {
+            role_id: userId,
+            role_type: "user",
+            email_verified: true,
+          },
+          accessKey,
+          { expiresIn: "15m" },
+        );
 
-    const { token: refreshToken } = await addRefresh(
-      {
-        role_id: userId,
-        role_type: "user",
-      },
-      client,
-    );
+        const { token: refreshToken } = await addRefresh(
+          {
+            role_id: userId,
+            role_type: "user",
+          },
+          client,
+        );
 
-    await client.query("COMMIT");
+        return { invitation, userId, accessToken, refreshToken };
+      });
 
     setAuthCookies(res, accessToken, refreshToken);
 
@@ -322,9 +316,6 @@ export const acceptInvitation = async (
         : "Account created and joined the organization",
     );
   } catch (error) {
-    await client.query("ROLLBACK");
     next(error);
-  } finally {
-    client.release();
   }
 };

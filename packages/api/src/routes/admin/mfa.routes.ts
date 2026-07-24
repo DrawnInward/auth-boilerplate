@@ -6,7 +6,7 @@ import {
   mfaVerifySchema,
   mfaDisableSchema,
   mfaBackupVerifySchema,
-} from "../../types";
+} from "@auth-boilerplate/shared";
 import {
   setup,
   verifySetup,

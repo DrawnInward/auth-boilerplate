@@ -1,7 +1,7 @@
 import express from "express";
-import adminAuthRoutes from "./auth/adminAuth";
-import adminUserRoutes from "./admin/users";
-import adminOrganizationRoutes from "./admin/organizations";
+import adminAuthRoutes from "./auth/adminAuth.routes";
+import adminUserRoutes from "./admin/users.routes";
+import adminOrganizationRoutes from "./admin/organizations.routes";
 import adminMfaRoutes from "./admin/mfa.routes";
 
 const router = express.Router();

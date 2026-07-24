@@ -1,4 +1,7 @@
 import { EmailOptions, EmailProvider } from "../../../interfaces/email";
+import { childLogger } from "../../logger";
+
+const log = childLogger("sendGridEmailProvider");
 
 export class SendGridEmailProvider implements EmailProvider {
   async send(options: EmailOptions): Promise<void> {
@@ -18,9 +21,9 @@ export class SendGridEmailProvider implements EmailProvider {
         html: options.html || options.text,
       });
 
-      console.log(`Email sent to ${options.to}`);
+      log.info("Email sent");
     } catch (error) {
-      console.error("Error sending email via SendGrid:", error);
+      log.error({ err: error }, "Error sending email via SendGrid");
       throw error;
     }
   }

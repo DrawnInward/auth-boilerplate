@@ -11,16 +11,15 @@ import {
   OrganizationWithMemberCount,
   OrganizationWithRole,
 } from "@auth-boilerplate/shared";
+import { isUniqueViolation, isForeignKeyViolation } from "../utils/pgErrors";
+import { httpError } from "../utils/httpError";
 
 export const createOrganization = async (
   newOrg: CreateOrganizationDto & { owner_id: string },
   client: PoolClient | Pool = db,
 ): Promise<Organization> => {
   if (!newOrg.owner_id || !newOrg.name) {
-    throw {
-      status: 400,
-      msg: "owner_id and name are required",
-    };
+    throw httpError(400, "owner_id and name are required");
   }
 
   // Generate slug from name if not provided
@@ -44,11 +43,11 @@ export const createOrganization = async (
     const result = await client.query(queryString, values);
     return result.rows[0];
   } catch (err: any) {
-    if (err.code === "23505") {
-      throw { status: 409, msg: "Organization slug already exists" };
+    if (isUniqueViolation(err)) {
+      throw httpError(409, "Organization slug already exists");
     }
-    if (err.code === "23503") {
-      throw { status: 400, msg: "Invalid owner_id" };
+    if (isForeignKeyViolation(err)) {
+      throw httpError(400, "Invalid owner_id");
     }
     throw err;
   }
@@ -181,7 +180,7 @@ export const modifyOrganization = async (
   });
 
   if (updates.length === 0) {
-    throw { status: 400, msg: "No valid fields to update" };
+    throw httpError(400, "No valid fields to update");
   }
 
   // Always update updated_at
@@ -199,12 +198,12 @@ export const modifyOrganization = async (
   try {
     const result = await client.query(queryString, values);
     if (result.rows.length === 0) {
-      throw { status: 404, msg: "Organization not found" };
+      throw httpError(404, "Organization not found");
     }
     return result.rows[0];
   } catch (err: any) {
-    if (err.code === "23505") {
-      throw { status: 409, msg: "Organization slug already exists" };
+    if (isUniqueViolation(err)) {
+      throw httpError(409, "Organization slug already exists");
     }
     throw err;
   }
@@ -222,7 +221,7 @@ export const deleteOrganization = async (
 
   const result = await client.query(queryString, [id]);
   if (result.rows.length === 0) {
-    throw { status: 404, msg: "Organization not found" };
+    throw httpError(404, "Organization not found");
   }
   return result.rows[0];
 };

@@ -8,13 +8,15 @@ import {
   completeRegistrationSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
-  mfaVerifySchema,
-  mfaBackupVerifySchema,
-  setPasswordSchema,
   changePasswordSchema,
   updateProfileSchema,
   requestEmailChangeSchema,
 } from "../../types";
+import {
+  mfaVerifySchema,
+  mfaBackupVerifySchema,
+  setPasswordSchema,
+} from "@auth-boilerplate/shared";
 import {
   login,
   logout,
@@ -31,7 +33,7 @@ import {
   updateProfile,
   requestEmailChange,
   confirmEmailChange,
-} from "../../controllers/user/auth";
+} from "../../controllers/user/auth.controller";
 
 const router = express.Router();
 
