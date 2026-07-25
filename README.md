@@ -109,46 +109,46 @@ These are defined in `packages/api/src/database/dev-data/` and can be modified o
 
 The setup script generates three env files in `packages/api/`:
 
-| File | Purpose |
-|------|---------|
-| `.env` | JWT keys, registration modes, OAuth credentials |
-| `.env.development` | Development database connection |
-| `.env.test` | Test database connection |
+| File               | Purpose                                         |
+| ------------------ | ----------------------------------------------- |
+| `.env`             | JWT keys, registration modes, OAuth credentials |
+| `.env.development` | Development database connection                 |
+| `.env.test`        | Test database connection                        |
 
 ### Core Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | `3000` | API server port |
-| `ALLOWED_ORIGIN` | `http://localhost:5173` | CORS origin for frontend |
-| `NODE_ENV` | `development` | Environment (development/test/production) |
-| `DB_PASSWORD` | `Password1` | PostgreSQL password (used during setup) |
-| `PROJECT_NAME` | `app` | Database naming prefix (used during setup) |
+| Variable         | Default                 | Description                                |
+| ---------------- | ----------------------- | ------------------------------------------ |
+| `PORT`           | `3000`                  | API server port                            |
+| `ALLOWED_ORIGIN` | `http://localhost:5173` | CORS origin for frontend                   |
+| `NODE_ENV`       | `development`           | Environment (development/test/production)  |
+| `DB_PASSWORD`    | `Password1`             | PostgreSQL password (used during setup)    |
+| `PROJECT_NAME`   | `app`                   | Database naming prefix (used during setup) |
 
 ### JWT Keys (Auto-generated)
 
-| Variable | Description |
-|----------|-------------|
-| `REFRESH_KEY` | Signs refresh tokens |
-| `USER_ACCESS_KEY` | Signs user access tokens |
-| `ADMIN_ACCESS_KEY` | Signs admin access tokens |
-| `MFA_CHALLENGE_KEY` | Signs MFA challenge tokens |
+| Variable             | Description                                    |
+| -------------------- | ---------------------------------------------- |
+| `REFRESH_KEY`        | Signs refresh tokens                           |
+| `USER_ACCESS_KEY`    | Signs user access tokens                       |
+| `ADMIN_ACCESS_KEY`   | Signs admin access tokens                      |
+| `MFA_CHALLENGE_KEY`  | Signs MFA challenge tokens                     |
 | `MFA_ENCRYPTION_KEY` | Encrypts MFA secrets in database (AES-256-GCM) |
 
 ### Token Settings
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `REFRESH_TOKEN_DAYS` | `7` | Refresh token lifetime in days |
+| Variable             | Default | Description                    |
+| -------------------- | ------- | ------------------------------ |
+| `REFRESH_TOKEN_DAYS` | `7`     | Refresh token lifetime in days |
 
 ### Registration Modes
 
 Control who can create accounts and organizations:
 
-| Variable | Options | Description |
-|----------|---------|-------------|
-| `ACCOUNT_CREATION_MODE` | `open`, `invite_only`, `admin_only` | Who can create accounts |
-| `ORG_CREATION_MODE` | `open`, `self_registered_only`, `admin_only` | Who can create organizations |
+| Variable                | Options                                      | Description                  |
+| ----------------------- | -------------------------------------------- | ---------------------------- |
+| `ACCOUNT_CREATION_MODE` | `open`, `invite_only`, `admin_only`          | Who can create accounts      |
+| `ORG_CREATION_MODE`     | `open`, `self_registered_only`, `admin_only` | Who can create organizations |
 
 **Example configurations:**
 
@@ -215,23 +215,23 @@ Backup codes work the same way via `/api/auth/mfa/login-backup`.
 
 Rate limiting is applied at multiple levels to protect against abuse:
 
-| Limiter | Limit | Applied To |
-|---------|-------|------------|
-| Global | 500 req / 15 min | All routes |
-| Auth | 10 attempts / 15 min | Login, register, password reset |
-| Strict | 5 attempts / hour | Sensitive operations |
-| API | 100 req / 15 min | General API endpoints |
+| Limiter | Limit                | Applied To                      |
+| ------- | -------------------- | ------------------------------- |
+| Global  | 500 req / 15 min     | All routes                      |
+| Auth    | 10 attempts / 15 min | Login, register, password reset |
+| Strict  | 5 attempts / hour    | Sensitive operations            |
+| API     | 100 req / 15 min     | General API endpoints           |
 
 Rate limiting is disabled in test environment. Configuration is in `packages/api/src/middleware/rateLimiter.ts`.
 
 ### Organization Roles
 
-| Role | Permissions |
-|------|-------------|
-| `owner` | Full control, can transfer ownership, delete org |
-| `admin` | Manage members, send invites, update org settings |
-| `member` | Standard access |
-| `viewer` | Read-only access |
+| Role     | Permissions                                       |
+| -------- | ------------------------------------------------- |
+| `owner`  | Full control, can transfer ownership, delete org  |
+| `admin`  | Manage members, send invites, update org settings |
+| `member` | Standard access                                   |
+| `viewer` | Read-only access                                  |
 
 ### Frontend-Backend Interaction
 
@@ -245,15 +245,15 @@ The frontend uses React Query for data fetching:
 
 Seven tables provide the authentication foundation:
 
-| Table | Purpose |
-|-------|---------|
-| `users` | User accounts (email, password hash, MFA settings, OAuth IDs) |
-| `admins` | Admin accounts (separate from users) |
-| `refresh` | Refresh tokens (hashed, with expiry and role info) |
-| `organizations` | Organization records (name, slug, owner) |
-| `organization_members` | Membership junction (user, org, role) |
-| `invitations` | All invitation types (registration, org invite, password reset, email change) |
-| `mfa_backup_codes` | Hashed backup codes for MFA recovery |
+| Table                  | Purpose                                                                       |
+| ---------------------- | ----------------------------------------------------------------------------- |
+| `users`                | User accounts (email, password hash, MFA settings, OAuth IDs)                 |
+| `admins`               | Admin accounts (separate from users)                                          |
+| `refresh`              | Refresh tokens (hashed, with expiry and role info)                            |
+| `organizations`        | Organization records (name, slug, owner)                                      |
+| `organization_members` | Membership junction (user, org, role)                                         |
+| `invitations`          | All invitation types (registration, org invite, password reset, email change) |
+| `mfa_backup_codes`     | Hashed backup codes for MFA recovery                                          |
 
 Add your application's tables alongside these. The schema is defined in `packages/api/src/database/seed.ts`.
 
@@ -295,7 +295,7 @@ router.post(
   "/organizations/:organizationId/settings",
   authoriseUser(["user"]),
   requireOrgRole(["admin", "owner"]),
-  updateSettings
+  updateSettings,
 );
 ```
 
@@ -313,14 +313,14 @@ Add new shared types in `packages/shared/src/types/`.
 
 ## Scripts
 
-| Command | Description |
-|---------|-------------|
-| `npm run dev:api` | Start API dev server with hot reload |
-| `npm run dev:web` | Start frontend dev server |
-| `npm run build` | Build all packages |
-| `npm run test` | Run backend tests (Jest) |
-| `npm run setup` | Generate env files and create databases |
-| `npm run seed` | Seed database with development data |
+| Command           | Description                             |
+| ----------------- | --------------------------------------- |
+| `npm run dev:api` | Start API dev server with hot reload    |
+| `npm run dev:web` | Start frontend dev server               |
+| `npm run build`   | Build all packages                      |
+| `npm run test`    | Run backend tests (Jest)                |
+| `npm run setup`   | Generate env files and create databases |
+| `npm run seed`    | Seed database with development data     |
 
 ## API Overview
 

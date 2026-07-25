@@ -5,7 +5,13 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -79,7 +85,9 @@ export function AdminUsersPage() {
               <LoadingSpinner />
             </div>
           ) : users.length === 0 ? (
-            <p className="py-8 text-center text-muted-foreground">No users found</p>
+            <p className="py-8 text-center text-muted-foreground">
+              No users found
+            </p>
           ) : (
             <>
               <div className="md:hidden">
@@ -102,7 +110,10 @@ export function AdminUsersPage() {
             </DialogDescription>
           </DialogHeader>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(handleInvite)} className="space-y-4">
+            <form
+              onSubmit={form.handleSubmit(handleInvite)}
+              className="space-y-4"
+            >
               <FormField
                 control={form.control}
                 name="email"
@@ -110,17 +121,26 @@ export function AdminUsersPage() {
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input type="email" placeholder="user@example.com" {...field} />
+                      <Input
+                        type="email"
+                        placeholder="user@example.com"
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
               <p className="text-sm text-muted-foreground">
-                The user will receive an email with a link to set their password.
+                The user will receive an email with a link to set their
+                password.
               </p>
               <div className="flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => setCreateModalOpen(false)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setCreateModalOpen(false)}
+                >
                   Cancel
                 </Button>
                 <Button type="submit" disabled={createUser.isPending}>

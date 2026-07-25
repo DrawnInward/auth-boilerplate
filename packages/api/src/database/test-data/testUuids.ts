@@ -118,7 +118,9 @@ export function getOrganizationUuid(orgIndex: 1 | 2 | 3 | 4): string {
   return orgMap[orgIndex - 1];
 }
 
-export function getOrgMemberUuid(memberIndex: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8): string {
+export function getOrgMemberUuid(
+  memberIndex: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8,
+): string {
   const memberMap = [
     TEST_UUIDS.ORG_MEMBERS.ACME_OWNER,
     TEST_UUIDS.ORG_MEMBERS.ACME_ALICE_ADMIN,
@@ -141,7 +143,7 @@ export function getRoleUuid(index: number, roleType: "user" | "admin"): string {
 }
 
 export function getInvitationUuid(
-  invitationIndex: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
+  invitationIndex: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10,
 ): string {
   const invitationMap = [
     TEST_UUIDS.INVITATIONS.VALID_REGISTRATION,

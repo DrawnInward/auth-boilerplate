@@ -1,13 +1,23 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useAdminUserStats, useAdminOrganizationStats } from "@/api/queries/admin";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  useAdminUserStats,
+  useAdminOrganizationStats,
+} from "@/api/queries/admin";
 import { StatsCard } from "../components";
 import { LoadingSpinner } from "@/components/shared";
 
 export function AdminDashboardPage() {
   const { data: userStats, isLoading: usersLoading } = useAdminUserStats();
-  const { data: orgStats, isLoading: orgsLoading } = useAdminOrganizationStats();
+  const { data: orgStats, isLoading: orgsLoading } =
+    useAdminOrganizationStats();
 
   const users = userStats?.data;
   const orgs = orgStats?.data;

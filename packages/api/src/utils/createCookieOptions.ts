@@ -4,7 +4,7 @@ import { extractCookieDomain } from "./extractCookieDomain";
 
 export const createCookieOptions = (
   maxAge: number,
-  options?: TokenCookieOptions
+  options?: TokenCookieOptions,
 ): CookieOptions => {
   const isSecure = options?.isSecure ?? process.env.NODE_ENV === "production";
 

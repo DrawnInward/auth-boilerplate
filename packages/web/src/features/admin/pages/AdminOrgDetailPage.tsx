@@ -3,10 +3,19 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { updateOrganizationDtoSchema, type UpdateOrganizationDto } from "@auth-boilerplate/shared";
+import {
+  updateOrganizationDtoSchema,
+  type UpdateOrganizationDto,
+} from "@auth-boilerplate/shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import {
   Form,
   FormControl,
@@ -55,7 +64,8 @@ export function AdminOrgDetailPage() {
   });
 
   if (isLoading) return <FullPageSpinner />;
-  if (isError || !organization) return <FullPageError message="Organization not found" />;
+  if (isError || !organization)
+    return <FullPageError message="Organization not found" />;
 
   const handleUpdate = async (formData: UpdateOrganizationDto) => {
     try {
@@ -135,7 +145,10 @@ export function AdminOrgDetailPage() {
         </CardHeader>
         <CardContent>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(handleUpdate)} className="space-y-4">
+            <form
+              onSubmit={form.handleSubmit(handleUpdate)}
+              className="space-y-4"
+            >
               <FormField
                 control={form.control}
                 name="name"
@@ -175,12 +188,16 @@ export function AdminOrgDetailPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete organization</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{organization.name}"? This action cannot be undone.
+              Are you sure you want to delete "{organization.name}"? This action
+              cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

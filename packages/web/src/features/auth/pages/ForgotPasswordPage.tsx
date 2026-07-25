@@ -2,8 +2,17 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { forgotPasswordSchema, type ForgotPasswordDto } from "@auth-boilerplate/shared";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  forgotPasswordSchema,
+  type ForgotPasswordDto,
+} from "@auth-boilerplate/shared";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -42,7 +51,8 @@ export function ForgotPasswordPage() {
         <CardHeader className="text-center">
           <CardTitle>Check your email</CardTitle>
           <CardDescription>
-            If an account exists with that email, we've sent password reset instructions.
+            If an account exists with that email, we've sent password reset
+            instructions.
           </CardDescription>
         </CardHeader>
         <CardContent className="text-center">
@@ -64,7 +74,10 @@ export function ForgotPasswordPage() {
       </CardHeader>
       <CardContent className="space-y-4">
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+          <form
+            onSubmit={form.handleSubmit(handleSubmit)}
+            className="space-y-4"
+          >
             <FormField
               control={form.control}
               name="email"
@@ -72,13 +85,21 @@ export function ForgotPasswordPage() {
                 <FormItem>
                   <FormLabel>Email</FormLabel>
                   <FormControl>
-                    <Input type="email" placeholder="you@example.com" {...field} />
+                    <Input
+                      type="email"
+                      placeholder="you@example.com"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            <Button type="submit" className="w-full" disabled={forgotPassword.isPending}>
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={forgotPassword.isPending}
+            >
               {forgotPassword.isPending ? "Sending..." : "Send reset link"}
             </Button>
           </form>

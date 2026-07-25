@@ -1,5 +1,10 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ProfileTab, SecurityTab, ChangePasswordForm, OAuthTab } from "../components";
+import {
+  ProfileTab,
+  SecurityTab,
+  ChangePasswordForm,
+  OAuthTab,
+} from "../components";
 
 export function SettingsPage() {
   return (

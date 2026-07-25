@@ -27,7 +27,12 @@ type AdminLoginResponse = AdminAuthResponse | AdminMfaRequiredApiResponse;
 export function isAdminMfaRequired(
   response: AdminLoginResponse,
 ): response is AdminMfaRequiredApiResponse {
-  return "data" in response && response.data && "mfa_required" in response.data && response.data.mfa_required === true;
+  return (
+    "data" in response &&
+    response.data &&
+    "mfa_required" in response.data &&
+    response.data.mfa_required === true
+  );
 }
 
 export function useAdminMe() {

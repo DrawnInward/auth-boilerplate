@@ -6,7 +6,13 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -188,7 +194,10 @@ export function AdminUserDetailPage() {
         </CardHeader>
         <CardContent>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(handleUpdate)} className="space-y-4">
+            <form
+              onSubmit={form.handleSubmit(handleUpdate)}
+              className="space-y-4"
+            >
               <FormField
                 control={form.control}
                 name="email"
@@ -231,46 +240,65 @@ export function AdminUserDetailPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete user</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this user? This action cannot be undone.
+              Are you sure you want to delete this user? This action cannot be
+              undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog open={resetPasswordDialogOpen} onOpenChange={setResetPasswordDialogOpen}>
+      <AlertDialog
+        open={resetPasswordDialogOpen}
+        onOpenChange={setResetPasswordDialogOpen}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Send Password Reset Email</AlertDialogTitle>
             <AlertDialogDescription>
-              This will send a password reset email to {user.email}. The user will be able to set a new password using the link in the email.
+              This will send a password reset email to {user.email}. The user
+              will be able to set a new password using the link in the email.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleResetPassword} disabled={resetPassword.isPending}>
+            <AlertDialogAction
+              onClick={handleResetPassword}
+              disabled={resetPassword.isPending}
+            >
               {resetPassword.isPending ? "Sending..." : "Send Reset Email"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog open={disableMfaDialogOpen} onOpenChange={setDisableMfaDialogOpen}>
+      <AlertDialog
+        open={disableMfaDialogOpen}
+        onOpenChange={setDisableMfaDialogOpen}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Disable MFA</AlertDialogTitle>
             <AlertDialogDescription>
-              This will disable MFA for {user.email} and delete all their backup codes. The user will need to set up MFA again if they want to use it.
+              This will disable MFA for {user.email} and delete all their backup
+              codes. The user will need to set up MFA again if they want to use
+              it.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDisableMfa} disabled={disableMfa.isPending}>
+            <AlertDialogAction
+              onClick={handleDisableMfa}
+              disabled={disableMfa.isPending}
+            >
               {disableMfa.isPending ? "Disabling..." : "Disable MFA"}
             </AlertDialogAction>
           </AlertDialogFooter>

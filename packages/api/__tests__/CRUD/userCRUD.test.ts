@@ -18,7 +18,6 @@ import { testUsers } from "../../src/database/test-data";
 import { getUserUuid } from "../../src/database/test-data/testUuids";
 
 describe("User Model CRUD Operations", () => {
-
   beforeAll(async () => {
     await seed({ usersData: testUsers });
   });
@@ -69,7 +68,7 @@ describe("User Model CRUD Operations", () => {
         createUser({
           email: "test@example.com",
           password_hash: "some_hash",
-        })
+        }),
       ).rejects.toMatchObject({
         status: 409,
         msg: "Email already exists",
@@ -81,7 +80,7 @@ describe("User Model CRUD Operations", () => {
         createUser({
           email: "",
           password_hash: "some_hash",
-        })
+        }),
       ).rejects.toMatchObject({
         status: 400,
         msg: "Email and password_hash are required",
@@ -93,7 +92,7 @@ describe("User Model CRUD Operations", () => {
         createUser({
           email: "test@example.com",
           password_hash: "",
-        })
+        }),
       ).rejects.toMatchObject({
         status: 400,
         msg: "Email and password_hash are required",
@@ -227,7 +226,7 @@ describe("User Model CRUD Operations", () => {
       const page1Emails = page1.map((u) => u.email);
       const page2Emails = page2.map((u) => u.email);
       const overlap = page1Emails.filter((email) =>
-        page2Emails.includes(email)
+        page2Emails.includes(email),
       );
       expect(overlap.length).toBe(0);
     });
@@ -254,7 +253,7 @@ describe("User Model CRUD Operations", () => {
 
       expect(updatedUser.email_verified).toBe(true);
       expect(new Date(updatedUser.updated_at!).getTime()).toBeGreaterThan(
-        new Date(bobUser!.updated_at!).getTime()
+        new Date(bobUser!.updated_at!).getTime(),
       );
     });
 
@@ -281,7 +280,7 @@ describe("User Model CRUD Operations", () => {
       await expect(
         modifyUser(testUser!.user_id!, {
           password_hash: "should_not_work",
-        } as any)
+        } as any),
       ).rejects.toMatchObject({
         status: 403,
         msg: "Password updates not allowed. Use updatePassword function instead",
@@ -292,7 +291,7 @@ describe("User Model CRUD Operations", () => {
       await expect(
         modifyUser("550e8400-e29b-41d4-a716-446655440030", {
           email_verified: true,
-        })
+        }),
       ).rejects.toMatchObject({
         status: 404,
         msg: "User not found",
@@ -306,7 +305,7 @@ describe("User Model CRUD Operations", () => {
       expect(aliceUser).not.toBeNull();
 
       await expect(
-        modifyUser(aliceUser!.user_id!, { email: testUser!.email })
+        modifyUser(aliceUser!.user_id!, { email: testUser!.email }),
       ).rejects.toMatchObject({
         status: 409,
         msg: "Email already exists",
@@ -351,7 +350,7 @@ describe("User Model CRUD Operations", () => {
 
     it("should throw error when deleting non-existent user", async () => {
       await expect(
-        deleteUser("550e8400-e29b-41d4-a716-446655440030")
+        deleteUser("550e8400-e29b-41d4-a716-446655440030"),
       ).rejects.toMatchObject({
         status: 404,
         msg: "User not found",
@@ -387,7 +386,7 @@ describe("User Model CRUD Operations", () => {
 
     it("should throw error for non-existent user", async () => {
       await expect(
-        activateUser("550e8400-e29b-41d4-a716-446655440030")
+        activateUser("550e8400-e29b-41d4-a716-446655440030"),
       ).rejects.toMatchObject({
         status: 404,
         msg: "User not found",
@@ -403,7 +402,7 @@ describe("User Model CRUD Operations", () => {
 
       const deactivatedUser = await deactivateUser(
         testUser!.user_id!,
-        deactivatorId
+        deactivatorId,
       );
 
       expect(deactivatedUser.is_active).toBe(false);
@@ -413,7 +412,7 @@ describe("User Model CRUD Operations", () => {
 
     it("should throw error for non-existent user", async () => {
       await expect(
-        deactivateUser("550e8400-e29b-41d4-a716-446655440030", getUserUuid(1))
+        deactivateUser("550e8400-e29b-41d4-a716-446655440030", getUserUuid(1)),
       ).rejects.toMatchObject({
         status: 404,
         msg: "User not found",
@@ -433,7 +432,7 @@ describe("User Model CRUD Operations", () => {
 
     it("should throw error for non-existent user", async () => {
       await expect(
-        verifyUserEmail("550e8400-e29b-41d4-a716-446655440030")
+        verifyUserEmail("550e8400-e29b-41d4-a716-446655440030"),
       ).rejects.toMatchObject({
         status: 404,
         msg: "User not found",
@@ -459,7 +458,7 @@ describe("User Model CRUD Operations", () => {
 
     it("should throw error for non-existent user", async () => {
       await expect(
-        updatePassword("550e8400-e29b-41d4-a716-446655440030", "new_hash")
+        updatePassword("550e8400-e29b-41d4-a716-446655440030", "new_hash"),
       ).rejects.toMatchObject({
         status: 404,
         msg: "User not found",
@@ -541,7 +540,7 @@ describe("User Model CRUD Operations", () => {
 
       // Verified + unverified should equal total non-deleted
       expect(stats.verified + stats.unverified).toBe(
-        stats.total - stats.deleted
+        stats.total - stats.deleted,
       );
     });
   });
@@ -558,7 +557,7 @@ describe("User Model CRUD Operations", () => {
             email: "transaction@example.com",
             password_hash: "tx_hash",
           },
-          client
+          client,
         );
 
         expect(user.email).toBe("transaction@example.com");
@@ -586,7 +585,7 @@ describe("User Model CRUD Operations", () => {
           {
             email_verified: false,
           },
-          client
+          client,
         );
 
         expect(modified.email_verified).toBe(false);

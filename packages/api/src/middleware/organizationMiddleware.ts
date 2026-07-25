@@ -12,7 +12,7 @@ import { httpError } from "../utils/httpError";
 export const organizationMemberMiddleware = async (
   req: RequestWithUser,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const organizationId = req.params.organizationId as string;
@@ -29,7 +29,10 @@ export const organizationMemberMiddleware = async (
     }
 
     // Verify user is a member of this organization
-    const membership = await getOrganizationMember(organizationId, req.user!.role_id);
+    const membership = await getOrganizationMember(
+      organizationId,
+      req.user!.role_id,
+    );
 
     if (!membership) {
       throw httpError(403, "Access denied: Not a member of this organization");
@@ -60,14 +63,23 @@ export const requireOrgRole = (allowedRoles: OrganizationRoleType[]) => {
       }
 
       // Get user's role in this organization
-      const userRole = await getUserRoleInOrg(organizationId, req.user!.role_id);
+      const userRole = await getUserRoleInOrg(
+        organizationId,
+        req.user!.role_id,
+      );
 
       if (!userRole) {
-        throw httpError(403, "Access denied: Not a member of this organization");
+        throw httpError(
+          403,
+          "Access denied: Not a member of this organization",
+        );
       }
 
       if (!allowedRoles.includes(userRole)) {
-        throw httpError(403, `Access denied: Requires one of these roles: ${allowedRoles.join(", ")}`);
+        throw httpError(
+          403,
+          `Access denied: Requires one of these roles: ${allowedRoles.join(", ")}`,
+        );
       }
 
       req.organization = organization;
@@ -82,4 +94,9 @@ export const requireOrgRole = (allowedRoles: OrganizationRoleType[]) => {
 export const requireOrgOwner = requireOrgRole(["owner"]);
 export const requireOrgAdmin = requireOrgRole(["owner", "admin"]);
 export const requireOrgMember = requireOrgRole(["owner", "admin", "member"]);
-export const requireOrgViewer = requireOrgRole(["owner", "admin", "member", "viewer"]);
+export const requireOrgViewer = requireOrgRole([
+  "owner",
+  "admin",
+  "member",
+  "viewer",
+]);

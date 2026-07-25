@@ -16,6 +16,12 @@
     "types": ["node", "jest"],
     "moduleResolution": "node"
   },
-  "include": ["src/**/*", "__tests__/**/*", "run-seed.ts", "setup.ts"],
+  "include": [
+    "src/**/*",
+    "__tests__/**/*",
+    "run-seed.ts",
+    "run-migrate.ts",
+    "setup.ts"
+  ],
   "exclude": ["node_modules", "dist"]
 }

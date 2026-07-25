@@ -7,7 +7,7 @@ import { httpError } from "../utils/httpError";
 export const canCreateOrg = async (
   req: RequestWithUser,
   _res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     if (!req.user || req.user.role_type !== "user") {
@@ -41,7 +41,10 @@ export const canCreateOrg = async (
       if (user.created_through === "self_registered") {
         return next();
       }
-      throw httpError(403, "Only self-registered users can create organizations");
+      throw httpError(
+        403,
+        "Only self-registered users can create organizations",
+      );
     }
 
     return next();

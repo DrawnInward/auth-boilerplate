@@ -20,7 +20,7 @@ export async function hashBackupCodes(codes: string[]): Promise<string[]> {
 
 export async function verifyBackupCode(
   code: string,
-  hashedCodes: string[]
+  hashedCodes: string[],
 ): Promise<number> {
   for (let i = 0; i < hashedCodes.length; i++) {
     if (await bcrypt.compare(code, hashedCodes[i])) {

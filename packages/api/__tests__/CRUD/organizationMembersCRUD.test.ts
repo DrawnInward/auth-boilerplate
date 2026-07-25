@@ -68,7 +68,7 @@ describe("Organization Members Model CRUD Operations", () => {
       const member = await addOrganizationMember(
         org.id!,
         { user_id: getUserUuid(3), role: "viewer" },
-        getUserUuid(1)
+        getUserUuid(1),
       );
 
       expect(member.invited_by).toBe(getUserUuid(1));
@@ -92,7 +92,7 @@ describe("Organization Members Model CRUD Operations", () => {
         addOrganizationMember(getOrganizationUuid(1), {
           user_id: getUserUuid(2), // Alice is already a member
           role: "member",
-        })
+        }),
       ).rejects.toMatchObject({
         status: 409,
         msg: "User is already a member of this organization",
@@ -104,7 +104,7 @@ describe("Organization Members Model CRUD Operations", () => {
         addOrganizationMember(getOrganizationUuid(1), {
           user_id: "",
           role: "member",
-        })
+        }),
       ).rejects.toMatchObject({
         status: 400,
         msg: "user_id is required",
@@ -116,7 +116,7 @@ describe("Organization Members Model CRUD Operations", () => {
         addOrganizationMember(getOrganizationUuid(1), {
           user_id: "550e8400-e29b-41d4-a716-446655440999",
           role: "member",
-        })
+        }),
       ).rejects.toMatchObject({
         status: 400,
         msg: "Invalid organization_id or user_id",
@@ -128,7 +128,7 @@ describe("Organization Members Model CRUD Operations", () => {
     it("should find member by org and user ID", async () => {
       const member = await getOrganizationMember(
         getOrganizationUuid(1),
-        getUserUuid(1)
+        getUserUuid(1),
       );
 
       expect(member).toBeDefined();
@@ -141,7 +141,7 @@ describe("Organization Members Model CRUD Operations", () => {
       // Bob is not a member of Alice's startup
       const member = await getOrganizationMember(
         getOrganizationUuid(3),
-        getUserUuid(3)
+        getUserUuid(3),
       );
       expect(member).toBeNull();
     });
@@ -157,7 +157,7 @@ describe("Organization Members Model CRUD Operations", () => {
 
     it("should return null for non-existent ID", async () => {
       const member = await getOrganizationMemberById(
-        "550e8400-e29b-41d4-a716-446655440999"
+        "550e8400-e29b-41d4-a716-446655440999",
       );
       expect(member).toBeNull();
     });
@@ -261,7 +261,7 @@ describe("Organization Members Model CRUD Operations", () => {
       });
 
       await expect(
-        updateMemberRole(org.id!, getUserUuid(2), "owner")
+        updateMemberRole(org.id!, getUserUuid(2), "owner"),
       ).rejects.toMatchObject({
         status: 400,
         msg: "Cannot set role to owner directly. Use transfer ownership.",
@@ -270,7 +270,7 @@ describe("Organization Members Model CRUD Operations", () => {
 
     it("should not allow changing owner role", async () => {
       await expect(
-        updateMemberRole(getOrganizationUuid(1), getUserUuid(1), "admin")
+        updateMemberRole(getOrganizationUuid(1), getUserUuid(1), "admin"),
       ).rejects.toMatchObject({
         status: 404,
         msg: "Member not found or cannot modify owner role",
@@ -279,11 +279,7 @@ describe("Organization Members Model CRUD Operations", () => {
 
     it("should throw error for non-member", async () => {
       await expect(
-        updateMemberRole(
-          getOrganizationUuid(3),
-          getUserUuid(3),
-          "admin"
-        )
+        updateMemberRole(getOrganizationUuid(3), getUserUuid(3), "admin"),
       ).rejects.toMatchObject({
         status: 404,
         msg: "Member not found or cannot modify owner role",
@@ -313,7 +309,7 @@ describe("Organization Members Model CRUD Operations", () => {
 
     it("should not allow removing the owner", async () => {
       await expect(
-        removeOrganizationMember(getOrganizationUuid(1), getUserUuid(1))
+        removeOrganizationMember(getOrganizationUuid(1), getUserUuid(1)),
       ).rejects.toMatchObject({
         status: 400,
         msg: "Cannot remove owner from organization. Transfer ownership first.",
@@ -322,7 +318,7 @@ describe("Organization Members Model CRUD Operations", () => {
 
     it("should throw error for non-member", async () => {
       await expect(
-        removeOrganizationMember(getOrganizationUuid(3), getUserUuid(3))
+        removeOrganizationMember(getOrganizationUuid(3), getUserUuid(3)),
       ).rejects.toMatchObject({
         status: 404,
         msg: "Member not found",
@@ -352,7 +348,7 @@ describe("Organization Members Model CRUD Operations", () => {
       const { oldOwner, newOwner } = await transferOwnership(
         org.id!,
         getUserUuid(1),
-        getUserUuid(2)
+        getUserUuid(2),
       );
 
       expect(oldOwner.role).toBe("admin");
@@ -371,7 +367,7 @@ describe("Organization Members Model CRUD Operations", () => {
       });
 
       await expect(
-        transferOwnership(org.id!, getUserUuid(1), getUserUuid(3))
+        transferOwnership(org.id!, getUserUuid(1), getUserUuid(3)),
       ).rejects.toMatchObject({
         status: 400,
         msg: "New owner must be an existing member of the organization",
@@ -400,7 +396,7 @@ describe("Organization Members Model CRUD Operations", () => {
       });
 
       await expect(
-        transferOwnership(org.id!, getUserUuid(2), getUserUuid(3))
+        transferOwnership(org.id!, getUserUuid(2), getUserUuid(3)),
       ).rejects.toMatchObject({
         status: 403,
         msg: "Only current owner can transfer ownership",
@@ -429,7 +425,7 @@ describe("Organization Members Model CRUD Operations", () => {
     it("should return true for member", async () => {
       const isMember = await isUserMemberOfOrg(
         getOrganizationUuid(1),
-        getUserUuid(1)
+        getUserUuid(1),
       );
       expect(isMember).toBe(true);
     });
@@ -437,7 +433,7 @@ describe("Organization Members Model CRUD Operations", () => {
     it("should return false for non-member", async () => {
       const isMember = await isUserMemberOfOrg(
         getOrganizationUuid(3),
-        getUserUuid(3)
+        getUserUuid(3),
       );
       expect(isMember).toBe(false);
     });
@@ -445,12 +441,18 @@ describe("Organization Members Model CRUD Operations", () => {
 
   describe("getUserRoleInOrg", () => {
     it("should return role for member", async () => {
-      const role = await getUserRoleInOrg(getOrganizationUuid(1), getUserUuid(1));
+      const role = await getUserRoleInOrg(
+        getOrganizationUuid(1),
+        getUserUuid(1),
+      );
       expect(role).toBe("owner");
     });
 
     it("should return null for non-member", async () => {
-      const role = await getUserRoleInOrg(getOrganizationUuid(3), getUserUuid(3));
+      const role = await getUserRoleInOrg(
+        getOrganizationUuid(3),
+        getUserUuid(3),
+      );
       expect(role).toBeNull();
     });
   });
@@ -470,7 +472,7 @@ describe("Organization Members Model CRUD Operations", () => {
           org.id!,
           { user_id: getUserUuid(2), role: "member" },
           null,
-          client
+          client,
         );
 
         expect(member.user_id).toBe(getUserUuid(2));

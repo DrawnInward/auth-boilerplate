@@ -8,7 +8,7 @@ export interface ApiError {
 
 export async function apiClient<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
 ): Promise<T> {
   const res = await fetch(`${API_BASE}${endpoint}`, {
     credentials: "include",

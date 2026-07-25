@@ -93,9 +93,8 @@ describe("User Registration Integration Tests", () => {
     beforeAll(async () => {
       // Create a registration invitation to get a valid token
       // We need to access the database directly since the endpoint doesn't return the token
-      const { createInvitation } = await import(
-        "../../src/models/invitations.models"
-      );
+      const { createInvitation } =
+        await import("../../src/models/invitations.models");
       const result = await createInvitation({
         email: "verifytest@example.com",
         type: "registration",
@@ -124,9 +123,8 @@ describe("User Registration Integration Tests", () => {
 
     it("should return 400 for expired token", async () => {
       // Create an expired invitation directly in the database
-      const { createInvitation } = await import(
-        "../../src/models/invitations.models"
-      );
+      const { createInvitation } =
+        await import("../../src/models/invitations.models");
       const result = await createInvitation({
         email: "expiredverify@example.com",
         type: "registration",
@@ -135,7 +133,7 @@ describe("User Registration Integration Tests", () => {
       // Manually expire it
       await db.query(
         "UPDATE invitations SET expires_at = NOW() - INTERVAL '1 day' WHERE id = $1",
-        [result.invitation.id]
+        [result.invitation.id],
       );
 
       const response = await request(app)
@@ -147,9 +145,8 @@ describe("User Registration Integration Tests", () => {
     });
 
     it("should return 400 for used token", async () => {
-      const { createInvitation, markInvitationUsed } = await import(
-        "../../src/models/invitations.models"
-      );
+      const { createInvitation, markInvitationUsed } =
+        await import("../../src/models/invitations.models");
       const result = await createInvitation({
         email: "usedverify@example.com",
         type: "registration",
@@ -168,9 +165,8 @@ describe("User Registration Integration Tests", () => {
 
   describe("POST /api/auth/complete-registration", () => {
     it("should complete registration with valid token and password", async () => {
-      const { createInvitation } = await import(
-        "../../src/models/invitations.models"
-      );
+      const { createInvitation } =
+        await import("../../src/models/invitations.models");
       const result = await createInvitation({
         email: "complete@example.com",
         type: "registration",
@@ -195,16 +191,16 @@ describe("User Registration Integration Tests", () => {
       const cookies = response.headers["set-cookie"];
       expect(cookies).toBeDefined();
       const cookieArray = Array.isArray(cookies) ? cookies : [cookies];
-      expect(
-        cookieArray.some((c: string) => c.includes("access_token"))
-      ).toBe(true);
-      expect(
-        cookieArray.some((c: string) => c.includes("refresh_token"))
-      ).toBe(true);
+      expect(cookieArray.some((c: string) => c.includes("access_token"))).toBe(
+        true,
+      );
+      expect(cookieArray.some((c: string) => c.includes("refresh_token"))).toBe(
+        true,
+      );
 
       // Token should be marked as used
       const invitation = await getInvitationByTokenHash(
-        determinateHash(result.token)
+        determinateHash(result.token),
       );
       expect(invitation!.used_at).not.toBeNull();
     });
@@ -222,9 +218,8 @@ describe("User Registration Integration Tests", () => {
     });
 
     it("should reject with short password", async () => {
-      const { createInvitation } = await import(
-        "../../src/models/invitations.models"
-      );
+      const { createInvitation } =
+        await import("../../src/models/invitations.models");
       const result = await createInvitation({
         email: "shortpw@example.com",
         type: "registration",
@@ -243,9 +238,8 @@ describe("User Registration Integration Tests", () => {
     });
 
     it("should reject with missing password", async () => {
-      const { createInvitation } = await import(
-        "../../src/models/invitations.models"
-      );
+      const { createInvitation } =
+        await import("../../src/models/invitations.models");
       const result = await createInvitation({
         email: "nopw@example.com",
         type: "registration",
@@ -262,9 +256,8 @@ describe("User Registration Integration Tests", () => {
     });
 
     it("should reject with used token", async () => {
-      const { createInvitation, markInvitationUsed } = await import(
-        "../../src/models/invitations.models"
-      );
+      const { createInvitation, markInvitationUsed } =
+        await import("../../src/models/invitations.models");
       const result = await createInvitation({
         email: "usedcomplete@example.com",
         type: "registration",
@@ -284,9 +277,8 @@ describe("User Registration Integration Tests", () => {
     });
 
     it("should reject with wrong invitation type", async () => {
-      const { createInvitation } = await import(
-        "../../src/models/invitations.models"
-      );
+      const { createInvitation } =
+        await import("../../src/models/invitations.models");
       // Create a password reset invitation instead of registration
       const result = await createInvitation({
         email: "test@example.com",
@@ -319,21 +311,19 @@ describe("User Registration Integration Tests", () => {
       expect(registerResponse.body.data.email).toBe(email);
 
       // Get the token from database (simulating email link click)
-      const { getPendingInvitationsForEmail } = await import(
-        "../../src/models/invitations.models"
-      );
+      const { getPendingInvitationsForEmail } =
+        await import("../../src/models/invitations.models");
       const invitations = await getPendingInvitationsForEmail(
         email,
-        "registration"
+        "registration",
       );
       expect(invitations.length).toBe(1);
 
       // We need to get the actual token - but we can't since it's not stored
       // In real testing, we'd mock the email service and capture the token
       // For now, create a fresh invitation to test the flow
-      const { createInvitation } = await import(
-        "../../src/models/invitations.models"
-      );
+      const { createInvitation } =
+        await import("../../src/models/invitations.models");
       const { token } = await createInvitation({
         email: "fullflow2@example.com",
         type: "registration",
@@ -373,9 +363,8 @@ describe("User Registration Integration Tests", () => {
 
   describe("Security Tests", () => {
     it("should not expose password hash in any response", async () => {
-      const { createInvitation } = await import(
-        "../../src/models/invitations.models"
-      );
+      const { createInvitation } =
+        await import("../../src/models/invitations.models");
       const result = await createInvitation({
         email: "security@example.com",
         type: "registration",
@@ -394,9 +383,8 @@ describe("User Registration Integration Tests", () => {
     });
 
     it("should set HttpOnly cookies", async () => {
-      const { createInvitation } = await import(
-        "../../src/models/invitations.models"
-      );
+      const { createInvitation } =
+        await import("../../src/models/invitations.models");
       const result = await createInvitation({
         email: "httponly@example.com",
         type: "registration",
@@ -414,7 +402,7 @@ describe("User Registration Integration Tests", () => {
       const cookieArray = Array.isArray(cookies) ? cookies : [cookies];
 
       const accessTokenCookie = cookieArray.find((c: string) =>
-        c.includes("access_token")
+        c.includes("access_token"),
       );
       expect(accessTokenCookie).toContain("HttpOnly");
     });

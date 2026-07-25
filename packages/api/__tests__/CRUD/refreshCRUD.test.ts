@@ -146,7 +146,7 @@ describe("Refresh Token Model CRUD Operations", () => {
 
     it("should throw error for non-existent token hash", async () => {
       await expect(
-        fetchRefreshByTokenHash("non_existent_hash")
+        fetchRefreshByTokenHash("non_existent_hash"),
       ).rejects.toMatchObject({
         status: 404,
         msg: "Refresh token not found",
@@ -188,7 +188,7 @@ describe("Refresh Token Model CRUD Operations", () => {
 
       // Check issued time is around now
       expect(issuedTime.getTime()).toBeGreaterThanOrEqual(
-        beforeCreation.getTime()
+        beforeCreation.getTime(),
       );
 
       // Check expiration is approximately 7 days later (default REFRESH_TOKEN_DAYS)
@@ -196,7 +196,7 @@ describe("Refresh Token Model CRUD Operations", () => {
       expectedExpiration.setDate(issuedTime.getDate() + 7);
 
       expect(
-        Math.abs(expirationTime.getTime() - expectedExpiration.getTime())
+        Math.abs(expirationTime.getTime() - expectedExpiration.getTime()),
       ).toBeLessThan(1000);
     });
   });
@@ -207,12 +207,12 @@ describe("Refresh Token Model CRUD Operations", () => {
       const updated = await modifyRefreshById(
         { last_used_time: lastUsedTime },
         getRefreshUuid(1), // Active valid token
-        client
+        client,
       );
 
       expect(updated.last_used_time).toBeDefined();
       expect(new Date(updated.last_used_time!).toISOString()).toBe(
-        lastUsedTime
+        lastUsedTime,
       );
     });
 
@@ -220,7 +220,7 @@ describe("Refresh Token Model CRUD Operations", () => {
       const updated = await modifyRefreshById(
         { is_active: false },
         getRefreshUuid(1), // Active valid token
-        client
+        client,
       );
 
       expect(updated.is_active).toBe(false);
@@ -234,7 +234,7 @@ describe("Refresh Token Model CRUD Operations", () => {
           is_active: false,
         },
         getRefreshUuid(1),
-        client
+        client,
       );
 
       expect(updated.used_at).toBeDefined();
@@ -276,19 +276,19 @@ describe("Refresh Token Model CRUD Operations", () => {
       const validRefreshToken = jwt.sign(
         { refresh_id: getRefreshUuid(1), role_type: "user" },
         process.env.REFRESH_KEY!,
-        { expiresIn: "200d" }
+        { expiresIn: "200d" },
       );
 
       // Update the token hash to match our generated token
       const tokenHash = determinateHash(validRefreshToken);
       await db.query(
         "UPDATE refresh SET token_hash = $1 WHERE refresh_id = $2",
-        [tokenHash, getRefreshUuid(1)]
+        [tokenHash, getRefreshUuid(1)],
       );
 
       const decoded = jwt.verify(
         validRefreshToken,
-        process.env.REFRESH_KEY!
+        process.env.REFRESH_KEY!,
       ) as any;
 
       const result = await createAccessToken(decoded, validRefreshToken);
@@ -308,13 +308,13 @@ describe("Refresh Token Model CRUD Operations", () => {
       const usedToken = jwt.sign(
         { refresh_id: 2, role_type: "user" },
         process.env.REFRESH_KEY!,
-        { expiresIn: "200d" }
+        { expiresIn: "200d" },
       );
 
       const tokenHash = determinateHash(usedToken);
       await db.query(
         "UPDATE refresh SET token_hash = $1 WHERE refresh_id = $2",
-        [tokenHash, getRefreshUuid(2)]
+        [tokenHash, getRefreshUuid(2)],
       );
 
       const decoded = jwt.verify(usedToken, process.env.REFRESH_KEY!) as any;
@@ -323,7 +323,7 @@ describe("Refresh Token Model CRUD Operations", () => {
         {
           status: 401,
           msg: "Refresh token has already been used - possible security breach",
-        }
+        },
       );
     });
 
@@ -332,19 +332,19 @@ describe("Refresh Token Model CRUD Operations", () => {
       const expiredToken = jwt.sign(
         { refresh_id: 3, role_type: "user" },
         process.env.REFRESH_KEY!,
-        { expiresIn: "200d" }
+        { expiresIn: "200d" },
       );
 
       const tokenHash = determinateHash(expiredToken);
       await db.query(
         "UPDATE refresh SET token_hash = $1 WHERE refresh_id = $2",
-        [tokenHash, getRefreshUuid(3)]
+        [tokenHash, getRefreshUuid(3)],
       );
 
       const decoded = jwt.verify(expiredToken, process.env.REFRESH_KEY!) as any;
 
       await expect(
-        createAccessToken(decoded, expiredToken)
+        createAccessToken(decoded, expiredToken),
       ).rejects.toMatchObject({
         status: 401,
         msg: "Refresh token has expired",
@@ -356,19 +356,19 @@ describe("Refresh Token Model CRUD Operations", () => {
       const revokedToken = jwt.sign(
         { refresh_id: 4, role_type: "user" },
         process.env.REFRESH_KEY!,
-        { expiresIn: "200d" }
+        { expiresIn: "200d" },
       );
 
       const tokenHash = determinateHash(revokedToken);
       await db.query(
         "UPDATE refresh SET token_hash = $1 WHERE refresh_id = $2",
-        [tokenHash, getRefreshUuid(4)]
+        [tokenHash, getRefreshUuid(4)],
       );
 
       const decoded = jwt.verify(revokedToken, process.env.REFRESH_KEY!) as any;
 
       await expect(
-        createAccessToken(decoded, revokedToken)
+        createAccessToken(decoded, revokedToken),
       ).rejects.toMatchObject({
         status: 401,
         msg: "Refresh token has been revoked",
@@ -380,13 +380,13 @@ describe("Refresh Token Model CRUD Operations", () => {
       const adminToken = jwt.sign(
         { refresh_id: getRefreshUuid(5), role_type: "admin" },
         process.env.REFRESH_KEY!,
-        { expiresIn: "200d" }
+        { expiresIn: "200d" },
       );
 
       const tokenHash = determinateHash(adminToken);
       await db.query(
         "UPDATE refresh SET token_hash = $1 WHERE refresh_id = $2",
-        [tokenHash, getRefreshUuid(5)]
+        [tokenHash, getRefreshUuid(5)],
       );
 
       const decoded = jwt.verify(adminToken, process.env.REFRESH_KEY!) as any;
@@ -396,7 +396,7 @@ describe("Refresh Token Model CRUD Operations", () => {
       // Verify access token uses admin key
       const accessDecoded = jwt.verify(
         result.accessToken,
-        process.env.ADMIN_ACCESS_KEY!
+        process.env.ADMIN_ACCESS_KEY!,
       ) as any;
       expect(accessDecoded.role_id).toBe(getAdminUuid(1));
       expect(accessDecoded.role_type).toBe("admin");
@@ -492,7 +492,7 @@ describe("Refresh Token Model CRUD Operations", () => {
 
       const decoded = jwt.verify(
         freshToken.token,
-        process.env.REFRESH_KEY!
+        process.env.REFRESH_KEY!,
       ) as any;
 
       // First use should succeed
@@ -500,7 +500,7 @@ describe("Refresh Token Model CRUD Operations", () => {
 
       // Second use should fail and revoke all user tokens
       await expect(
-        createAccessToken(decoded, freshToken.token)
+        createAccessToken(decoded, freshToken.token),
       ).rejects.toMatchObject({
         status: 401,
         msg: "Refresh token has already been used - possible security breach",
@@ -509,7 +509,7 @@ describe("Refresh Token Model CRUD Operations", () => {
       // Check that all tokens for user 1 are revoked
       const tokens = await db.query(
         "SELECT * FROM refresh WHERE role_id = $1 AND role_type = $2",
-        [getUserUuid(2), "user"]
+        [getUserUuid(2), "user"],
       );
 
       tokens.rows.forEach((token) => {
@@ -530,7 +530,7 @@ describe("Refresh Token Model CRUD Operations", () => {
             role_id: getUserUuid(1),
             role_type: "user",
           },
-          client
+          client,
         );
 
         expect(refresh.refresh_id).toBeDefined();
@@ -539,7 +539,7 @@ describe("Refresh Token Model CRUD Operations", () => {
 
         // Token should not exist after rollback
         await expect(
-          fetchRefreshById(refresh.refresh_id)
+          fetchRefreshById(refresh.refresh_id),
         ).rejects.toMatchObject({
           status: 404,
           msg: "Refresh token not found",
@@ -558,7 +558,7 @@ describe("Refresh Token Model CRUD Operations", () => {
         const modified = await modifyRefreshById(
           { is_active: true },
           getRefreshUuid(1),
-          client
+          client,
         );
 
         expect(modified.is_active).toBe(true);

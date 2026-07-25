@@ -32,7 +32,9 @@ const RATE_LIMITS = {
   },
 } as const;
 
-function createLimiter(config: RateLimitConfig): RateLimitRequestHandler | RequestHandler {
+function createLimiter(
+  config: RateLimitConfig,
+): RateLimitRequestHandler | RequestHandler {
   if (isTestEnv) {
     return (_req, _res, next) => next();
   }

@@ -14,7 +14,7 @@ const MFA_CHALLENGE_MAX_AGE = 5 * 60 * 1000;
 
 export function createMfaChallengeToken(
   roleId: string,
-  roleType: "user" | "admin"
+  roleType: "user" | "admin",
 ): string {
   const key = process.env.MFA_CHALLENGE_KEY;
   if (!key) {
@@ -24,7 +24,7 @@ export function createMfaChallengeToken(
   return jwt.sign(
     { role_id: roleId, role_type: roleType, type: "mfa_challenge" },
     key,
-    { expiresIn: MFA_CHALLENGE_EXPIRY }
+    { expiresIn: MFA_CHALLENGE_EXPIRY },
   );
 }
 

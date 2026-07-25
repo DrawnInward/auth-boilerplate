@@ -22,7 +22,11 @@ export function AdminLayout({ onLogout }: AdminLayoutProps) {
               className="md:hidden"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             >
-              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              {mobileMenuOpen ? (
+                <X className="h-5 w-5" />
+              ) : (
+                <Menu className="h-5 w-5" />
+              )}
             </Button>
             <Link to="/admin" className="text-xl font-semibold">
               Admin Panel
@@ -34,7 +38,10 @@ export function AdminLayout({ onLogout }: AdminLayoutProps) {
         </div>
       </header>
       <div className="flex">
-        <Sidebar mobileOpen={mobileMenuOpen} onMobileClose={() => setMobileMenuOpen(false)} />
+        <Sidebar
+          mobileOpen={mobileMenuOpen}
+          onMobileClose={() => setMobileMenuOpen(false)}
+        />
         <main className="flex-1 p-4 md:p-8">
           <Outlet />
         </main>

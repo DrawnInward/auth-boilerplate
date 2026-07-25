@@ -69,7 +69,7 @@ describe("Organization Model CRUD Operations", () => {
           name: "Another Acme",
           slug: "acme-corp",
           owner_id: getUserUuid(1),
-        })
+        }),
       ).rejects.toMatchObject({
         status: 409,
         msg: "Organization slug already exists",
@@ -81,7 +81,7 @@ describe("Organization Model CRUD Operations", () => {
         createOrganization({
           name: "No Owner Org",
           owner_id: "",
-        })
+        }),
       ).rejects.toMatchObject({
         status: 400,
         msg: "owner_id and name are required",
@@ -93,7 +93,7 @@ describe("Organization Model CRUD Operations", () => {
         createOrganization({
           name: "",
           owner_id: getUserUuid(1),
-        })
+        }),
       ).rejects.toMatchObject({
         status: 400,
         msg: "owner_id and name are required",
@@ -105,7 +105,7 @@ describe("Organization Model CRUD Operations", () => {
         createOrganization({
           name: "Invalid Owner Org",
           owner_id: "550e8400-e29b-41d4-a716-446655440999",
-        })
+        }),
       ).rejects.toMatchObject({
         status: 400,
         msg: "Invalid owner_id",
@@ -125,7 +125,7 @@ describe("Organization Model CRUD Operations", () => {
 
     it("should return null for non-existent ID", async () => {
       const org = await getOrganizationById(
-        "550e8400-e29b-41d4-a716-446655440999"
+        "550e8400-e29b-41d4-a716-446655440999",
       );
       expect(org).toBeNull();
     });
@@ -232,7 +232,9 @@ describe("Organization Model CRUD Operations", () => {
         owner_id: getUserUuid(1),
       });
 
-      const updated = await modifyOrganization(org.id!, { name: "Updated Name" });
+      const updated = await modifyOrganization(org.id!, {
+        name: "Updated Name",
+      });
 
       expect(updated.name).toBe("Updated Name");
       expect(updated.updated_at).toBeInstanceOf(Date);
@@ -257,7 +259,7 @@ describe("Organization Model CRUD Operations", () => {
       });
 
       await expect(
-        modifyOrganization(org.id!, { slug: "acme-corp" })
+        modifyOrganization(org.id!, { slug: "acme-corp" }),
       ).rejects.toMatchObject({
         status: 409,
         msg: "Organization slug already exists",
@@ -268,7 +270,7 @@ describe("Organization Model CRUD Operations", () => {
       await expect(
         modifyOrganization("550e8400-e29b-41d4-a716-446655440999", {
           name: "New Name",
-        })
+        }),
       ).rejects.toMatchObject({
         status: 404,
         msg: "Organization not found",
@@ -277,7 +279,7 @@ describe("Organization Model CRUD Operations", () => {
 
     it("should throw error when no valid fields provided", async () => {
       await expect(
-        modifyOrganization(getOrganizationUuid(1), {})
+        modifyOrganization(getOrganizationUuid(1), {}),
       ).rejects.toMatchObject({
         status: 400,
         msg: "No valid fields to update",
@@ -302,7 +304,7 @@ describe("Organization Model CRUD Operations", () => {
 
     it("should throw error for non-existent organization", async () => {
       await expect(
-        deleteOrganization("550e8400-e29b-41d4-a716-446655440999")
+        deleteOrganization("550e8400-e29b-41d4-a716-446655440999"),
       ).rejects.toMatchObject({
         status: 404,
         msg: "Organization not found",
@@ -338,7 +340,7 @@ describe("Organization Model CRUD Operations", () => {
 
     it("should return null for non-existent organization", async () => {
       const org = await getOrganizationWithMemberCount(
-        "550e8400-e29b-41d4-a716-446655440999"
+        "550e8400-e29b-41d4-a716-446655440999",
       );
       expect(org).toBeNull();
     });
@@ -356,7 +358,7 @@ describe("Organization Model CRUD Operations", () => {
             name: "Transaction Org",
             owner_id: getUserUuid(1),
           },
-          client
+          client,
         );
 
         expect(org.name).toBe("Transaction Org");

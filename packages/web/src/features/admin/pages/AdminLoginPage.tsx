@@ -1,4 +1,10 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { AdminLoginForm } from "../components";
 import { useAdminAuth } from "../context/AdminAuthContext";
 import { useApiError } from "@/hooks";

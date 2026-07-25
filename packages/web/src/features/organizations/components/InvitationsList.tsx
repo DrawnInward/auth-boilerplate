@@ -9,7 +9,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useOrganizationInvitations, useCancelInvitation } from "@/api/queries/organizations";
+import {
+  useOrganizationInvitations,
+  useCancelInvitation,
+} from "@/api/queries/organizations";
 import { useApiError } from "@/hooks";
 import { LoadingSpinner } from "@/components/shared";
 
@@ -35,7 +38,11 @@ export function InvitationsList({ orgId }: InvitationsListProps) {
   };
 
   if (isLoading) {
-    return <div className="flex justify-center py-8"><LoadingSpinner /></div>;
+    return (
+      <div className="flex justify-center py-8">
+        <LoadingSpinner />
+      </div>
+    );
   }
 
   if (pendingInvitations.length === 0) {

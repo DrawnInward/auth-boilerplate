@@ -21,14 +21,14 @@ function getIdColumn(roleType: RoleType): string {
 export async function getMfaStatus(
   roleId: string,
   roleType: RoleType,
-  client: PoolClient | Pool = db
+  client: PoolClient | Pool = db,
 ): Promise<MfaStatus | null> {
   const table = getTableName(roleType);
   const idColumn = getIdColumn(roleType);
 
   const result = await client.query(
     `SELECT mfa_enabled, mfa_secret FROM ${table} WHERE ${idColumn} = $1 AND deleted_at IS NULL`,
-    [roleId]
+    [roleId],
   );
 
   if (result.rows.length === 0) {
@@ -41,7 +41,7 @@ export async function getMfaStatus(
 export async function getMfaSecret(
   roleId: string,
   roleType: RoleType,
-  client: PoolClient | Pool = db
+  client: PoolClient | Pool = db,
 ): Promise<string | null> {
   const status = await getMfaStatus(roleId, roleType, client);
   if (!status || !status.mfa_secret) {
@@ -54,7 +54,7 @@ export async function setMfaSecret(
   roleId: string,
   roleType: RoleType,
   secret: string,
-  client: PoolClient | Pool = db
+  client: PoolClient | Pool = db,
 ): Promise<void> {
   const table = getTableName(roleType);
   const idColumn = getIdColumn(roleType);
@@ -62,7 +62,7 @@ export async function setMfaSecret(
 
   const result = await client.query(
     `UPDATE ${table} SET mfa_secret = $1, updated_at = NOW() WHERE ${idColumn} = $2 AND deleted_at IS NULL RETURNING ${idColumn}`,
-    [encryptedSecret, roleId]
+    [encryptedSecret, roleId],
   );
 
   if (result.rows.length === 0) {
@@ -73,14 +73,14 @@ export async function setMfaSecret(
 export async function enableMfa(
   roleId: string,
   roleType: RoleType,
-  client: PoolClient | Pool = db
+  client: PoolClient | Pool = db,
 ): Promise<void> {
   const table = getTableName(roleType);
   const idColumn = getIdColumn(roleType);
 
   const result = await client.query(
     `UPDATE ${table} SET mfa_enabled = true, updated_at = NOW() WHERE ${idColumn} = $1 AND deleted_at IS NULL RETURNING ${idColumn}`,
-    [roleId]
+    [roleId],
   );
 
   if (result.rows.length === 0) {
@@ -91,14 +91,14 @@ export async function enableMfa(
 export async function disableMfa(
   roleId: string,
   roleType: RoleType,
-  client: PoolClient | Pool = db
+  client: PoolClient | Pool = db,
 ): Promise<void> {
   const table = getTableName(roleType);
   const idColumn = getIdColumn(roleType);
 
   const result = await client.query(
     `UPDATE ${table} SET mfa_enabled = false, mfa_secret = NULL, updated_at = NOW() WHERE ${idColumn} = $1 AND deleted_at IS NULL RETURNING ${idColumn}`,
-    [roleId]
+    [roleId],
   );
 
   if (result.rows.length === 0) {
@@ -109,14 +109,14 @@ export async function disableMfa(
 export async function clearMfaSecret(
   roleId: string,
   roleType: RoleType,
-  client: PoolClient | Pool = db
+  client: PoolClient | Pool = db,
 ): Promise<void> {
   const table = getTableName(roleType);
   const idColumn = getIdColumn(roleType);
 
   await client.query(
     `UPDATE ${table} SET mfa_secret = NULL, updated_at = NOW() WHERE ${idColumn} = $1 AND deleted_at IS NULL`,
-    [roleId]
+    [roleId],
   );
 }
 
@@ -135,12 +135,12 @@ export async function createBackupCodes(
   roleId: string,
   roleType: RoleType,
   hashedCodes: string[],
-  client: PoolClient | Pool = db
+  client: PoolClient | Pool = db,
 ): Promise<void> {
   for (const codeHash of hashedCodes) {
     await client.query(
       `INSERT INTO mfa_backup_codes (role_id, role_type, code_hash) VALUES ($1, $2, $3)`,
-      [roleId, roleType, codeHash]
+      [roleId, roleType, codeHash],
     );
   }
 }
@@ -148,11 +148,11 @@ export async function createBackupCodes(
 export async function getUnusedBackupCodes(
   roleId: string,
   roleType: RoleType,
-  client: PoolClient | Pool = db
+  client: PoolClient | Pool = db,
 ): Promise<BackupCode[]> {
   const result = await client.query(
     `SELECT * FROM mfa_backup_codes WHERE role_id = $1 AND role_type = $2 AND used_at IS NULL ORDER BY created_at`,
-    [roleId, roleType]
+    [roleId, roleType],
   );
   return result.rows;
 }
@@ -160,32 +160,32 @@ export async function getUnusedBackupCodes(
 export async function getBackupCodeCount(
   roleId: string,
   roleType: RoleType,
-  client: PoolClient | Pool = db
+  client: PoolClient | Pool = db,
 ): Promise<number> {
   const result = await client.query(
     `SELECT COUNT(*) as count FROM mfa_backup_codes WHERE role_id = $1 AND role_type = $2 AND used_at IS NULL`,
-    [roleId, roleType]
+    [roleId, roleType],
   );
   return parseInt(result.rows[0].count);
 }
 
 export async function markBackupCodeUsed(
   codeId: string,
-  client: PoolClient | Pool = db
+  client: PoolClient | Pool = db,
 ): Promise<void> {
   await client.query(
     `UPDATE mfa_backup_codes SET used_at = NOW() WHERE id = $1`,
-    [codeId]
+    [codeId],
   );
 }
 
 export async function deleteAllBackupCodes(
   roleId: string,
   roleType: RoleType,
-  client: PoolClient | Pool = db
+  client: PoolClient | Pool = db,
 ): Promise<void> {
   await client.query(
     `DELETE FROM mfa_backup_codes WHERE role_id = $1 AND role_type = $2`,
-    [roleId, roleType]
+    [roleId, roleType],
   );
 }

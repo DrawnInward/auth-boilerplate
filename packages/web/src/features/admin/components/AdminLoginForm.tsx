@@ -33,7 +33,11 @@ export function AdminLoginForm({ onSubmit, isLoading }: AdminLoginFormProps) {
             <FormItem>
               <FormLabel>Email</FormLabel>
               <FormControl>
-                <Input type="email" placeholder="admin@example.com" {...field} />
+                <Input
+                  type="email"
+                  placeholder="admin@example.com"
+                  {...field}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>

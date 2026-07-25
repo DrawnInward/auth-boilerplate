@@ -53,7 +53,7 @@ export function getGoogleAuthUrl(state: string): string {
 }
 
 export async function exchangeCodeForTokens(
-  code: string
+  code: string,
 ): Promise<GoogleTokenResponse> {
   const { clientId, clientSecret, callbackUrl } = getGoogleConfig();
 
@@ -80,7 +80,7 @@ export async function exchangeCodeForTokens(
 }
 
 export async function getGoogleUserInfo(
-  accessToken: string
+  accessToken: string,
 ): Promise<GoogleUserInfo> {
   const response = await fetch(
     "https://www.googleapis.com/oauth2/v2/userinfo",
@@ -88,7 +88,7 @@ export async function getGoogleUserInfo(
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },
-    }
+    },
   );
 
   if (!response.ok) {

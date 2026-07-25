@@ -65,7 +65,10 @@ export const inviteMemberSchema = z.object({
 
 // Schema for accepting an org invite
 export const acceptInviteSchema = z.object({
-  password: z.string().min(8, "Password must be at least 8 characters").optional(),
+  password: z
+    .string()
+    .min(8, "Password must be at least 8 characters")
+    .optional(),
 });
 
 export type InvitationType = z.infer<typeof invitationTypeSchema>;
@@ -73,7 +76,9 @@ export type OrgInviteRole = z.infer<typeof orgInviteRoleSchema>;
 export type Invitation = z.infer<typeof invitationSchema>;
 export type CreateInvitationDto = z.infer<typeof createInvitationSchema>;
 export type RegisterDto = z.infer<typeof registerSchema>;
-export type CompleteRegistrationDto = z.infer<typeof completeRegistrationSchema>;
+export type CompleteRegistrationDto = z.infer<
+  typeof completeRegistrationSchema
+>;
 export type ForgotPasswordDto = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordDto = z.infer<typeof resetPasswordSchema>;
 export type InviteMemberDto = z.infer<typeof inviteMemberSchema>;

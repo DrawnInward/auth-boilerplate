@@ -1,5 +1,5 @@
 export const parseCookies = (
-  cookieString: string | undefined
+  cookieString: string | undefined,
 ): Record<string, string> => {
   const cookies: Record<string, string> = {};
 

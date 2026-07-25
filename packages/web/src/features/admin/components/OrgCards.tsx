@@ -16,7 +16,8 @@ export function OrgCards({ organizations }: OrgCardsProps) {
             <div className="min-w-0 flex-1 space-y-1">
               <p className="truncate font-medium">{org.name}</p>
               <p className="text-sm text-muted-foreground">
-                /{org.slug} · {org.member_count} {org.member_count === 1 ? "member" : "members"}
+                /{org.slug} · {org.member_count}{" "}
+                {org.member_count === 1 ? "member" : "members"}
               </p>
             </div>
             <Button variant="ghost" size="sm" asChild>

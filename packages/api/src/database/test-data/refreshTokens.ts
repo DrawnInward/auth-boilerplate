@@ -8,7 +8,7 @@ export const testRefreshTokens = [
     role_type: "user",
     token_hash: "hash_active_valid_token",
     expiration_time: new Date(
-      Date.now() + 7 * 24 * 60 * 60 * 1000
+      Date.now() + 7 * 24 * 60 * 60 * 1000,
     ).toISOString(), // 7 days future
     issued_time: new Date().toISOString(),
     last_used_time: null,
@@ -22,7 +22,7 @@ export const testRefreshTokens = [
     role_type: "user",
     token_hash: "hash_already_used_token",
     expiration_time: new Date(
-      Date.now() + 7 * 24 * 60 * 60 * 1000
+      Date.now() + 7 * 24 * 60 * 60 * 1000,
     ).toISOString(),
     issued_time: new Date(Date.now() - 60 * 60 * 1000).toISOString(), // 1 hour ago
     last_used_time: new Date(Date.now() - 30 * 60 * 1000).toISOString(), // 30 min ago
@@ -48,7 +48,7 @@ export const testRefreshTokens = [
     role_type: "user",
     token_hash: "hash_revoked_token",
     expiration_time: new Date(
-      Date.now() + 7 * 24 * 60 * 60 * 1000
+      Date.now() + 7 * 24 * 60 * 60 * 1000,
     ).toISOString(),
     issued_time: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 days ago
     last_used_time: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), // 1 day ago
@@ -62,7 +62,7 @@ export const testRefreshTokens = [
     role_type: "admin",
     token_hash: "hash_admin_token",
     expiration_time: new Date(
-      Date.now() + 30 * 24 * 60 * 60 * 1000
+      Date.now() + 30 * 24 * 60 * 60 * 1000,
     ).toISOString(), // 30 days
     issued_time: new Date().toISOString(),
     last_used_time: null,
@@ -76,7 +76,7 @@ export const testRefreshTokens = [
     role_type: "user",
     token_hash: "hash_user3_token_1",
     expiration_time: new Date(
-      Date.now() + 7 * 24 * 60 * 60 * 1000
+      Date.now() + 7 * 24 * 60 * 60 * 1000,
     ).toISOString(),
     issued_time: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
     last_used_time: null,
@@ -89,7 +89,7 @@ export const testRefreshTokens = [
     role_type: "user",
     token_hash: "hash_user3_token_2",
     expiration_time: new Date(
-      Date.now() + 7 * 24 * 60 * 60 * 1000
+      Date.now() + 7 * 24 * 60 * 60 * 1000,
     ).toISOString(),
     issued_time: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
     last_used_time: null,

@@ -120,7 +120,7 @@ describe("Invitation Model CRUD Operations", () => {
           email: "test@example.com",
           type: "email_change",
           user_id: getUserUuid(1),
-        })
+        }),
       ).rejects.toMatchObject({
         status: 400,
         msg: "Email change requires new_email and user_id",
@@ -133,7 +133,7 @@ describe("Invitation Model CRUD Operations", () => {
           email: "test@example.com",
           type: "email_change",
           new_email: "newemail@example.com",
-        })
+        }),
       ).rejects.toMatchObject({
         status: 400,
         msg: "Email change requires new_email and user_id",
@@ -175,7 +175,7 @@ describe("Invitation Model CRUD Operations", () => {
           email: "test@example.com",
           type: "org_invite",
           role: "member",
-        })
+        }),
       ).rejects.toMatchObject({
         status: 400,
         msg: "Organization invite requires organization_id and role",
@@ -188,7 +188,7 @@ describe("Invitation Model CRUD Operations", () => {
           email: "test@example.com",
           type: "org_invite",
           organization_id: getOrganizationUuid(1),
-        })
+        }),
       ).rejects.toMatchObject({
         status: 400,
         msg: "Organization invite requires organization_id and role",
@@ -208,7 +208,7 @@ describe("Invitation Model CRUD Operations", () => {
   describe("getInvitationById", () => {
     it("should find invitation by ID", async () => {
       const invitation = await getInvitationById(
-        getInvitationUuid(1) // VALID_REGISTRATION
+        getInvitationUuid(1), // VALID_REGISTRATION
       );
 
       expect(invitation).toBeDefined();
@@ -219,7 +219,7 @@ describe("Invitation Model CRUD Operations", () => {
 
     it("should return null for non-existent ID", async () => {
       const invitation = await getInvitationById(
-        "550e8400-e29b-41d4-a716-446655440999"
+        "550e8400-e29b-41d4-a716-446655440999",
       );
       expect(invitation).toBeNull();
     });
@@ -258,7 +258,7 @@ describe("Invitation Model CRUD Operations", () => {
 
     it("should throw error for non-existent invitation", async () => {
       await expect(
-        markInvitationUsed("550e8400-e29b-41d4-a716-446655440999")
+        markInvitationUsed("550e8400-e29b-41d4-a716-446655440999"),
       ).rejects.toMatchObject({
         status: 404,
         msg: "Invitation not found",
@@ -280,7 +280,7 @@ describe("Invitation Model CRUD Operations", () => {
 
       const count = await invalidatePendingInvitations(
         "invalidate@example.com",
-        "registration"
+        "registration",
       );
 
       expect(count).toBeGreaterThanOrEqual(2);
@@ -288,7 +288,7 @@ describe("Invitation Model CRUD Operations", () => {
       // Verify they're invalidated
       const pending = await getPendingInvitationsForEmail(
         "invalidate@example.com",
-        "registration"
+        "registration",
       );
       expect(pending.length).toBe(0);
     });
@@ -308,7 +308,7 @@ describe("Invitation Model CRUD Operations", () => {
       // Password reset should still be pending
       const pending = await getPendingInvitationsForEmail(
         "test@example.com",
-        "password_reset"
+        "password_reset",
       );
       expect(pending.length).toBeGreaterThanOrEqual(1);
     });
@@ -329,14 +329,14 @@ describe("Invitation Model CRUD Operations", () => {
 
       const count = await invalidatePendingInvitations(
         "invalidatechange@example.com",
-        "email_change"
+        "email_change",
       );
 
       expect(count).toBeGreaterThanOrEqual(2);
 
       const pending = await getPendingInvitationsForEmail(
         "invalidatechange@example.com",
-        "email_change"
+        "email_change",
       );
       expect(pending.length).toBe(0);
     });
@@ -345,19 +345,19 @@ describe("Invitation Model CRUD Operations", () => {
   describe("listInvitationsByOrganization", () => {
     it("should list pending invitations for organization", async () => {
       const invitations = await listInvitationsByOrganization(
-        getOrganizationUuid(1) // ACME_CORP
+        getOrganizationUuid(1), // ACME_CORP
       );
 
       expect(Array.isArray(invitations)).toBe(true);
       // Should include VALID_ORG_INVITE but not EXPIRED or USED
       const validInvite = invitations.find(
-        (i) => i.id === getInvitationUuid(4)
+        (i) => i.id === getInvitationUuid(4),
       );
       expect(validInvite).toBeDefined();
 
       // Should NOT include expired or used
       const expiredInvite = invitations.find(
-        (i) => i.id === getInvitationUuid(5)
+        (i) => i.id === getInvitationUuid(5),
       );
       const usedInvite = invitations.find((i) => i.id === getInvitationUuid(6));
       expect(expiredInvite).toBeUndefined();
@@ -367,11 +367,11 @@ describe("Invitation Model CRUD Operations", () => {
     it("should support pagination", async () => {
       const page1 = await listInvitationsByOrganization(
         getOrganizationUuid(1),
-        { limit: 1, offset: 0 }
+        { limit: 1, offset: 0 },
       );
       const page2 = await listInvitationsByOrganization(
         getOrganizationUuid(1),
-        { limit: 1, offset: 1 }
+        { limit: 1, offset: 1 },
       );
 
       expect(page1.length).toBeLessThanOrEqual(1);
@@ -383,7 +383,7 @@ describe("Invitation Model CRUD Operations", () => {
 
     it("should return empty array for organization with no pending invitations", async () => {
       const invitations = await listInvitationsByOrganization(
-        getOrganizationUuid(3) // ALICE_STARTUP - no invitations
+        getOrganizationUuid(3), // ALICE_STARTUP - no invitations
       );
 
       expect(invitations).toEqual([]);
@@ -406,7 +406,7 @@ describe("Invitation Model CRUD Operations", () => {
 
     it("should return false for non-existent invitation", async () => {
       const deleted = await deleteInvitation(
-        "550e8400-e29b-41d4-a716-446655440999"
+        "550e8400-e29b-41d4-a716-446655440999",
       );
       expect(deleted).toBe(false);
     });
@@ -459,7 +459,7 @@ describe("Invitation Model CRUD Operations", () => {
       });
 
       await expect(
-        validateInvitationToken(token, "password_reset")
+        validateInvitationToken(token, "password_reset"),
       ).rejects.toMatchObject({
         status: 400,
         msg: "Invalid invitation type",
@@ -468,7 +468,7 @@ describe("Invitation Model CRUD Operations", () => {
 
     it("should throw error for used token", async () => {
       await expect(
-        validateInvitationToken(TEST_TOKENS.USED_REGISTRATION)
+        validateInvitationToken(TEST_TOKENS.USED_REGISTRATION),
       ).rejects.toMatchObject({
         status: 400,
         msg: "Invitation has already been used",
@@ -477,7 +477,7 @@ describe("Invitation Model CRUD Operations", () => {
 
     it("should throw error for invalid token", async () => {
       await expect(
-        validateInvitationToken("invalid-token-that-does-not-exist")
+        validateInvitationToken("invalid-token-that-does-not-exist"),
       ).rejects.toMatchObject({
         status: 404,
         msg: "Invalid or expired invitation",
@@ -507,7 +507,7 @@ describe("Invitation Model CRUD Operations", () => {
       });
 
       await expect(
-        validateInvitationToken(token, "password_reset")
+        validateInvitationToken(token, "password_reset"),
       ).rejects.toMatchObject({
         status: 400,
         msg: "Invalid invitation type",
@@ -523,7 +523,7 @@ describe("Invitation Model CRUD Operations", () => {
       });
 
       const invitations = await getPendingInvitationsForEmail(
-        "pending@example.com"
+        "pending@example.com",
       );
 
       expect(invitations.length).toBeGreaterThanOrEqual(1);
@@ -539,11 +539,11 @@ describe("Invitation Model CRUD Operations", () => {
 
       const regInvitations = await getPendingInvitationsForEmail(
         "filtertype@example.com",
-        "registration"
+        "registration",
       );
       const pwInvitations = await getPendingInvitationsForEmail(
         "filtertype@example.com",
-        "password_reset"
+        "password_reset",
       );
 
       expect(regInvitations.length).toBeGreaterThanOrEqual(1);
@@ -559,7 +559,7 @@ describe("Invitation Model CRUD Operations", () => {
       await markInvitationUsed(invitation.id!);
 
       const pending = await getPendingInvitationsForEmail(
-        "usedpending@example.com"
+        "usedpending@example.com",
       );
       const found = pending.find((i) => i.id === invitation.id);
       expect(found).toBeUndefined();
@@ -578,7 +578,7 @@ describe("Invitation Model CRUD Operations", () => {
             email: "transaction@example.com",
             type: "registration",
           },
-          client
+          client,
         );
 
         expect(invitation.email).toBe("transaction@example.com");

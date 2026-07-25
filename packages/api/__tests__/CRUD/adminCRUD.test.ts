@@ -16,9 +16,7 @@ import {
   getRootAdmin,
 } from "../../src/models/admins.models";
 import { testAdmins } from "../../src/database/test-data";
-import {
-  getAdminUuid,
-} from "../../src/database/test-data/testUuids";
+import { getAdminUuid } from "../../src/database/test-data/testUuids";
 
 const passwordHash =
   "$2b$10$UOmUkN/DnL0BN0NX2.YXKeaKXCbmWSN0vWN0dD.bcDcbYPJiqI.Pm"; // Hash of Password1
@@ -77,7 +75,7 @@ describe("Admin Model CRUD Operations", () => {
         createAdmin({
           email: "root.admin@test.com",
           password_hash: "some_hash",
-        })
+        }),
       ).rejects.toMatchObject({
         status: 409,
         msg: "Email already exists",
@@ -90,7 +88,7 @@ describe("Admin Model CRUD Operations", () => {
           email: "second.root@test.com",
           password_hash: "some_hash",
           root: true,
-        })
+        }),
       ).rejects.toMatchObject({
         status: 409,
         msg: "Root admin already exists",
@@ -102,7 +100,7 @@ describe("Admin Model CRUD Operations", () => {
         createAdmin({
           email: "",
           password_hash: "some_hash",
-        })
+        }),
       ).rejects.toMatchObject({
         status: 400,
         msg: "Email and password_hash are required",
@@ -114,7 +112,7 @@ describe("Admin Model CRUD Operations", () => {
         createAdmin({
           email: "test@example.com",
           password_hash: "",
-        })
+        }),
       ).rejects.toMatchObject({
         status: 400,
         msg: "Email and password_hash are required",
@@ -260,7 +258,7 @@ describe("Admin Model CRUD Operations", () => {
       const page1Emails = page1.map((a) => a.email);
       const page2Emails = page2.map((a) => a.email);
       const overlap = page1Emails.filter((email) =>
-        page2Emails.includes(email)
+        page2Emails.includes(email),
       );
       expect(overlap.length).toBe(0);
     });
@@ -287,7 +285,7 @@ describe("Admin Model CRUD Operations", () => {
 
       expect(updatedAdmin.email_verified).toBe(true);
       expect(new Date(updatedAdmin.updated_at!).getTime()).toBeGreaterThan(
-        new Date(unverifiedAdmin!.updated_at!).getTime()
+        new Date(unverifiedAdmin!.updated_at!).getTime(),
       );
     });
 
@@ -314,7 +312,7 @@ describe("Admin Model CRUD Operations", () => {
       await expect(
         modifyAdmin(testAdmin!.admin_id!, {
           password_hash: "should_not_work",
-        } as any)
+        } as any),
       ).rejects.toMatchObject({
         status: 403,
         msg: "Password updates not allowed. Use updateAdminPassword function instead",
@@ -325,7 +323,7 @@ describe("Admin Model CRUD Operations", () => {
       await expect(
         modifyAdmin("550e8400-e29b-41d4-a717-446355440031", {
           email_verified: true,
-        })
+        }),
       ).rejects.toMatchObject({
         status: 404,
         msg: "Admin not found",
@@ -339,7 +337,7 @@ describe("Admin Model CRUD Operations", () => {
       expect(regularAdmin).not.toBeNull();
 
       await expect(
-        modifyAdmin(regularAdmin!.admin_id!, { email: rootAdmin!.email })
+        modifyAdmin(regularAdmin!.admin_id!, { email: rootAdmin!.email }),
       ).rejects.toMatchObject({
         status: 409,
         msg: "Email already exists",
@@ -351,7 +349,7 @@ describe("Admin Model CRUD Operations", () => {
       expect(regularAdmin).not.toBeNull();
 
       await expect(
-        modifyAdmin(regularAdmin!.admin_id!, { root: true })
+        modifyAdmin(regularAdmin!.admin_id!, { root: true }),
       ).rejects.toMatchObject({
         status: 409,
         msg: "Root admin already exists",
@@ -363,7 +361,7 @@ describe("Admin Model CRUD Operations", () => {
       expect(rootAdmin).not.toBeNull();
 
       await expect(
-        modifyAdmin(rootAdmin!.admin_id!, { root: false })
+        modifyAdmin(rootAdmin!.admin_id!, { root: false }),
       ).rejects.toMatchObject({
         status: 409,
         msg: "Cannot remove root status from the only root admin",
@@ -408,7 +406,7 @@ describe("Admin Model CRUD Operations", () => {
 
     it("should throw error when deleting non-existent admin", async () => {
       await expect(
-        deleteAdmin("550e8400-e29b-41d4-a716-446355440030")
+        deleteAdmin("550e8400-e29b-41d4-a716-446355440030"),
       ).rejects.toMatchObject({
         status: 404,
         msg: "Admin not found",
@@ -454,7 +452,7 @@ describe("Admin Model CRUD Operations", () => {
 
     it("should throw error for non-existent admin", async () => {
       await expect(
-        activateAdmin("550e8400-e29b-41d4-a716-446355440030")
+        activateAdmin("550e8400-e29b-41d4-a716-446355440030"),
       ).rejects.toMatchObject({
         status: 404,
         msg: "Admin not found",
@@ -470,7 +468,7 @@ describe("Admin Model CRUD Operations", () => {
 
       const deactivatedAdmin = await deactivateAdmin(
         regularAdmin!.admin_id!,
-        deactivatorId
+        deactivatorId,
       );
 
       expect(deactivatedAdmin.is_active).toBe(false);
@@ -481,7 +479,7 @@ describe("Admin Model CRUD Operations", () => {
     it("should throw error for non-existent admin", async () => {
       const nonExistentId = "550e8400-e29b-41d4-a716-446655449999";
       await expect(
-        deactivateAdmin(nonExistentId, getAdminUuid(1))
+        deactivateAdmin(nonExistentId, getAdminUuid(1)),
       ).rejects.toMatchObject({
         status: 404,
         msg: "Admin not found",
@@ -493,7 +491,7 @@ describe("Admin Model CRUD Operations", () => {
       expect(rootAdmin).not.toBeNull();
 
       await expect(
-        deactivateAdmin(rootAdmin!.admin_id!, getAdminUuid(1))
+        deactivateAdmin(rootAdmin!.admin_id!, getAdminUuid(1)),
       ).rejects.toMatchObject({
         status: 409,
         msg: "Cannot deactivate the only active root admin",
@@ -513,9 +511,7 @@ describe("Admin Model CRUD Operations", () => {
 
     it("should throw error for non-existent admin", async () => {
       const nonExistentId = "550e8400-e29b-41d4-a716-446655449999";
-      await expect(
-        verifyAdminEmail(nonExistentId)
-      ).rejects.toMatchObject({
+      await expect(verifyAdminEmail(nonExistentId)).rejects.toMatchObject({
         status: 404,
         msg: "Admin not found",
       });
@@ -530,14 +526,14 @@ describe("Admin Model CRUD Operations", () => {
 
       const result = await updateAdminPassword(
         regularAdmin!.admin_id!,
-        newPasswordHash
+        newPasswordHash,
       );
 
       expect(result).toBe(true);
 
       // Verify password was actually updated by fetching with password
       const adminWithPassword = await getAdminWithPassword(
-        "regular.admin@test.com"
+        "regular.admin@test.com",
       );
       expect(adminWithPassword).not.toBeNull();
       expect(adminWithPassword!.password_hash).toBe(newPasswordHash);
@@ -545,7 +541,7 @@ describe("Admin Model CRUD Operations", () => {
 
     it("should throw error for non-existent admin", async () => {
       await expect(
-        updateAdminPassword("550e8400-e29b-41d4-a716-446355440030", "new_hash")
+        updateAdminPassword("550e8400-e29b-41d4-a716-446355440030", "new_hash"),
       ).rejects.toMatchObject({
         status: 404,
         msg: "Admin not found",
@@ -569,7 +565,7 @@ describe("Admin Model CRUD Operations", () => {
   describe("getAdminWithPassword", () => {
     it("should return admin with password hash when explicitly requested", async () => {
       const adminWithPassword = await getAdminWithPassword(
-        "root.admin@test.com"
+        "root.admin@test.com",
       );
 
       expect(adminWithPassword).toBeDefined();
@@ -632,7 +628,7 @@ describe("Admin Model CRUD Operations", () => {
 
       // Verified + unverified should equal total non-deleted
       expect(stats.verified + stats.unverified).toBe(
-        stats.total - stats.deleted
+        stats.total - stats.deleted,
       );
 
       // Should have exactly 1 root admin
@@ -668,7 +664,7 @@ describe("Admin Model CRUD Operations", () => {
             email: "transaction@example.com",
             password_hash: "tx_hash",
           },
-          client
+          client,
         );
 
         expect(admin.email).toBe("transaction@example.com");
@@ -696,7 +692,7 @@ describe("Admin Model CRUD Operations", () => {
           {
             email_verified: false,
           },
-          client
+          client,
         );
 
         expect(modified.email_verified).toBe(false);
