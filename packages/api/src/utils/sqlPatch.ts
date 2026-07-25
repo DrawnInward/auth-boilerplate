@@ -3,11 +3,13 @@
 //
 // Semantics shared by every caller: undefined means "untouched", null is a
 // value (it clears); keys outside the allow-list are dropped. An empty result
-// throws — request emptiness is validated at the edge (Zod), so an empty patch
-// reaching here is a programmer error.
+// is a client error, not a programmer error — a patch body whose every key was
+// unknown or undefined is a bad request, and the model suites pin it to
+// 400 "No valid fields to update".
+
+import { httpError } from "./httpError";
 
 export type SqlPatch = {
-  columns: string[];
   values: unknown[];
   /** `col = $N` clauses, placeholders numbered from startIndex. */
   setClauses: (startIndex: number) => string[];
@@ -16,18 +18,16 @@ export type SqlPatch = {
 export const buildPatch = (
   patch: Record<string, unknown>,
   allowedFields: readonly string[],
-  label: string,
 ): SqlPatch => {
   const entries = Object.entries(patch).filter(
     ([key, value]) => allowedFields.includes(key) && value !== undefined,
   );
 
   if (entries.length === 0) {
-    throw new Error(`${label} requires at least one field`);
+    throw httpError(400, "No valid fields to update");
   }
 
   return {
-    columns: entries.map(([key]) => key),
     values: entries.map(([, value]) => value),
     setClauses: (startIndex: number) =>
       entries.map(([key], i) => `${key} = $${i + startIndex}`),

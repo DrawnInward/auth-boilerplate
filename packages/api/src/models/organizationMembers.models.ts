@@ -9,6 +9,7 @@ import {
 } from "@auth-boilerplate/shared";
 import { isUniqueViolation, isForeignKeyViolation } from "../utils/pgErrors";
 import { httpError } from "../utils/httpError";
+import { pagedQuery } from "../utils/pagedQuery";
 
 export interface OrganizationMemberWithUser extends OrganizationMember {
   email: string;
@@ -87,29 +88,16 @@ export const getOrganizationMembers = async (
   organizationId: string,
   pagination: PaginationOptions = {},
 ): Promise<OrganizationMemberWithUser[]> => {
-  let queryString = `
-    SELECT om.*, u.email
-    FROM organization_members om
-    JOIN users u ON om.user_id = u.user_id
-    WHERE om.organization_id = $1
-    ORDER BY om.joined_at DESC
-  `;
+  const { text, values } = pagedQuery({
+    select: `SELECT om.*, u.email
+             FROM organization_members om
+             JOIN users u ON om.user_id = u.user_id`,
+    equals: { "om.organization_id": organizationId },
+    orderBy: "om.joined_at DESC",
+    pagination,
+  });
 
-  const values: any[] = [organizationId];
-  let paramIndex = 2;
-
-  if (pagination.limit) {
-    queryString += ` LIMIT $${paramIndex}`;
-    values.push(pagination.limit);
-    paramIndex++;
-  }
-
-  if (pagination.offset) {
-    queryString += ` OFFSET $${paramIndex}`;
-    values.push(pagination.offset);
-  }
-
-  const result = await db.query(queryString, values);
+  const result = await db.query(text, values);
   return result.rows;
 };
 
@@ -117,27 +105,14 @@ export const getUserMemberships = async (
   userId: string,
   pagination: PaginationOptions = {},
 ): Promise<OrganizationMember[]> => {
-  let queryString = `
-    SELECT * FROM organization_members
-    WHERE user_id = $1
-    ORDER BY joined_at DESC
-  `;
+  const { text, values } = pagedQuery({
+    select: "SELECT * FROM organization_members",
+    equals: { user_id: userId },
+    orderBy: "joined_at DESC",
+    pagination,
+  });
 
-  const values: any[] = [userId];
-  let paramIndex = 2;
-
-  if (pagination.limit) {
-    queryString += ` LIMIT $${paramIndex}`;
-    values.push(pagination.limit);
-    paramIndex++;
-  }
-
-  if (pagination.offset) {
-    queryString += ` OFFSET $${paramIndex}`;
-    values.push(pagination.offset);
-  }
-
-  const result = await db.query(queryString, values);
+  const result = await db.query(text, values);
   return result.rows;
 };
 
@@ -149,7 +124,10 @@ export const updateMemberRole = async (
 ): Promise<OrganizationMember> => {
   // Prevent changing owner role directly (use transfer ownership instead)
   if (newRole === "owner") {
-    throw httpError(400, "Cannot set role to owner directly. Use transfer ownership.");
+    throw httpError(
+      400,
+      "Cannot set role to owner directly. Use transfer ownership.",
+    );
   }
 
   const queryString = `
@@ -185,7 +163,10 @@ export const removeOrganizationMember = async (
     throw httpError(404, "Member not found");
   }
   if (member.role === "owner") {
-    throw httpError(400, "Cannot remove owner from organization. Transfer ownership first.");
+    throw httpError(
+      400,
+      "Cannot remove owner from organization. Transfer ownership first.",
+    );
   }
 
   const queryString = `
@@ -218,7 +199,10 @@ export const transferOwnership = async (
     newOwnerId,
   );
   if (!newOwnerMember) {
-    throw httpError(400, "New owner must be an existing member of the organization");
+    throw httpError(
+      400,
+      "New owner must be an existing member of the organization",
+    );
   }
 
   const demoteQuery = `

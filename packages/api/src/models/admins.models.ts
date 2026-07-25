@@ -11,6 +11,18 @@ import { PaginationOptions } from "../types/PaginationOptions";
 import { excludePasswordHash } from "../utils";
 import { isUniqueViolation } from "../utils/pgErrors";
 import { httpError } from "../utils/httpError";
+import { buildPatch } from "../utils/sqlPatch";
+import { pagedQuery } from "../utils/pagedQuery";
+
+const ADMIN_PATCH_FIELDS = [
+  "email",
+  "root",
+  "email_verified",
+  "is_active",
+  "deactivated_at",
+  "deactivated_by",
+  "deleted_at",
+] as const;
 
 export const createAdmin = async (
   newAdmin: CreateAdminDto,
@@ -97,46 +109,19 @@ export const getAdmins = async (
   filters: GetAdminsOptions = {},
   pagination: PaginationOptions = {},
 ): Promise<Omit<Admin, "password_hash">[]> => {
-  let queryString = `
-    SELECT * FROM admins
-    WHERE deleted_at IS NULL
-  `;
+  const { text, values } = pagedQuery({
+    select: "SELECT * FROM admins",
+    where: ["deleted_at IS NULL"],
+    equals: {
+      is_active: filters.is_active,
+      email_verified: filters.email_verified,
+      root: filters.root,
+    },
+    orderBy: "created_at DESC",
+    pagination,
+  });
 
-  const values: any[] = [];
-  let paramIndex = 1;
-
-  if (filters.is_active !== undefined) {
-    queryString += ` AND is_active = $${paramIndex}`;
-    values.push(filters.is_active);
-    paramIndex++;
-  }
-
-  if (filters.email_verified !== undefined) {
-    queryString += ` AND email_verified = $${paramIndex}`;
-    values.push(filters.email_verified);
-    paramIndex++;
-  }
-
-  if (filters.root !== undefined) {
-    queryString += ` AND root = $${paramIndex}`;
-    values.push(filters.root);
-    paramIndex++;
-  }
-
-  queryString += ` ORDER BY created_at DESC`;
-
-  if (pagination.limit) {
-    queryString += ` LIMIT $${paramIndex}`;
-    values.push(pagination.limit);
-    paramIndex++;
-  }
-
-  if (pagination.offset) {
-    queryString += ` OFFSET $${paramIndex}`;
-    values.push(pagination.offset);
-  }
-
-  const result = await db.query(queryString, values);
+  const result = await db.query(text, values);
   return result.rows.map(excludePasswordHash);
 };
 
@@ -161,7 +146,10 @@ export const modifyAdmin = async (
   client: PoolClient | Pool = db,
 ): Promise<Omit<Admin, "password_hash">> => {
   if ("password_hash" in detailsToUpdate) {
-    throw httpError(403, "Password updates not allowed. Use updateAdminPassword function instead");
+    throw httpError(
+      403,
+      "Password updates not allowed. Use updateAdminPassword function instead",
+    );
   }
 
   if ("root" in detailsToUpdate) {
@@ -176,48 +164,24 @@ export const modifyAdmin = async (
         throw httpError(409, "Root admin already exists");
       }
     } else if (detailsToUpdate.root === false) {
-      throw httpError(409, "Cannot remove root status from the only root admin");
+      throw httpError(
+        409,
+        "Cannot remove root status from the only root admin",
+      );
     }
   }
 
-  const allowedFields = [
-    "email",
-    "root",
-    "email_verified",
-    "is_active",
-    "deactivated_at",
-    "deactivated_by",
-    "deleted_at",
-  ];
-  const updates: string[] = [];
-  const values: any[] = [];
-  let paramIndex = 1;
-
-  Object.entries(detailsToUpdate).forEach(([key, value]) => {
-    if (allowedFields.includes(key)) {
-      updates.push(`${key} = $${paramIndex}`);
-      values.push(value);
-      paramIndex++;
-    }
-  });
-
-  if (updates.length === 0) {
-    throw httpError(400, "No valid fields to update");
-  }
-
-  updates.push(`updated_at = NOW()`);
+  const patch = buildPatch(detailsToUpdate, ADMIN_PATCH_FIELDS);
 
   const queryString = `
     UPDATE admins
-    SET ${updates.join(", ")}
-    WHERE admin_id = $${paramIndex} AND deleted_at IS NULL
+    SET ${[...patch.setClauses(1), "updated_at = NOW()"].join(", ")}
+    WHERE admin_id = $${patch.values.length + 1} AND deleted_at IS NULL
     RETURNING *;
   `;
 
-  values.push(adminId);
-
   try {
-    const result = await client.query(queryString, values);
+    const result = await client.query(queryString, [...patch.values, adminId]);
     if (result.rows.length === 0) {
       throw httpError(404, "Admin not found");
     }

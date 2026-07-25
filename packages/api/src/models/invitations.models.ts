@@ -6,6 +6,7 @@ import { determinateHash } from "../utils";
 import { PaginationOptions } from "../types/PaginationOptions";
 import { isUniqueViolation } from "../utils/pgErrors";
 import { httpError } from "../utils/httpError";
+import { pagedQuery } from "../utils/pagedQuery";
 
 const EXPIRY_TIMES: Record<InvitationType, number> = {
   registration: 24 * 60 * 60 * 1000, // 24 hours
@@ -19,10 +20,14 @@ export const createInvitation = async (
   data: CreateInvitationDto,
   client: PoolClient | Pool = db,
 ): Promise<{ invitation: Invitation; token: string }> => {
-  const { email, type, organization_id, role, invited_by, new_email, user_id } = data;
+  const { email, type, organization_id, role, invited_by, new_email, user_id } =
+    data;
 
   if (type === "org_invite" && (!organization_id || !role)) {
-    throw httpError(400, "Organization invite requires organization_id and role");
+    throw httpError(
+      400,
+      "Organization invite requires organization_id and role",
+    );
   }
 
   if (type === "email_change" && (!new_email || !user_id)) {
@@ -147,27 +152,15 @@ export const listInvitationsByOrganization = async (
   pagination: PaginationOptions = {},
   client: PoolClient | Pool = db,
 ): Promise<Invitation[]> => {
-  let queryString = `
-    SELECT * FROM invitations
-    WHERE organization_id = $1 AND used_at IS NULL AND expires_at > NOW()
-    ORDER BY created_at DESC
-  `;
+  const { text, values } = pagedQuery({
+    select: "SELECT * FROM invitations",
+    where: ["used_at IS NULL", "expires_at > NOW()"],
+    equals: { organization_id: organizationId },
+    orderBy: "created_at DESC",
+    pagination,
+  });
 
-  const values: any[] = [organizationId];
-  let paramIndex = 2;
-
-  if (pagination.limit) {
-    queryString += ` LIMIT $${paramIndex}`;
-    values.push(pagination.limit);
-    paramIndex++;
-  }
-
-  if (pagination.offset) {
-    queryString += ` OFFSET $${paramIndex}`;
-    values.push(pagination.offset);
-  }
-
-  const result = await client.query(queryString, values);
+  const result = await client.query(text, values);
   return result.rows;
 };
 

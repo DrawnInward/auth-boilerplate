@@ -13,6 +13,10 @@ import {
 } from "@auth-boilerplate/shared";
 import { isUniqueViolation, isForeignKeyViolation } from "../utils/pgErrors";
 import { httpError } from "../utils/httpError";
+import { buildPatch } from "../utils/sqlPatch";
+import { pagedQuery } from "../utils/pagedQuery";
+
+const ORGANIZATION_PATCH_FIELDS = ["name", "slug"] as const;
 
 export const createOrganization = async (
   newOrg: CreateOrganizationDto & { owner_id: string },
@@ -87,46 +91,24 @@ export const getOrganizations = async (
   filters: GetOrganizationsOptions = {},
   pagination: PaginationOptions = {},
 ): Promise<Organization[]> => {
-  let queryString = `
-    SELECT DISTINCT o.* FROM organizations o
-  `;
+  // Membership filtering needs the join; owner-only filtering does not.
+  const select =
+    filters.user_id !== undefined
+      ? `SELECT DISTINCT o.* FROM organizations o
+         JOIN organization_members om ON o.id = om.organization_id`
+      : `SELECT DISTINCT o.* FROM organizations o`;
 
-  const values: any[] = [];
-  let paramIndex = 1;
+  const { text, values } = pagedQuery({
+    select,
+    equals: {
+      "o.owner_id": filters.owner_id,
+      "om.user_id": filters.user_id,
+    },
+    orderBy: "o.created_at DESC",
+    pagination,
+  });
 
-  // Join with members if filtering by user_id (membership)
-  if (filters.user_id !== undefined) {
-    queryString += ` JOIN organization_members om ON o.id = om.organization_id`;
-  }
-
-  queryString += ` WHERE 1=1`;
-
-  if (filters.owner_id !== undefined) {
-    queryString += ` AND o.owner_id = $${paramIndex}`;
-    values.push(filters.owner_id);
-    paramIndex++;
-  }
-
-  if (filters.user_id !== undefined) {
-    queryString += ` AND om.user_id = $${paramIndex}`;
-    values.push(filters.user_id);
-    paramIndex++;
-  }
-
-  queryString += ` ORDER BY o.created_at DESC`;
-
-  if (pagination.limit) {
-    queryString += ` LIMIT $${paramIndex}`;
-    values.push(pagination.limit);
-    paramIndex++;
-  }
-
-  if (pagination.offset) {
-    queryString += ` OFFSET $${paramIndex}`;
-    values.push(pagination.offset);
-  }
-
-  const result = await db.query(queryString, values);
+  const result = await db.query(text, values);
   return result.rows;
 };
 
@@ -134,29 +116,16 @@ export const getOrganizationsByUserId = async (
   userId: string,
   pagination: PaginationOptions = {},
 ): Promise<OrganizationWithRole[]> => {
-  let queryString = `
-    SELECT o.*, om.role
-    FROM organizations o
-    JOIN organization_members om ON o.id = om.organization_id
-    WHERE om.user_id = $1
-    ORDER BY o.created_at DESC
-  `;
+  const { text, values } = pagedQuery({
+    select: `SELECT o.*, om.role
+             FROM organizations o
+             JOIN organization_members om ON o.id = om.organization_id`,
+    equals: { "om.user_id": userId },
+    orderBy: "o.created_at DESC",
+    pagination,
+  });
 
-  const values: any[] = [userId];
-  let paramIndex = 2;
-
-  if (pagination.limit) {
-    queryString += ` LIMIT $${paramIndex}`;
-    values.push(pagination.limit);
-    paramIndex++;
-  }
-
-  if (pagination.offset) {
-    queryString += ` OFFSET $${paramIndex}`;
-    values.push(pagination.offset);
-  }
-
-  const result = await db.query(queryString, values);
+  const result = await db.query(text, values);
   return result.rows;
 };
 
@@ -165,38 +134,17 @@ export const modifyOrganization = async (
   detailsToUpdate: UpdateOrganizationDto,
   client: PoolClient | Pool = db,
 ): Promise<Organization> => {
-  const allowedFields = ["name", "slug"];
-
-  const updates: string[] = [];
-  const values: any[] = [];
-  let paramIndex = 1;
-
-  Object.entries(detailsToUpdate).forEach(([key, value]) => {
-    if (allowedFields.includes(key)) {
-      updates.push(`${key} = $${paramIndex}`);
-      values.push(value);
-      paramIndex++;
-    }
-  });
-
-  if (updates.length === 0) {
-    throw httpError(400, "No valid fields to update");
-  }
-
-  // Always update updated_at
-  updates.push(`updated_at = NOW()`);
+  const patch = buildPatch(detailsToUpdate, ORGANIZATION_PATCH_FIELDS);
 
   const queryString = `
     UPDATE organizations
-    SET ${updates.join(", ")}
-    WHERE id = $${paramIndex}
+    SET ${[...patch.setClauses(1), "updated_at = NOW()"].join(", ")}
+    WHERE id = $${patch.values.length + 1}
     RETURNING *;
   `;
 
-  values.push(id);
-
   try {
-    const result = await client.query(queryString, values);
+    const result = await client.query(queryString, [...patch.values, id]);
     if (result.rows.length === 0) {
       throw httpError(404, "Organization not found");
     }
