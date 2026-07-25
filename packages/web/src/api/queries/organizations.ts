@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../client";
+import { orgKeys } from "./orgKeys";
 import type {
   OrganizationWithRole,
   CreateOrganizationDto,
@@ -39,14 +40,14 @@ interface InvitationsResponse {
 
 export function useOrganizations() {
   return useQuery({
-    queryKey: ["organizations"],
+    queryKey: orgKeys.all,
     queryFn: () => api.get<OrganizationsResponse>("/organizations"),
   });
 }
 
 export function useOrganization(id: string | undefined) {
   return useQuery({
-    queryKey: ["organizations", id],
+    queryKey: orgKeys.detail(id),
     queryFn: () => api.get<OrganizationResponse>(`/organizations/${id}`),
     enabled: !!id,
   });
@@ -59,7 +60,7 @@ export function useCreateOrganization() {
     mutationFn: (data: CreateOrganizationDto) =>
       api.post<OrganizationResponse>("/organizations", data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["organizations"] });
+      queryClient.invalidateQueries({ queryKey: orgKeys.all });
     },
   });
 }
@@ -71,8 +72,8 @@ export function useUpdateOrganization(id: string) {
     mutationFn: (data: UpdateOrganizationDto) =>
       api.put<OrganizationResponse>(`/organizations/${id}`, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["organizations"] });
-      queryClient.invalidateQueries({ queryKey: ["organizations", id] });
+      queryClient.invalidateQueries({ queryKey: orgKeys.all });
+      queryClient.invalidateQueries({ queryKey: orgKeys.detail(id) });
     },
   });
 }
@@ -84,14 +85,14 @@ export function useDeleteOrganization() {
     mutationFn: (id: string) =>
       api.delete<{ status: string }>(`/organizations/${id}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["organizations"] });
+      queryClient.invalidateQueries({ queryKey: orgKeys.all });
     },
   });
 }
 
 export function useOrganizationMembers(orgId: string | undefined) {
   return useQuery({
-    queryKey: ["organizations", orgId, "members"],
+    queryKey: orgKeys.members(orgId),
     queryFn: () => api.get<MembersResponse>(`/organizations/${orgId}/members`),
     enabled: !!orgId,
   });
@@ -101,10 +102,21 @@ export function useUpdateMemberRole(orgId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ userId, data }: { userId: string; data: UpdateMemberRoleDto }) =>
-      api.put<{ status: string }>(`/organizations/${orgId}/members/${userId}`, data),
+    mutationFn: ({
+      userId,
+      data,
+    }: {
+      userId: string;
+      data: UpdateMemberRoleDto;
+    }) =>
+      api.put<{ status: string }>(
+        `/organizations/${orgId}/members/${userId}`,
+        data,
+      ),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["organizations", orgId, "members"] });
+      queryClient.invalidateQueries({
+        queryKey: orgKeys.members(orgId),
+      });
     },
   });
 }
@@ -114,9 +126,13 @@ export function useRemoveMember(orgId: string) {
 
   return useMutation({
     mutationFn: (userId: string) =>
-      api.delete<{ status: string }>(`/organizations/${orgId}/members/${userId}`),
+      api.delete<{ status: string }>(
+        `/organizations/${orgId}/members/${userId}`,
+      ),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["organizations", orgId, "members"] });
+      queryClient.invalidateQueries({
+        queryKey: orgKeys.members(orgId),
+      });
     },
   });
 }
@@ -128,7 +144,7 @@ export function useLeaveOrganization() {
     mutationFn: (orgId: string) =>
       api.post<{ status: string }>(`/organizations/${orgId}/leave`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["organizations"] });
+      queryClient.invalidateQueries({ queryKey: orgKeys.all });
     },
   });
 }
@@ -138,21 +154,27 @@ export function useTransferOwnership(orgId: string) {
 
   return useMutation({
     mutationFn: (newOwnerId: string) =>
-      api.post<{ status: string }>(`/organizations/${orgId}/transfer-ownership`, {
-        new_owner_id: newOwnerId,
-      }),
+      api.post<{ status: string }>(
+        `/organizations/${orgId}/transfer-ownership`,
+        {
+          new_owner_id: newOwnerId,
+        },
+      ),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["organizations"] });
-      queryClient.invalidateQueries({ queryKey: ["organizations", orgId] });
-      queryClient.invalidateQueries({ queryKey: ["organizations", orgId, "members"] });
+      queryClient.invalidateQueries({ queryKey: orgKeys.all });
+      queryClient.invalidateQueries({ queryKey: orgKeys.detail(orgId) });
+      queryClient.invalidateQueries({
+        queryKey: orgKeys.members(orgId),
+      });
     },
   });
 }
 
 export function useOrganizationInvitations(orgId: string | undefined) {
   return useQuery({
-    queryKey: ["organizations", orgId, "invitations"],
-    queryFn: () => api.get<InvitationsResponse>(`/organizations/${orgId}/invitations`),
+    queryKey: orgKeys.invitations(orgId),
+    queryFn: () =>
+      api.get<InvitationsResponse>(`/organizations/${orgId}/invitations`),
     enabled: !!orgId,
   });
 }
@@ -164,7 +186,9 @@ export function useInviteMember(orgId: string) {
     mutationFn: (data: InviteMemberDto) =>
       api.post<{ status: string }>(`/organizations/${orgId}/invite`, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["organizations", orgId, "invitations"] });
+      queryClient.invalidateQueries({
+        queryKey: orgKeys.invitations(orgId),
+      });
     },
   });
 }
@@ -174,9 +198,13 @@ export function useCancelInvitation(orgId: string) {
 
   return useMutation({
     mutationFn: (invitationId: string) =>
-      api.delete<{ status: string }>(`/organizations/${orgId}/invitations/${invitationId}`),
+      api.delete<{ status: string }>(
+        `/organizations/${orgId}/invitations/${invitationId}`,
+      ),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["organizations", orgId, "invitations"] });
+      queryClient.invalidateQueries({
+        queryKey: orgKeys.invitations(orgId),
+      });
     },
   });
 }
