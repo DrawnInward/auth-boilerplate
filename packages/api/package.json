@@ -10,7 +10,8 @@
     "migrate": "ts-node ./run-migrate.ts",
     "test": "jest --runInBand",
     "setup": "ts-node ./setup.ts",
-    "apiGen": "ts-node ./src/utils/generateApiKey.ts"
+    "apiGen": "ts-node ./src/utils/generateApiKey.ts",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [],
   "author": "",
