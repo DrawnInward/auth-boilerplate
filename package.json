@@ -9,6 +9,7 @@
     "dev:web": "npm run dev -w @auth-boilerplate/web",
     "build": "npm run build --workspaces --if-present",
     "build:shared": "npm run build -w @auth-boilerplate/shared",
+    "prepare": "npm run build:shared",
     "test": "npm run test -w @auth-boilerplate/api",
     "test:web": "npm run test -w @auth-boilerplate/web",
     "typecheck": "npm run typecheck --workspaces --if-present",

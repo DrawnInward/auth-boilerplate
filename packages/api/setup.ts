@@ -1,6 +1,7 @@
 import { generateApiKey } from "./src/utils/generateApiKey";
 import crypto from "crypto";
 import fs from "fs";
+import path from "path";
 import { exec } from "child_process";
 import { promisify } from "util";
 
@@ -10,8 +11,22 @@ function generateEncryptionKey(): string {
   return crypto.randomBytes(32).toString("hex");
 }
 
+// Derived from the repo directory so two checkouts of this boilerplate — a fork
+// and its upstream, or two projects built from it — never share databases.
+// Setup DROPs the databases it creates, so a shared name is silent data loss.
+function defaultProjectName(): string {
+  const repoRoot = path.resolve(__dirname, "..", "..");
+  const sanitised = path
+    .basename(repoRoot)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .replace(/^(?=\d)/, "p_");
+  return sanitised || "app";
+}
+
 async function setup() {
-  const PROJECT_NAME = process.env.PROJECT_NAME || "app";
+  const PROJECT_NAME = process.env.PROJECT_NAME || defaultProjectName();
   const DB_PASSWORD = process.env.DB_PASSWORD || "Password1";
 
   console.log(`Setting up ${PROJECT_NAME}...\n`);
@@ -74,6 +89,7 @@ PGPASSWORD=${DB_PASSWORD}
       console.log(`Updated password for PostgreSQL user '${dbUser}'`);
     }
 
+    console.log(`Dropping and recreating: ${dbName}, ${testDbName}`);
     await execAsync(`psql -d postgres -c "DROP DATABASE IF EXISTS ${dbName};"`);
     await execAsync(
       `psql -d postgres -c "DROP DATABASE IF EXISTS ${testDbName};"`,
