@@ -1,7 +1,12 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { mfaVerifySchema, mfaBackupVerifySchema, type MfaVerifyDto, type MfaBackupVerifyDto } from "@auth-boilerplate/shared";
+import {
+  mfaVerifySchema,
+  mfaBackupVerifySchema,
+  type MfaVerifyDto,
+  type MfaBackupVerifyDto,
+} from "@auth-boilerplate/shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -19,7 +24,11 @@ interface MfaVerifyFormProps {
   isLoading?: boolean;
 }
 
-export function MfaVerifyForm({ onSubmitCode, onSubmitBackup, isLoading }: MfaVerifyFormProps) {
+export function MfaVerifyForm({
+  onSubmitCode,
+  onSubmitBackup,
+  isLoading,
+}: MfaVerifyFormProps) {
   const [useBackup, setUseBackup] = useState(false);
 
   const codeForm = useForm<MfaVerifyDto>({
@@ -35,7 +44,10 @@ export function MfaVerifyForm({ onSubmitCode, onSubmitBackup, isLoading }: MfaVe
   if (useBackup) {
     return (
       <Form {...backupForm} key="backup">
-        <form onSubmit={backupForm.handleSubmit(onSubmitBackup)} className="space-y-4">
+        <form
+          onSubmit={backupForm.handleSubmit(onSubmitBackup)}
+          className="space-y-4"
+        >
           <FormField
             control={backupForm.control}
             name="code"
@@ -67,7 +79,10 @@ export function MfaVerifyForm({ onSubmitCode, onSubmitBackup, isLoading }: MfaVe
 
   return (
     <Form {...codeForm} key="code">
-      <form onSubmit={codeForm.handleSubmit(onSubmitCode)} className="space-y-4">
+      <form
+        onSubmit={codeForm.handleSubmit(onSubmitCode)}
+        className="space-y-4"
+      >
         <FormField
           control={codeForm.control}
           name="code"

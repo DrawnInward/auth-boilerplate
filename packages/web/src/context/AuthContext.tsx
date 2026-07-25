@@ -1,10 +1,35 @@
-import { createContext, useContext, useState, useCallback, useMemo } from "react";
+// App-wide auth state. This lives outside features/ because four features
+// consume it (dashboard, organizations, settings, and auth itself) — a feature
+// may not import another feature's internals, so the shared piece is promoted
+// rather than reached into.
+//
+// The hook that reads this context is src/hooks/useAuth.ts; components should
+// use that, not useContext directly.
+import {
+  createContext,
+  useState,
+  useCallback,
+  useMemo,
+  type ReactNode,
+} from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import type { PublicUser, LoginUserDto, MfaVerifyDto, MfaBackupVerifyDto } from "@auth-boilerplate/shared";
-import { useMe, useLogin, useLogout, useMfaLoginVerify, useMfaLoginBackup, isMfaRequired } from "@/api/queries/auth";
+import type {
+  PublicUser,
+  LoginUserDto,
+  MfaVerifyDto,
+  MfaBackupVerifyDto,
+} from "@auth-boilerplate/shared";
+import {
+  useMe,
+  useLogin,
+  useLogout,
+  useMfaLoginVerify,
+  useMfaLoginBackup,
+  isMfaRequired,
+} from "@/api/queries/auth";
 
-interface AuthContextValue {
+export interface AuthContextValue {
   user: PublicUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
@@ -15,9 +40,9 @@ interface AuthContextValue {
   verifyMfaBackup: (data: MfaBackupVerifyDto) => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextValue | null>(null);
+export const AuthContext = createContext<AuthContextValue | null>(null);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
@@ -41,11 +66,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         setMfaRequired(false);
         await queryClient.refetchQueries({ queryKey: ["me"] });
-        const from = (location.state as { from?: Location })?.from?.pathname || "/dashboard";
+        const from =
+          (location.state as { from?: Location })?.from?.pathname ||
+          "/dashboard";
         navigate(from);
       }
     },
-    [loginMutation, navigate, location.state, queryClient]
+    [loginMutation, navigate, location.state, queryClient],
   );
 
   const logout = useCallback(async () => {
@@ -59,10 +86,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await mfaVerifyMutation.mutateAsync(data);
       setMfaRequired(false);
       await queryClient.refetchQueries({ queryKey: ["me"] });
-      const from = (location.state as { from?: Location })?.from?.pathname || "/dashboard";
+      const from =
+        (location.state as { from?: Location })?.from?.pathname || "/dashboard";
       navigate(from);
     },
-    [mfaVerifyMutation, location.state, queryClient, navigate]
+    [mfaVerifyMutation, location.state, queryClient, navigate],
   );
 
   const verifyMfaBackup = useCallback(
@@ -70,10 +98,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await mfaBackupMutation.mutateAsync(data);
       setMfaRequired(false);
       await queryClient.refetchQueries({ queryKey: ["me"] });
-      const from = (location.state as { from?: Location })?.from?.pathname || "/dashboard";
+      const from =
+        (location.state as { from?: Location })?.from?.pathname || "/dashboard";
       navigate(from);
     },
-    [mfaBackupMutation, location.state, queryClient, navigate]
+    [mfaBackupMutation, location.state, queryClient, navigate],
   );
 
   const value = useMemo(
@@ -87,16 +116,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       verifyMfa,
       verifyMfaBackup,
     }),
-    [user, isLoading, isAuthenticated, mfaRequired, login, logout, verifyMfa, verifyMfaBackup]
+    [
+      user,
+      isLoading,
+      isAuthenticated,
+      mfaRequired,
+      login,
+      logout,
+      verifyMfa,
+      verifyMfaBackup,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}
-
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth must be used within AuthProvider");
-  }
-  return context;
 }

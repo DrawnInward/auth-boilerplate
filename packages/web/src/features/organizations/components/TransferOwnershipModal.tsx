@@ -15,8 +15,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useOrganizationMembers, useTransferOwnership } from "@/api/queries/organizations";
-import { useAuth } from "@/features/auth/context/AuthContext";
+import {
+  useOrganizationMembers,
+  useTransferOwnership,
+} from "@/api/queries/organizations";
+import { useAuth } from "@/hooks";
 import { useApiError } from "@/hooks";
 import { LoadingSpinner } from "@/components/shared";
 
@@ -26,7 +29,11 @@ interface TransferOwnershipModalProps {
   orgId: string;
 }
 
-export function TransferOwnershipModal({ open, onOpenChange, orgId }: TransferOwnershipModalProps) {
+export function TransferOwnershipModal({
+  open,
+  onOpenChange,
+  orgId,
+}: TransferOwnershipModalProps) {
   const { user } = useAuth();
   const { data, isLoading } = useOrganizationMembers(orgId);
   const transferOwnership = useTransferOwnership(orgId);
@@ -53,12 +60,15 @@ export function TransferOwnershipModal({ open, onOpenChange, orgId }: TransferOw
         <DialogHeader>
           <DialogTitle>Transfer Ownership</DialogTitle>
           <DialogDescription>
-            Select a member to transfer ownership to. This action cannot be undone.
+            Select a member to transfer ownership to. This action cannot be
+            undone.
           </DialogDescription>
         </DialogHeader>
 
         {isLoading ? (
-          <div className="flex justify-center py-4"><LoadingSpinner /></div>
+          <div className="flex justify-center py-4">
+            <LoadingSpinner />
+          </div>
         ) : (
           <div className="space-y-4">
             <Select value={selectedUserId} onValueChange={setSelectedUserId}>
@@ -75,7 +85,11 @@ export function TransferOwnershipModal({ open, onOpenChange, orgId }: TransferOw
             </Select>
 
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+              >
                 Cancel
               </Button>
               <Button
@@ -83,7 +97,9 @@ export function TransferOwnershipModal({ open, onOpenChange, orgId }: TransferOw
                 disabled={!selectedUserId || transferOwnership.isPending}
                 onClick={handleTransfer}
               >
-                {transferOwnership.isPending ? "Transferring..." : "Transfer Ownership"}
+                {transferOwnership.isPending
+                  ? "Transferring..."
+                  : "Transfer Ownership"}
               </Button>
             </div>
           </div>
