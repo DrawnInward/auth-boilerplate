@@ -1,14 +1,13 @@
-export { sendEmail } from "./sendEmail";
 export { textToHtml } from "./textToHtml";
 export { getEmailProvider } from "./providers";
 export {
-  sendVerificationEmail,
-  sendPasswordResetEmail,
-  sendOrgInviteEmail,
-  sendMfaDisabledEmail,
-  sendMfaEnabledEmail,
-  sendEmailChangeVerificationEmail,
-  sendEmailChangeNotificationEmail,
-  sendAdminInviteEmail,
+  buildVerificationEmail,
+  buildPasswordResetEmail,
+  buildOrgInviteEmail,
+  buildMfaDisabledEmail,
+  buildMfaEnabledEmail,
+  buildEmailChangeVerificationEmail,
+  buildEmailChangeNotificationEmail,
+  buildAdminInviteEmail,
 } from "./templates";
 export { EmailOptions, ClickableLink } from "../../interfaces/email";

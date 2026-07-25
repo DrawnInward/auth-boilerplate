@@ -12,13 +12,15 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 
-const passwordFormSchema = z.object({
-  password: z.string().min(8, "Password must be at least 8 characters"),
-  confirmPassword: z.string(),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ["confirmPassword"],
-});
+const passwordFormSchema = z
+  .object({
+    password: z.string().min(8, "Password must be at least 8 characters"),
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords don't match",
+    path: ["confirmPassword"],
+  });
 
 type PasswordFormData = z.infer<typeof passwordFormSchema>;
 
@@ -28,7 +30,11 @@ interface PasswordResetFormProps {
   submitLabel?: string;
 }
 
-export function PasswordResetForm({ onSubmit, isLoading, submitLabel = "Reset password" }: PasswordResetFormProps) {
+export function PasswordResetForm({
+  onSubmit,
+  isLoading,
+  submitLabel = "Reset password",
+}: PasswordResetFormProps) {
   const form = useForm<PasswordFormData>({
     resolver: zodResolver(passwordFormSchema),
     defaultValues: { password: "", confirmPassword: "" },

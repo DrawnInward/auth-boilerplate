@@ -1,4 +1,10 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { useAdminOrganizations } from "@/api/queries/admin";
 import { OrgTable, OrgCards } from "../components";
 import { LoadingSpinner } from "@/components/shared";
@@ -28,7 +34,9 @@ export function AdminOrgsPage() {
               <LoadingSpinner />
             </div>
           ) : organizations.length === 0 ? (
-            <p className="py-8 text-center text-muted-foreground">No organizations found</p>
+            <p className="py-8 text-center text-muted-foreground">
+              No organizations found
+            </p>
           ) : (
             <>
               <div className="md:hidden">

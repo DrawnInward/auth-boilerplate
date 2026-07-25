@@ -1,10 +1,14 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
-import { AuthProvider } from "@/features/auth/context/AuthContext";
+import { AuthProvider } from "@/context/AuthContext";
 import { AdminAuthProvider } from "@/features/admin/context/AdminAuthContext";
-import { PublicLayout, ProtectedLayout, AdminLayout } from "@/components/layout";
-import { useAuth } from "@/features/auth/context/AuthContext";
+import {
+  PublicLayout,
+  ProtectedLayout,
+  AdminLayout,
+} from "@/components/layout";
+import { useAuth } from "@/hooks";
 import { useAdminAuth } from "@/features/admin/context/AdminAuthContext";
 import { ProtectedRoute, AdminRoute } from "@/routes";
 import "./App.css";
@@ -24,7 +28,10 @@ import {
 // User pages
 import { DashboardPage } from "@/features/dashboard/pages";
 import { SettingsPage } from "@/features/settings/pages";
-import { OrganizationsListPage, OrganizationDetailPage } from "@/features/organizations/pages";
+import {
+  OrganizationsListPage,
+  OrganizationDetailPage,
+} from "@/features/organizations/pages";
 import { AcceptInvitePage } from "@/features/invitations/pages";
 
 // Admin pages
@@ -59,21 +66,37 @@ function UserRoutes() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/verify-email/:token" element={<VerifyEmailPage />} />
-        <Route path="/complete-registration" element={<CompleteRegistrationPage />} />
+        <Route
+          path="/complete-registration"
+          element={<CompleteRegistrationPage />}
+        />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
-        <Route path="/confirm-email-change/:token" element={<ConfirmEmailChangePage />} />
+        <Route
+          path="/confirm-email-change/:token"
+          element={<ConfirmEmailChangePage />}
+        />
         <Route path="/mfa-verify" element={<MfaVerifyPage />} />
         <Route path="/invitations/:token" element={<AcceptInvitePage />} />
       </Route>
 
       {/* Protected user routes */}
-      <Route element={<ProtectedRoute isAuthenticated={isAuthenticated} isLoading={isLoading} />}>
+      <Route
+        element={
+          <ProtectedRoute
+            isAuthenticated={isAuthenticated}
+            isLoading={isLoading}
+          />
+        }
+      >
         <Route element={<ProtectedLayout user={user} onLogout={logout} />}>
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/organizations" element={<OrganizationsListPage />} />
-          <Route path="/organizations/:id" element={<OrganizationDetailPage />} />
+          <Route
+            path="/organizations/:id"
+            element={<OrganizationDetailPage />}
+          />
         </Route>
       </Route>
 
@@ -107,7 +130,11 @@ function AdminRoutes() {
       </Route>
 
       {/* Admin protected routes */}
-      <Route element={<AdminRoute isAuthenticated={isAuthenticated} isLoading={isLoading} />}>
+      <Route
+        element={
+          <AdminRoute isAuthenticated={isAuthenticated} isLoading={isLoading} />
+        }
+      >
         <Route element={<AdminLayout onLogout={logout} />}>
           <Route index element={<AdminDashboardPage />} />
           <Route path="users" element={<AdminUsersPage />} />

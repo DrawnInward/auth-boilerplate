@@ -1,5 +1,11 @@
 import { useParams, Navigate, Link } from "react-router-dom";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { FullPageSpinner } from "@/components/shared";
 import { useVerifyToken } from "@/api/queries/auth";
@@ -39,7 +45,8 @@ export function VerifyEmailPage() {
       <CardHeader className="text-center">
         <CardTitle>Email verified</CardTitle>
         <CardDescription>
-          Your email {data?.data?.email} has been verified. Set your password to complete registration.
+          Your email {data?.data?.email} has been verified. Set your password to
+          complete registration.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex justify-center">

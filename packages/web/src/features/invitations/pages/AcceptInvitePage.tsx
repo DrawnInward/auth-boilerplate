@@ -2,8 +2,17 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { acceptInviteSchema, type AcceptInviteDto } from "@auth-boilerplate/shared";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  acceptInviteSchema,
+  type AcceptInviteDto,
+} from "@auth-boilerplate/shared";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -90,15 +99,20 @@ export function AcceptInvitePage() {
       <CardHeader className="text-center">
         <CardTitle>Accept Invitation</CardTitle>
         <CardDescription>
-          You've been invited to join {invitation.organization_name || "an organization"}
+          You've been invited to join{" "}
+          {invitation.organization_name || "an organization"}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="space-y-2 rounded-md bg-muted p-4">
           {invitation.organization_name && (
             <div className="flex justify-between">
-              <span className="text-sm text-muted-foreground">Organization:</span>
-              <span className="font-medium">{invitation.organization_name}</span>
+              <span className="text-sm text-muted-foreground">
+                Organization:
+              </span>
+              <span className="font-medium">
+                {invitation.organization_name}
+              </span>
             </div>
           )}
           {invitation.role && (
@@ -114,7 +128,10 @@ export function AcceptInvitePage() {
         </div>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+          <form
+            onSubmit={form.handleSubmit(handleSubmit)}
+            className="space-y-4"
+          >
             {!invitation.is_existing_user && (
               <FormField
                 control={form.control}
@@ -123,7 +140,11 @@ export function AcceptInvitePage() {
                   <FormItem>
                     <FormLabel>Password</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="Create a password" {...field} />
+                      <Input
+                        type="password"
+                        placeholder="Create a password"
+                        {...field}
+                      />
                     </FormControl>
                     <FormDescription>
                       Create a password for your new account
@@ -142,7 +163,11 @@ export function AcceptInvitePage() {
                   <FormItem>
                     <FormLabel>Password</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="Enter your password" {...field} />
+                      <Input
+                        type="password"
+                        placeholder="Enter your password"
+                        {...field}
+                      />
                     </FormControl>
                     <FormDescription>
                       Enter your account password to confirm
@@ -153,8 +178,14 @@ export function AcceptInvitePage() {
               />
             )}
 
-            <Button type="submit" className="w-full" disabled={acceptInvitation.isPending}>
-              {acceptInvitation.isPending ? "Accepting..." : "Accept Invitation"}
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={acceptInvitation.isPending}
+            >
+              {acceptInvitation.isPending
+                ? "Accepting..."
+                : "Accept Invitation"}
             </Button>
           </form>
         </Form>

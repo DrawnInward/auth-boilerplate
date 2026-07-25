@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { useOrganizations } from "@/api/queries/organizations";
 import { OrganizationCard, CreateOrgModal } from "../components";
 import { LoadingSpinner } from "@/components/shared";
-import { useAuth } from "@/features/auth/context/AuthContext";
+import { useAuth } from "@/hooks";
 
 export function OrganizationsListPage() {
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -21,7 +21,10 @@ export function OrganizationsListPage() {
           <p className="text-muted-foreground">Manage your organizations</p>
         </div>
         {canCreateOrgs && (
-          <Button onClick={() => setCreateModalOpen(true)} className="w-full sm:w-auto">
+          <Button
+            onClick={() => setCreateModalOpen(true)}
+            className="w-full sm:w-auto"
+          >
             Create Organization
           </Button>
         )}

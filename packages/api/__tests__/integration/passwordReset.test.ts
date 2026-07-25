@@ -78,9 +78,8 @@ describe("Password Reset Integration Tests", () => {
 
   describe("POST /api/auth/reset-password", () => {
     it("should reset password with valid token", async () => {
-      const { createInvitation } = await import(
-        "../../src/models/invitations.models"
-      );
+      const { createInvitation } =
+        await import("../../src/models/invitations.models");
       const result = await createInvitation({
         email: "test@example.com",
         type: "password_reset",
@@ -122,9 +121,8 @@ describe("Password Reset Integration Tests", () => {
     });
 
     it("should reject short password", async () => {
-      const { createInvitation } = await import(
-        "../../src/models/invitations.models"
-      );
+      const { createInvitation } =
+        await import("../../src/models/invitations.models");
       const result = await createInvitation({
         email: "test@example.com",
         type: "password_reset",
@@ -143,9 +141,8 @@ describe("Password Reset Integration Tests", () => {
     });
 
     it("should reject missing password", async () => {
-      const { createInvitation } = await import(
-        "../../src/models/invitations.models"
-      );
+      const { createInvitation } =
+        await import("../../src/models/invitations.models");
       const result = await createInvitation({
         email: "test@example.com",
         type: "password_reset",
@@ -162,9 +159,8 @@ describe("Password Reset Integration Tests", () => {
     });
 
     it("should reject expired token", async () => {
-      const { createInvitation } = await import(
-        "../../src/models/invitations.models"
-      );
+      const { createInvitation } =
+        await import("../../src/models/invitations.models");
       const result = await createInvitation({
         email: "test@example.com",
         type: "password_reset",
@@ -173,7 +169,7 @@ describe("Password Reset Integration Tests", () => {
       // Manually expire the token
       await db.query(
         "UPDATE invitations SET expires_at = NOW() - INTERVAL '1 day' WHERE id = $1",
-        [result.invitation.id]
+        [result.invitation.id],
       );
 
       const response = await request(app)
@@ -189,9 +185,8 @@ describe("Password Reset Integration Tests", () => {
     });
 
     it("should reject used token", async () => {
-      const { createInvitation, markInvitationUsed } = await import(
-        "../../src/models/invitations.models"
-      );
+      const { createInvitation, markInvitationUsed } =
+        await import("../../src/models/invitations.models");
       const result = await createInvitation({
         email: "test@example.com",
         type: "password_reset",
@@ -212,9 +207,8 @@ describe("Password Reset Integration Tests", () => {
     });
 
     it("should reject wrong invitation type", async () => {
-      const { createInvitation } = await import(
-        "../../src/models/invitations.models"
-      );
+      const { createInvitation } =
+        await import("../../src/models/invitations.models");
       // Create a registration invitation instead of password reset
       const result = await createInvitation({
         email: "wrongtype@example.com",
@@ -236,9 +230,8 @@ describe("Password Reset Integration Tests", () => {
     it("should revoke all refresh tokens after password reset", async () => {
       // First, login to create a refresh token
       // Reset the password back to Password1 first
-      const { createInvitation } = await import(
-        "../../src/models/invitations.models"
-      );
+      const { createInvitation } =
+        await import("../../src/models/invitations.models");
       let result = await createInvitation({
         email: "test@example.com",
         type: "password_reset",
@@ -280,7 +273,7 @@ describe("Password Reset Integration Tests", () => {
       // Old refresh token should no longer work
       const cookieArray = Array.isArray(cookies) ? cookies : [cookies];
       const refreshTokenCookie = cookieArray.find((c: string) =>
-        c.includes("refresh_token")
+        c.includes("refresh_token"),
       );
 
       const logoutResponse = await request(app)
@@ -295,9 +288,8 @@ describe("Password Reset Integration Tests", () => {
   describe("Full Password Reset Flow", () => {
     it("should complete full password reset flow", async () => {
       // Reset password to known value first
-      const { createInvitation } = await import(
-        "../../src/models/invitations.models"
-      );
+      const { createInvitation } =
+        await import("../../src/models/invitations.models");
       let result = await createInvitation({
         email: "alice@example.com",
         type: "password_reset",
@@ -373,14 +365,13 @@ describe("Password Reset Integration Tests", () => {
       // Responses should be identical
       expect(existingResponse.status).toBe(nonExistingResponse.status);
       expect(existingResponse.body.message).toBe(
-        nonExistingResponse.body.message
+        nonExistingResponse.body.message,
       );
     });
 
     it("should not accept registration tokens for password reset", async () => {
-      const { createInvitation } = await import(
-        "../../src/models/invitations.models"
-      );
+      const { createInvitation } =
+        await import("../../src/models/invitations.models");
       const result = await createInvitation({
         email: "typecheck@example.com",
         type: "registration",

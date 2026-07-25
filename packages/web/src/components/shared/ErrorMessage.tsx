@@ -10,7 +10,7 @@ export function ErrorMessage({ message, className }: ErrorMessageProps) {
     <div
       className={cn(
         "rounded-md border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive",
-        className
+        className,
       )}
     >
       {message}

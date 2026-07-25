@@ -161,12 +161,10 @@ describe("Email Change Integration Tests", () => {
 
   describe("POST /api/auth/confirm-email-change/:token", () => {
     it("should confirm email change with valid token", async () => {
-      const { createInvitation } = await import(
-        "../../src/models/invitations.models"
-      );
-      const { getUserUuid } = await import(
-        "../../src/database/test-data/testUuids"
-      );
+      const { createInvitation } =
+        await import("../../src/models/invitations.models");
+      const { getUserUuid } =
+        await import("../../src/database/test-data/testUuids");
 
       const result = await createInvitation({
         email: "test@example.com",
@@ -190,10 +188,10 @@ describe("Email Change Integration Tests", () => {
       expect(user!.email).toBe("confirmed@example.com");
 
       // Reset email back for other tests
-      await db.query(
-        "UPDATE users SET email = $1 WHERE user_id = $2",
-        ["test@example.com", getUserUuid(1)]
-      );
+      await db.query("UPDATE users SET email = $1 WHERE user_id = $2", [
+        "test@example.com",
+        getUserUuid(1),
+      ]);
     });
 
     it("should reject invalid token", async () => {
@@ -205,12 +203,10 @@ describe("Email Change Integration Tests", () => {
     });
 
     it("should reject expired token", async () => {
-      const { createInvitation } = await import(
-        "../../src/models/invitations.models"
-      );
-      const { getUserUuid } = await import(
-        "../../src/database/test-data/testUuids"
-      );
+      const { createInvitation } =
+        await import("../../src/models/invitations.models");
+      const { getUserUuid } =
+        await import("../../src/database/test-data/testUuids");
 
       const result = await createInvitation({
         email: "test@example.com",
@@ -222,7 +218,7 @@ describe("Email Change Integration Tests", () => {
       // Manually expire the token
       await db.query(
         "UPDATE invitations SET expires_at = NOW() - INTERVAL '1 day' WHERE id = $1",
-        [result.invitation.id]
+        [result.invitation.id],
       );
 
       const response = await request(app)
@@ -234,12 +230,10 @@ describe("Email Change Integration Tests", () => {
     });
 
     it("should reject used token", async () => {
-      const { createInvitation, markInvitationUsed } = await import(
-        "../../src/models/invitations.models"
-      );
-      const { getUserUuid } = await import(
-        "../../src/database/test-data/testUuids"
-      );
+      const { createInvitation, markInvitationUsed } =
+        await import("../../src/models/invitations.models");
+      const { getUserUuid } =
+        await import("../../src/database/test-data/testUuids");
 
       const result = await createInvitation({
         email: "test@example.com",
@@ -259,9 +253,8 @@ describe("Email Change Integration Tests", () => {
     });
 
     it("should reject wrong invitation type", async () => {
-      const { createInvitation } = await import(
-        "../../src/models/invitations.models"
-      );
+      const { createInvitation } =
+        await import("../../src/models/invitations.models");
 
       // Create a registration invitation instead of email_change
       const result = await createInvitation({
@@ -278,12 +271,10 @@ describe("Email Change Integration Tests", () => {
     });
 
     it("should reject if new email becomes taken during verification", async () => {
-      const { createInvitation } = await import(
-        "../../src/models/invitations.models"
-      );
-      const { getUserUuid } = await import(
-        "../../src/database/test-data/testUuids"
-      );
+      const { createInvitation } =
+        await import("../../src/models/invitations.models");
+      const { getUserUuid } =
+        await import("../../src/database/test-data/testUuids");
 
       const result = await createInvitation({
         email: "test@example.com",
@@ -303,12 +294,10 @@ describe("Email Change Integration Tests", () => {
 
   describe("Full Email Change Flow", () => {
     it("should complete full email change flow", async () => {
-      const { createInvitation } = await import(
-        "../../src/models/invitations.models"
-      );
-      const { getUserUuid } = await import(
-        "../../src/database/test-data/testUuids"
-      );
+      const { createInvitation } =
+        await import("../../src/models/invitations.models");
+      const { getUserUuid } =
+        await import("../../src/database/test-data/testUuids");
 
       // Step 1: Request email change
       const requestResponse = await request(app)
@@ -348,10 +337,10 @@ describe("Email Change Integration Tests", () => {
       expect(oldUser).toBeNull();
 
       // Reset email back for other tests
-      await db.query(
-        "UPDATE users SET email = $1 WHERE user_id = $2",
-        ["test@example.com", getUserUuid(1)]
-      );
+      await db.query("UPDATE users SET email = $1 WHERE user_id = $2", [
+        "test@example.com",
+        getUserUuid(1),
+      ]);
 
       // Re-login for subsequent tests
       const loginResponse = await request(app).post("/api/auth/login").send({
@@ -364,9 +353,8 @@ describe("Email Change Integration Tests", () => {
 
   describe("Security Tests", () => {
     it("should not accept registration tokens for email change", async () => {
-      const { createInvitation } = await import(
-        "../../src/models/invitations.models"
-      );
+      const { createInvitation } =
+        await import("../../src/models/invitations.models");
 
       const result = await createInvitation({
         email: "securitytest@example.com",
@@ -381,9 +369,8 @@ describe("Email Change Integration Tests", () => {
     });
 
     it("should not accept password_reset tokens for email change", async () => {
-      const { createInvitation } = await import(
-        "../../src/models/invitations.models"
-      );
+      const { createInvitation } =
+        await import("../../src/models/invitations.models");
 
       const result = await createInvitation({
         email: "test@example.com",

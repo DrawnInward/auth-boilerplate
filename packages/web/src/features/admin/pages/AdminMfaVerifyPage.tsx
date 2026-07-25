@@ -1,6 +1,12 @@
 import { Navigate } from "react-router-dom";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { MfaVerifyForm } from "@/features/auth/components";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { MfaVerifyForm } from "@/components/shared";
 import { useAdminAuth } from "../context/AdminAuthContext";
 import { useApiError } from "@/hooks";
 
@@ -20,7 +26,9 @@ export function AdminMfaVerifyPage() {
     }
   };
 
-  const handleSubmitBackup = async (data: Parameters<typeof verifyMfaBackup>[0]) => {
+  const handleSubmitBackup = async (
+    data: Parameters<typeof verifyMfaBackup>[0],
+  ) => {
     try {
       await verifyMfaBackup(data);
     } catch (error) {

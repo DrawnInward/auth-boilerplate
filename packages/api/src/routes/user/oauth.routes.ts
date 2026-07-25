@@ -2,7 +2,7 @@ import express from "express";
 import { authoriseUser } from "../../middleware/authoriseUser";
 import { validateBody } from "../../middleware/validate";
 import { authLimiter } from "../../middleware/rateLimiter";
-import { googleLinkSchema } from "../../types";
+import { googleLinkSchema } from "@auth-boilerplate/shared";
 import {
   initiateGoogleAuth,
   handleGoogleCallback,

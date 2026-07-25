@@ -33,7 +33,7 @@ export const testAdmins = [
     email_verified: true,
     is_active: false,
     deactivated_at: new Date(
-      Date.now() - 30 * 24 * 60 * 60 * 1000
+      Date.now() - 30 * 24 * 60 * 60 * 1000,
     ).toISOString(), // 30 days ago
   },
   // Unverified email admin

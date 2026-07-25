@@ -2,10 +2,21 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { mfaVerifySetupSchema, mfaDisableSchema, type MfaVerifySetupDto, type MfaDisableDto } from "@auth-boilerplate/shared";
+import {
+  mfaVerifySetupSchema,
+  mfaDisableSchema,
+  type MfaVerifySetupDto,
+  type MfaDisableDto,
+} from "@auth-boilerplate/shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -22,8 +33,13 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { useAuth } from "@/features/auth/context/AuthContext";
-import { useMfaSetup, useMfaVerifySetup, useMfaDisable, useMfaRegenerateBackupCodes } from "@/api/queries/mfa";
+import { useAuth } from "@/hooks";
+import {
+  useMfaSetup,
+  useMfaVerifySetup,
+  useMfaDisable,
+  useMfaRegenerateBackupCodes,
+} from "@/api/queries/mfa";
 import { useApiError } from "@/hooks";
 
 export function SecurityTab() {
@@ -131,10 +147,16 @@ export function SecurityTab() {
           <div className="flex flex-col sm:flex-row gap-2">
             {user?.mfa_enabled ? (
               <>
-                <Button variant="outline" onClick={() => setRegenerateDialogOpen(true)}>
+                <Button
+                  variant="outline"
+                  onClick={() => setRegenerateDialogOpen(true)}
+                >
                   Regenerate backup codes
                 </Button>
-                <Button variant="destructive" onClick={() => setDisableDialogOpen(true)}>
+                <Button
+                  variant="destructive"
+                  onClick={() => setDisableDialogOpen(true)}
+                >
                   Disable MFA
                 </Button>
               </>
@@ -162,7 +184,10 @@ export function SecurityTab() {
               </div>
             )}
             <Form {...setupForm}>
-              <form onSubmit={setupForm.handleSubmit(handleVerifySetup)} className="space-y-4">
+              <form
+                onSubmit={setupForm.handleSubmit(handleVerifySetup)}
+                className="space-y-4"
+              >
                 <FormField
                   control={setupForm.control}
                   name="code"
@@ -176,8 +201,14 @@ export function SecurityTab() {
                     </FormItem>
                   )}
                 />
-                <Button type="submit" className="w-full" disabled={mfaVerifySetup.isPending}>
-                  {mfaVerifySetup.isPending ? "Verifying..." : "Verify and enable"}
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={mfaVerifySetup.isPending}
+                >
+                  {mfaVerifySetup.isPending
+                    ? "Verifying..."
+                    : "Verify and enable"}
                 </Button>
               </form>
             </Form>
@@ -194,7 +225,10 @@ export function SecurityTab() {
             </DialogDescription>
           </DialogHeader>
           <Form {...disableForm}>
-            <form onSubmit={disableForm.handleSubmit(handleDisable)} className="space-y-4">
+            <form
+              onSubmit={disableForm.handleSubmit(handleDisable)}
+              className="space-y-4"
+            >
               <FormField
                 control={disableForm.control}
                 name="code"
@@ -208,7 +242,12 @@ export function SecurityTab() {
                   </FormItem>
                 )}
               />
-              <Button type="submit" variant="destructive" className="w-full" disabled={mfaDisable.isPending}>
+              <Button
+                type="submit"
+                variant="destructive"
+                className="w-full"
+                disabled={mfaDisable.isPending}
+              >
                 {mfaDisable.isPending ? "Disabling..." : "Disable MFA"}
               </Button>
             </form>
@@ -216,7 +255,10 @@ export function SecurityTab() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={regenerateDialogOpen} onOpenChange={setRegenerateDialogOpen}>
+      <Dialog
+        open={regenerateDialogOpen}
+        onOpenChange={setRegenerateDialogOpen}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Regenerate backup codes</DialogTitle>
@@ -225,7 +267,10 @@ export function SecurityTab() {
             </DialogDescription>
           </DialogHeader>
           <Form {...regenerateForm}>
-            <form onSubmit={regenerateForm.handleSubmit(handleRegenerate)} className="space-y-4">
+            <form
+              onSubmit={regenerateForm.handleSubmit(handleRegenerate)}
+              className="space-y-4"
+            >
               <FormField
                 control={regenerateForm.control}
                 name="code"
@@ -239,20 +284,30 @@ export function SecurityTab() {
                   </FormItem>
                 )}
               />
-              <Button type="submit" className="w-full" disabled={mfaRegenerate.isPending}>
-                {mfaRegenerate.isPending ? "Generating..." : "Generate new codes"}
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={mfaRegenerate.isPending}
+              >
+                {mfaRegenerate.isPending
+                  ? "Generating..."
+                  : "Generate new codes"}
               </Button>
             </form>
           </Form>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={backupCodesDialogOpen} onOpenChange={setBackupCodesDialogOpen}>
+      <Dialog
+        open={backupCodesDialogOpen}
+        onOpenChange={setBackupCodesDialogOpen}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Backup codes</DialogTitle>
             <DialogDescription>
-              Save these codes in a secure place. Each code can only be used once.
+              Save these codes in a secure place. Each code can only be used
+              once.
             </DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-2 rounded-md bg-muted p-4 font-mono text-sm">

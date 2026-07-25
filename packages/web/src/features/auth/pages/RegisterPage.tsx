@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { RegisterForm } from "../components";
 import { useRegister } from "@/api/queries/auth";
 import { useApiError } from "@/hooks";
@@ -12,9 +18,12 @@ export function RegisterPage() {
   const { handleError } = useApiError();
   const { data: config, isLoading: configLoading } = useConfig();
 
-  const registrationOpen = config?.data?.registration?.accountCreationMode === "open";
+  const registrationOpen =
+    config?.data?.registration?.accountCreationMode === "open";
 
-  const handleSubmit = async (data: Parameters<typeof register.mutateAsync>[0]) => {
+  const handleSubmit = async (
+    data: Parameters<typeof register.mutateAsync>[0],
+  ) => {
     try {
       await register.mutateAsync(data);
       setEmailSent(true);
@@ -33,7 +42,8 @@ export function RegisterPage() {
         <CardHeader className="text-center">
           <CardTitle>Registration unavailable</CardTitle>
           <CardDescription>
-            Registration is currently by invitation only. Please contact an administrator for access.
+            Registration is currently by invitation only. Please contact an
+            administrator for access.
           </CardDescription>
         </CardHeader>
         <CardContent className="text-center text-sm text-muted-foreground">
@@ -51,7 +61,8 @@ export function RegisterPage() {
         <CardHeader className="text-center">
           <CardTitle>Check your email</CardTitle>
           <CardDescription>
-            We've sent you a verification link. Click the link in the email to complete your registration.
+            We've sent you a verification link. Click the link in the email to
+            complete your registration.
           </CardDescription>
         </CardHeader>
         <CardContent className="text-center text-sm text-muted-foreground">

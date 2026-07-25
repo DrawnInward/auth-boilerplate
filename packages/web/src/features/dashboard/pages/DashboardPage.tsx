@@ -1,8 +1,14 @@
 import { Link } from "react-router-dom";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useAuth } from "@/features/auth/context/AuthContext";
+import { useAuth } from "@/hooks";
 import { useOrganizations } from "@/api/queries/organizations";
 
 export function DashboardPage() {
@@ -72,7 +78,9 @@ export function DashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle>Your Organizations</CardTitle>
-            <CardDescription>Quick access to your organizations</CardDescription>
+            <CardDescription>
+              Quick access to your organizations
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
@@ -89,7 +97,9 @@ export function DashboardPage() {
             </div>
             {organizations.length > 6 && (
               <Button variant="link" className="mt-2" asChild>
-                <Link to="/organizations">View all ({organizations.length})</Link>
+                <Link to="/organizations">
+                  View all ({organizations.length})
+                </Link>
               </Button>
             )}
           </CardContent>

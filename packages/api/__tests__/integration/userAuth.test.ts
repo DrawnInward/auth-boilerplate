@@ -40,10 +40,10 @@ describe("User Authentication Integration Tests", () => {
       expect(cookies).toBeDefined();
       const cookieArray = Array.isArray(cookies) ? cookies : [cookies];
       expect(
-        cookieArray.some((cookie: string) => cookie.includes("access_token"))
+        cookieArray.some((cookie: string) => cookie.includes("access_token")),
       ).toBe(true);
       expect(
-        cookieArray.some((cookie: string) => cookie.includes("refresh_token"))
+        cookieArray.some((cookie: string) => cookie.includes("refresh_token")),
       ).toBe(true);
     });
 
@@ -167,7 +167,7 @@ describe("User Authentication Integration Tests", () => {
 
       // Extract access token
       const accessTokenCookie = cookieArray.find((c: string) =>
-        c.includes("access_token")
+        c.includes("access_token"),
       );
       expect(accessTokenCookie).toBeDefined();
 
@@ -186,12 +186,12 @@ describe("User Authentication Integration Tests", () => {
 
       // Extract refresh token
       const refreshTokenCookie = cookieArray.find((c: string) =>
-        c.includes("refresh_token")
+        c.includes("refresh_token"),
       );
       expect(refreshTokenCookie).toBeDefined();
 
       const refreshTokenMatch = refreshTokenCookie!.match(
-        /refresh_token=([^;]+)/
+        /refresh_token=([^;]+)/,
       );
       expect(refreshTokenMatch).toBeTruthy();
       const refreshToken = refreshTokenMatch![1];
@@ -223,7 +223,7 @@ describe("User Authentication Integration Tests", () => {
 
       // Check access token expiration (15 minutes)
       const accessTokenCookie = cookieArray.find((c: string) =>
-        c.includes("access_token")
+        c.includes("access_token"),
       );
       const accessToken = accessTokenCookie!.match(/access_token=([^;]+)/)![1];
       const decodedAccess = jwt.decode(accessToken) as any;
@@ -233,15 +233,15 @@ describe("User Authentication Integration Tests", () => {
 
       // Check refresh token expiration (200 days as per refresh model)
       const refreshTokenCookie = cookieArray.find((c: string) =>
-        c.includes("refresh_token")
+        c.includes("refresh_token"),
       );
       const refreshToken = refreshTokenCookie!.match(
-        /refresh_token=([^;]+)/
+        /refresh_token=([^;]+)/,
       )![1];
       const decodedRefresh = jwt.decode(refreshToken) as any;
 
       expect(decodedRefresh.exp).toBeGreaterThanOrEqual(
-        beforeLogin + 7 * 24 * 60 * 60
+        beforeLogin + 7 * 24 * 60 * 60,
       );
     });
 
@@ -258,12 +258,12 @@ describe("User Authentication Integration Tests", () => {
       const cookieArray = Array.isArray(cookies) ? cookies : [cookies];
 
       const accessTokenCookie = cookieArray.find((c: string) =>
-        c.includes("access_token")
+        c.includes("access_token"),
       );
       expect(accessTokenCookie).toContain("HttpOnly");
 
       const refreshTokenCookie = cookieArray.find((c: string) =>
-        c.includes("refresh_token")
+        c.includes("refresh_token"),
       );
       expect(refreshTokenCookie).toContain("HttpOnly");
     });
@@ -298,23 +298,23 @@ describe("User Authentication Integration Tests", () => {
           ? logoutCookies
           : [logoutCookies];
         const accessTokenCookie = cookieArray.find((c: string) =>
-          c.includes("access_token")
+          c.includes("access_token"),
         );
         const refreshTokenCookie = cookieArray.find((c: string) =>
-          c.includes("refresh_token")
+          c.includes("refresh_token"),
         );
 
         // Cookies should be expired/cleared
         if (accessTokenCookie) {
           expect(
             accessTokenCookie.includes("Max-Age=0") ||
-              accessTokenCookie.includes("Expires=")
+              accessTokenCookie.includes("Expires="),
           ).toBe(true);
         }
         if (refreshTokenCookie) {
           expect(
             refreshTokenCookie.includes("Max-Age=0") ||
-              refreshTokenCookie.includes("Expires=")
+              refreshTokenCookie.includes("Expires="),
           ).toBe(true);
         }
       }
@@ -335,7 +335,7 @@ describe("User Authentication Integration Tests", () => {
 
       // Extract only the refresh token
       const refreshTokenCookie = cookieArray.find((c: string) =>
-        c.includes("refresh_token")
+        c.includes("refresh_token"),
       );
 
       // Logout (this should revoke all refresh tokens)
@@ -368,7 +368,7 @@ describe("User Authentication Integration Tests", () => {
 
       // Extract refresh token (access token will be expired/removed)
       const refreshTokenCookie = cookieArray.find((c: string) =>
-        c.includes("refresh_token")
+        c.includes("refresh_token"),
       );
       expect(refreshTokenCookie).toBeDefined();
 
@@ -386,10 +386,10 @@ describe("User Authentication Integration Tests", () => {
         ? newCookies
         : [newCookies];
       expect(
-        newCookieArray.some((c: string) => c.includes("access_token"))
+        newCookieArray.some((c: string) => c.includes("access_token")),
       ).toBe(true);
       expect(
-        newCookieArray.some((c: string) => c.includes("refresh_token"))
+        newCookieArray.some((c: string) => c.includes("refresh_token")),
       ).toBe(true);
     });
 
@@ -406,7 +406,7 @@ describe("User Authentication Integration Tests", () => {
       const cookies = loginResponse.headers["set-cookie"];
       const cookieArray = Array.isArray(cookies) ? cookies : [cookies];
       const refreshTokenCookie = cookieArray.find((c: string) =>
-        c.includes("refresh_token")
+        c.includes("refresh_token"),
       );
 
       // First request with refresh token - should succeed and rotate
@@ -452,7 +452,7 @@ describe("User Authentication Integration Tests", () => {
       const cookies = loginResponse.headers["set-cookie"];
       const cookieArray = Array.isArray(cookies) ? cookies : [cookies];
       const refreshTokenCookie = cookieArray.find((c: string) =>
-        c.includes("refresh_token")
+        c.includes("refresh_token"),
       );
 
       // Use refresh token first time (valid) - this triggers rotation
@@ -501,7 +501,7 @@ describe("User Authentication Integration Tests", () => {
         });
 
       expect(wrongPasswordResponse.body.message).toBe(
-        wrongEmailResponse.body.message
+        wrongEmailResponse.body.message,
       );
       expect(wrongPasswordResponse.body.message).toBe("Invalid credentials");
     });

@@ -7,6 +7,9 @@ import {
   OrganizationRoleType,
   AddOrganizationMemberDto,
 } from "@auth-boilerplate/shared";
+import { isUniqueViolation, isForeignKeyViolation } from "../utils/pgErrors";
+import { httpError } from "../utils/httpError";
+import { pagedQuery } from "../utils/pagedQuery";
 
 export interface OrganizationMemberWithUser extends OrganizationMember {
   email: string;
@@ -19,10 +22,7 @@ export const addOrganizationMember = async (
   client: PoolClient | Pool = db,
 ): Promise<OrganizationMember> => {
   if (!memberData.user_id) {
-    throw {
-      status: 400,
-      msg: "user_id is required",
-    };
+    throw httpError(400, "user_id is required");
   }
 
   const queryString = `
@@ -43,14 +43,11 @@ export const addOrganizationMember = async (
     const result = await client.query(queryString, values);
     return result.rows[0];
   } catch (err: any) {
-    if (err.code === "23505") {
-      throw {
-        status: 409,
-        msg: "User is already a member of this organization",
-      };
+    if (isUniqueViolation(err)) {
+      throw httpError(409, "User is already a member of this organization");
     }
-    if (err.code === "23503") {
-      throw { status: 400, msg: "Invalid organization_id or user_id" };
+    if (isForeignKeyViolation(err)) {
+      throw httpError(400, "Invalid organization_id or user_id");
     }
     throw err;
   }
@@ -91,29 +88,16 @@ export const getOrganizationMembers = async (
   organizationId: string,
   pagination: PaginationOptions = {},
 ): Promise<OrganizationMemberWithUser[]> => {
-  let queryString = `
-    SELECT om.*, u.email
-    FROM organization_members om
-    JOIN users u ON om.user_id = u.user_id
-    WHERE om.organization_id = $1
-    ORDER BY om.joined_at DESC
-  `;
+  const { text, values } = pagedQuery({
+    select: `SELECT om.*, u.email
+             FROM organization_members om
+             JOIN users u ON om.user_id = u.user_id`,
+    equals: { "om.organization_id": organizationId },
+    orderBy: "om.joined_at DESC",
+    pagination,
+  });
 
-  const values: any[] = [organizationId];
-  let paramIndex = 2;
-
-  if (pagination.limit) {
-    queryString += ` LIMIT $${paramIndex}`;
-    values.push(pagination.limit);
-    paramIndex++;
-  }
-
-  if (pagination.offset) {
-    queryString += ` OFFSET $${paramIndex}`;
-    values.push(pagination.offset);
-  }
-
-  const result = await db.query(queryString, values);
+  const result = await db.query(text, values);
   return result.rows;
 };
 
@@ -121,27 +105,14 @@ export const getUserMemberships = async (
   userId: string,
   pagination: PaginationOptions = {},
 ): Promise<OrganizationMember[]> => {
-  let queryString = `
-    SELECT * FROM organization_members
-    WHERE user_id = $1
-    ORDER BY joined_at DESC
-  `;
+  const { text, values } = pagedQuery({
+    select: "SELECT * FROM organization_members",
+    equals: { user_id: userId },
+    orderBy: "joined_at DESC",
+    pagination,
+  });
 
-  const values: any[] = [userId];
-  let paramIndex = 2;
-
-  if (pagination.limit) {
-    queryString += ` LIMIT $${paramIndex}`;
-    values.push(pagination.limit);
-    paramIndex++;
-  }
-
-  if (pagination.offset) {
-    queryString += ` OFFSET $${paramIndex}`;
-    values.push(pagination.offset);
-  }
-
-  const result = await db.query(queryString, values);
+  const result = await db.query(text, values);
   return result.rows;
 };
 
@@ -153,10 +124,10 @@ export const updateMemberRole = async (
 ): Promise<OrganizationMember> => {
   // Prevent changing owner role directly (use transfer ownership instead)
   if (newRole === "owner") {
-    throw {
-      status: 400,
-      msg: "Cannot set role to owner directly. Use transfer ownership.",
-    };
+    throw httpError(
+      400,
+      "Cannot set role to owner directly. Use transfer ownership.",
+    );
   }
 
   const queryString = `
@@ -173,10 +144,7 @@ export const updateMemberRole = async (
       userId,
     ]);
     if (result.rows.length === 0) {
-      throw {
-        status: 404,
-        msg: "Member not found or cannot modify owner role",
-      };
+      throw httpError(404, "Member not found or cannot modify owner role");
     }
     return result.rows[0];
   } catch (err: any) {
@@ -192,13 +160,13 @@ export const removeOrganizationMember = async (
 ): Promise<OrganizationMember> => {
   const member = await getOrganizationMember(organizationId, userId);
   if (!member) {
-    throw { status: 404, msg: "Member not found" };
+    throw httpError(404, "Member not found");
   }
   if (member.role === "owner") {
-    throw {
-      status: 400,
-      msg: "Cannot remove owner from organization. Transfer ownership first.",
-    };
+    throw httpError(
+      400,
+      "Cannot remove owner from organization. Transfer ownership first.",
+    );
   }
 
   const queryString = `
@@ -210,7 +178,7 @@ export const removeOrganizationMember = async (
   try {
     const result = await client.query(queryString, [organizationId, userId]);
     if (result.rows.length === 0) {
-      throw { status: 404, msg: "Member not found" };
+      throw httpError(404, "Member not found");
     }
     return result.rows[0];
   } catch (err: any) {
@@ -231,10 +199,10 @@ export const transferOwnership = async (
     newOwnerId,
   );
   if (!newOwnerMember) {
-    throw {
-      status: 400,
-      msg: "New owner must be an existing member of the organization",
-    };
+    throw httpError(
+      400,
+      "New owner must be an existing member of the organization",
+    );
   }
 
   const demoteQuery = `
@@ -263,7 +231,7 @@ export const transferOwnership = async (
       currentOwnerId,
     ]);
     if (demoteResult.rows.length === 0) {
-      throw { status: 403, msg: "Only current owner can transfer ownership" };
+      throw httpError(403, "Only current owner can transfer ownership");
     }
 
     const promoteResult = await client.query(promoteQuery, [

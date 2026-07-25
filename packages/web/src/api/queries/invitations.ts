@@ -1,6 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../client";
-import type { PublicInvitation, AcceptInviteDto } from "@auth-boilerplate/shared";
+import { orgKeys } from "./orgKeys";
+import type {
+  PublicInvitation,
+  AcceptInviteDto,
+} from "@auth-boilerplate/shared";
 
 interface InvitationResponse {
   status: string;
@@ -23,7 +27,7 @@ export function useAcceptInvitation(token: string) {
     mutationFn: (data: AcceptInviteDto) =>
       api.post<{ status: string }>(`/invitations/${token}/accept`, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["organizations"] });
+      queryClient.invalidateQueries({ queryKey: orgKeys.all });
       queryClient.invalidateQueries({ queryKey: ["me"] });
     },
   });

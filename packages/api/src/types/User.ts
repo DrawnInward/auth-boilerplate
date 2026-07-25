@@ -1,7 +1,12 @@
 import { z } from "zod";
+import {
+  authProviderSchema,
+  createdThroughSchema,
+} from "@auth-boilerplate/shared";
 
-export const authProviderSchema = z.enum(["local", "google", "both"]);
-export const createdThroughSchema = z.enum(["self_registered", "org_invited", "admin_created"]);
+// Defined once in the shared package (mirroring the DB CHECK constraints) and
+// re-exported for the API's internal row schemas — never re-typed here.
+export { authProviderSchema, createdThroughSchema };
 
 export const userSchema = z.object({
   user_id: z.string().uuid().optional(),

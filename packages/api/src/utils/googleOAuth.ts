@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { httpError } from "./httpError";
 
 export interface GoogleTokenResponse {
   access_token: string;
@@ -25,7 +26,7 @@ function getGoogleConfig() {
   const callbackUrl = process.env.GOOGLE_CALLBACK_URL;
 
   if (!clientId || !clientSecret || !callbackUrl) {
-    throw { status: 500, msg: "Google OAuth not configured" };
+    throw httpError(500, "Google OAuth not configured");
   }
 
   return { clientId, clientSecret, callbackUrl };
@@ -52,7 +53,7 @@ export function getGoogleAuthUrl(state: string): string {
 }
 
 export async function exchangeCodeForTokens(
-  code: string
+  code: string,
 ): Promise<GoogleTokenResponse> {
   const { clientId, clientSecret, callbackUrl } = getGoogleConfig();
 
@@ -72,14 +73,14 @@ export async function exchangeCodeForTokens(
 
   if (!response.ok) {
     const error = (await response.json()) as { error_description?: string };
-    throw { status: 401, msg: error.error_description || "Failed to exchange code" };
+    throw httpError(401, error.error_description || "Failed to exchange code");
   }
 
   return (await response.json()) as GoogleTokenResponse;
 }
 
 export async function getGoogleUserInfo(
-  accessToken: string
+  accessToken: string,
 ): Promise<GoogleUserInfo> {
   const response = await fetch(
     "https://www.googleapis.com/oauth2/v2/userinfo",
@@ -87,11 +88,11 @@ export async function getGoogleUserInfo(
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },
-    }
+    },
   );
 
   if (!response.ok) {
-    throw { status: 401, msg: "Failed to get user info from Google" };
+    throw httpError(401, "Failed to get user info from Google");
   }
 
   return (await response.json()) as GoogleUserInfo;

@@ -14,7 +14,9 @@ export const validationErrorResponseSchema = z.object({
   errors: z.array(validationErrorSchema),
 });
 
-export type ValidationErrorResponse = z.infer<typeof validationErrorResponseSchema>;
+export type ValidationErrorResponse = z.infer<
+  typeof validationErrorResponseSchema
+>;
 
 export const successResponseSchema = z.object({
   status: z.literal("success"),
@@ -31,7 +33,9 @@ export const errorResponseSchema = z.object({
 
 export type ErrorResponse = z.infer<typeof errorResponseSchema>;
 
-export const paginatedResponseSchema = <T extends z.ZodTypeAny>(itemSchema: T) =>
+export const paginatedResponseSchema = <T extends z.ZodTypeAny>(
+  itemSchema: T,
+) =>
   z.object({
     status: z.literal("success"),
     data: z.array(itemSchema),

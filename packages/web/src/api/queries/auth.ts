@@ -27,8 +27,15 @@ interface MfaRequiredApiResponse {
 
 type LoginResponse = AuthResponse | MfaRequiredApiResponse;
 
-function isMfaRequired(response: LoginResponse): response is MfaRequiredApiResponse {
-  return "data" in response && response.data && "mfa_required" in response.data && response.data.mfa_required === true;
+function isMfaRequired(
+  response: LoginResponse,
+): response is MfaRequiredApiResponse {
+  return (
+    "data" in response &&
+    response.data &&
+    "mfa_required" in response.data &&
+    response.data.mfa_required === true
+  );
 }
 
 export function useMe() {
@@ -82,7 +89,9 @@ export function useVerifyToken(token: string | undefined) {
   return useQuery({
     queryKey: ["verify-token", token],
     queryFn: () =>
-      api.get<{ status: string; data: { email: string } }>(`/auth/verify/${token}`),
+      api.get<{ status: string; data: { email: string } }>(
+        `/auth/verify/${token}`,
+      ),
     enabled: !!token,
     retry: false,
   });
@@ -91,28 +100,40 @@ export function useVerifyToken(token: string | undefined) {
 export function useCompleteRegistration() {
   return useMutation({
     mutationFn: (data: CompleteRegistrationDto) =>
-      api.post<{ status: string; message: string }>("/auth/complete-registration", data),
+      api.post<{ status: string; message: string }>(
+        "/auth/complete-registration",
+        data,
+      ),
   });
 }
 
 export function useForgotPassword() {
   return useMutation({
     mutationFn: (data: ForgotPasswordDto) =>
-      api.post<{ status: string; message: string }>("/auth/forgot-password", data),
+      api.post<{ status: string; message: string }>(
+        "/auth/forgot-password",
+        data,
+      ),
   });
 }
 
 export function useResetPassword() {
   return useMutation({
     mutationFn: (data: ResetPasswordDto) =>
-      api.post<{ status: string; message: string }>("/auth/reset-password", data),
+      api.post<{ status: string; message: string }>(
+        "/auth/reset-password",
+        data,
+      ),
   });
 }
 
 export function useChangePassword() {
   return useMutation({
     mutationFn: (data: ChangePasswordDto) =>
-      api.put<{ status: string; message: string }>("/auth/change-password", data),
+      api.put<{ status: string; message: string }>(
+        "/auth/change-password",
+        data,
+      ),
   });
 }
 
@@ -133,7 +154,7 @@ export function useRequestEmailChange() {
     mutationFn: (data: RequestEmailChangeDto) =>
       api.post<{ status: string; message: string; data: { newEmail: string } }>(
         "/auth/request-email-change",
-        data
+        data,
       ),
   });
 }
@@ -144,9 +165,11 @@ export function useConfirmEmailChange(token: string | undefined) {
   return useQuery({
     queryKey: ["confirm-email-change", token],
     queryFn: async () => {
-      const response = await api.post<{ status: string; message: string; data: { email: string } }>(
-        `/auth/confirm-email-change/${token}`
-      );
+      const response = await api.post<{
+        status: string;
+        message: string;
+        data: { email: string };
+      }>(`/auth/confirm-email-change/${token}`);
       queryClient.invalidateQueries({ queryKey: ["me"] });
       return response;
     },

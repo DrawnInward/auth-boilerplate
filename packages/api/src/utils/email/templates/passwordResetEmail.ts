@@ -1,13 +1,20 @@
-import { sendEmail } from "../sendEmail";
+import { EmailOptions } from "../../../interfaces/email";
 import { textToHtml } from "../textToHtml";
-import { getAppName, getFrontendUrl } from "../../config";
 
-export async function sendPasswordResetEmail(
-  email: string,
-  token: string,
-): Promise<void> {
-  const resetUrl = `${getFrontendUrl()}/reset-password/${token}`;
-  const appName = getAppName();
+export interface PasswordResetEmailParams {
+  to: string;
+  token: string;
+  appName: string;
+  frontendUrl: string;
+}
+
+export function buildPasswordResetEmail({
+  to,
+  token,
+  appName,
+  frontendUrl,
+}: PasswordResetEmailParams): EmailOptions {
+  const resetUrl = `${frontendUrl}/reset-password/${token}`;
 
   // Plain text includes URL for non-HTML email clients
   const text = `Password Reset Request
@@ -33,14 +40,13 @@ This link will expire in 1 hour.
 
 If you didn't request a password reset, you can safely ignore this email. Your password will remain unchanged.`;
 
-  const html = textToHtml(htmlText, {
-    links: [{ url: resetUrl, text: "Reset Password" }],
-  });
-
-  await sendEmail({
-    to: email,
+  return {
+    to,
     subject: `Reset your password - ${appName}`,
     text,
-    html,
-  });
+    html: textToHtml(htmlText, {
+      appName,
+      links: [{ url: resetUrl, text: "Reset Password" }],
+    }),
+  };
 }

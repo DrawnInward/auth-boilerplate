@@ -9,24 +9,24 @@ export interface ApiResponse<T = any> {
 export const sendSuccess = <T>(
   res: Response,
   data: T,
-  message?: string
+  message?: string,
 ): Response<ApiResponse<T>> => {
   return res.json({
     status: "success",
     message,
-    data
+    data,
   });
 };
 
 export const sendCreated = <T>(
   res: Response,
   data: T,
-  message?: string
+  message?: string,
 ): Response<ApiResponse<T>> => {
   return res.status(201).json({
     status: "success",
     message,
-    data
+    data,
   });
 };
 

@@ -9,6 +9,11 @@ import {
 import { determinateHash } from "../utils";
 import { getRefreshTokenDays } from "../utils/config";
 import { Pool, PoolClient } from "pg";
+import { childLogger } from "../utils/logger";
+import { httpError } from "../utils/httpError";
+import { withTransaction } from "../utils/withTransaction";
+
+const log = childLogger("refreshModels");
 dotenv.config({ quiet: true });
 
 export const fetchRefresh = async (): Promise<RefreshToken[]> => {
@@ -28,7 +33,7 @@ export const fetchRefreshById = async (id: string): Promise<RefreshToken> => {
 
   const refresh = await db.query(queryString, [id]);
   if (refresh.rows.length === 0) {
-    throw { status: 404, msg: "Refresh token not found" };
+    throw httpError(404, "Refresh token not found");
   }
 
   return refresh.rows[0];
@@ -46,7 +51,7 @@ export const fetchRefreshByTokenHash = async (
 
   const refresh = await client.query(queryString, [tokenHash]);
   if (refresh.rows.length === 0)
-    throw { status: 404, msg: "Refresh token not found" };
+    throw httpError(404, "Refresh token not found");
 
   return refresh.rows[0];
 };
@@ -104,7 +109,7 @@ export const addRefresh = async (
   const refreshId = initialAddRefreshTokenQuery.rows[0].refresh_id;
   const refreshKey = process.env.REFRESH_KEY;
   if (!refreshKey) {
-    throw { status: 500, msg: "Missing REFRESH_KEY environment variable" };
+    throw httpError(500, "Missing REFRESH_KEY environment variable");
   }
 
   const refreshToken = jwt.sign(
@@ -140,7 +145,7 @@ export const removeRefreshById = async (id: string): Promise<void> => {
   const result = await db.query(queryString, [id]);
 
   if (result.rows.length === 0) {
-    throw { status: 404, msg: "Refresh token not found" };
+    throw httpError(404, "Refresh token not found");
   }
 };
 
@@ -148,14 +153,10 @@ export const createAccessToken = async (
   decodedRefreshToken: { refresh_id: string; role_type: string },
   originalRefreshToken: string,
 ): Promise<{ accessToken: string; newRefreshToken: string }> => {
-  const client = await db.connect();
+  const { refresh_id, role_type } = decodedRefreshToken;
+  const tokenHash = determinateHash(originalRefreshToken);
 
-  try {
-    const { refresh_id, role_type } = decodedRefreshToken;
-    const tokenHash = determinateHash(originalRefreshToken);
-
-    await client.query("BEGIN");
-
+  return withTransaction(db, async (client) => {
     const refreshTokenData = await fetchRefreshByTokenHash(tokenHash, client);
 
     if (refreshTokenData.used_at) {
@@ -164,19 +165,19 @@ export const createAccessToken = async (
         refreshTokenData.role_id,
         refreshTokenData.role_type,
       );
-      throw {
-        status: 401,
-        msg: "Refresh token has already been used - possible security breach",
-      };
+      throw httpError(
+        401,
+        "Refresh token has already been used - possible security breach",
+      );
     }
 
     if (!refreshTokenData.is_active) {
-      throw { status: 401, msg: "Refresh token has been revoked" };
+      throw httpError(401, "Refresh token has been revoked");
     }
 
     const expirationTime = new Date(refreshTokenData.expiration_time!);
     if (expirationTime < new Date()) {
-      throw { status: 401, msg: "Refresh token has expired" };
+      throw httpError(401, "Refresh token has expired");
     }
 
     await modifyRefreshById(
@@ -201,10 +202,10 @@ export const createAccessToken = async (
     const accessKey = process.env[accessKeyEnvironmentVariable];
 
     if (!accessKey) {
-      throw {
-        status: 500,
-        msg: `Missing environment variable: ${accessKeyEnvironmentVariable}`,
-      };
+      throw httpError(
+        500,
+        `Missing environment variable: ${accessKeyEnvironmentVariable}`,
+      );
     }
     const accessToken = jwt.sign(
       { role_id: refreshTokenData.role_id, role_type },
@@ -212,17 +213,11 @@ export const createAccessToken = async (
       { expiresIn: "10m" },
     );
 
-    await client.query("COMMIT");
     return {
       accessToken,
       newRefreshToken: newRefreshData.token,
     };
-  } catch (err) {
-    await client.query("ROLLBACK");
-    throw err;
-  } finally {
-    client.release();
-  }
+  });
 };
 
 export const revokeUserTokens = async (
@@ -241,7 +236,7 @@ export const revokeUserTokens = async (
     const result = await client.query(queryStr, [roleId, roleType]);
     return `${result.rowCount} tokens revoked successfully`;
   } catch (error) {
-    console.error("Error revoking user tokens:", error);
+    log.error({ err: error }, "Error revoking user tokens");
     throw error;
   }
 };
@@ -264,7 +259,7 @@ export const revokeRefreshToken = async (
     }
     return "Token revoked successfully";
   } catch (error) {
-    console.error("Error revoking refresh token:", error);
+    log.error({ err: error }, "Error revoking refresh token");
     throw error;
   }
 };

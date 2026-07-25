@@ -6,7 +6,10 @@ interface ProtectedRouteProps {
   isLoading: boolean;
 }
 
-export function ProtectedRoute({ isAuthenticated, isLoading }: ProtectedRouteProps) {
+export function ProtectedRoute({
+  isAuthenticated,
+  isLoading,
+}: ProtectedRouteProps) {
   const location = useLocation();
 
   if (isLoading) {

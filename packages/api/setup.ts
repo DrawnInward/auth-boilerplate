@@ -11,8 +11,8 @@ function generateEncryptionKey(): string {
 }
 
 async function setup() {
-  const PROJECT_NAME = process.env.PROJECT_NAME || 'app';
-  const DB_PASSWORD = process.env.DB_PASSWORD || 'Password1';
+  const PROJECT_NAME = process.env.PROJECT_NAME || "app";
+  const DB_PASSWORD = process.env.DB_PASSWORD || "Password1";
 
   console.log(`Setting up ${PROJECT_NAME}...\n`);
 
@@ -68,18 +68,24 @@ PGPASSWORD=${DB_PASSWORD}
       const createUserSQL = `CREATE USER ${dbUser} WITH PASSWORD '${DB_PASSWORD}' CREATEDB;`;
       await execAsync(`psql -d postgres -c "${createUserSQL}"`);
       console.log(`Created PostgreSQL user '${dbUser}'`);
-    } catch (e) {
+    } catch {
       const alterUserSQL = `ALTER USER ${dbUser} WITH PASSWORD '${DB_PASSWORD}';`;
       await execAsync(`psql -d postgres -c "${alterUserSQL}"`);
       console.log(`Updated password for PostgreSQL user '${dbUser}'`);
     }
 
     await execAsync(`psql -d postgres -c "DROP DATABASE IF EXISTS ${dbName};"`);
-    await execAsync(`psql -d postgres -c "DROP DATABASE IF EXISTS ${testDbName};"`);
-    await execAsync(`psql -d postgres -c "CREATE DATABASE ${dbName} OWNER ${dbUser};"`);
-    await execAsync(`psql -d postgres -c "CREATE DATABASE ${testDbName} OWNER ${dbUser};"`);
+    await execAsync(
+      `psql -d postgres -c "DROP DATABASE IF EXISTS ${testDbName};"`,
+    );
+    await execAsync(
+      `psql -d postgres -c "CREATE DATABASE ${dbName} OWNER ${dbUser};"`,
+    );
+    await execAsync(
+      `psql -d postgres -c "CREATE DATABASE ${testDbName} OWNER ${dbUser};"`,
+    );
     console.log(`Databases created: ${dbName}, ${testDbName}`);
-  } catch (error) {
+  } catch {
     console.log("\nCould not set up PostgreSQL automatically.");
     console.log("Make sure you've run the one-time setup:");
     console.log("  sudo -u postgres createuser -s $(whoami)");
@@ -90,7 +96,9 @@ PGPASSWORD=${DB_PASSWORD}
   console.log("\nSetup complete!");
   console.log("Your API keys have been generated in .env");
   console.log("\nNote: To enable Google OAuth, configure GOOGLE_CLIENT_ID,");
-  console.log("GOOGLE_CLIENT_SECRET, and GOOGLE_CALLBACK_URL in your .env file.");
+  console.log(
+    "GOOGLE_CLIENT_SECRET, and GOOGLE_CALLBACK_URL in your .env file.",
+  );
 }
 
 setup().catch(console.error);

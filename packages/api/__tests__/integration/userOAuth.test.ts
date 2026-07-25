@@ -324,9 +324,7 @@ describe("User OAuth Integration Tests", () => {
         { expiresIn: "15m" },
       );
 
-      authCookies = [
-        `access_token=${accessToken}; Path=/; HttpOnly`,
-      ];
+      authCookies = [`access_token=${accessToken}; Path=/; HttpOnly`];
     });
 
     afterEach(async () => {

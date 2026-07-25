@@ -29,6 +29,8 @@ import {
   createMfaChallengeToken,
   setMfaChallengeCookie,
 } from "../../utils/mfaChallenge";
+import { httpError } from "../../utils/httpError";
+import { withTransaction } from "../../utils/withTransaction";
 
 const OAUTH_STATE_MAX_AGE = 10 * 60 * 1000;
 const OAUTH_PENDING_MAX_AGE = 10 * 60 * 1000;
@@ -40,7 +42,7 @@ export const initiateGoogleAuth = async (
 ) => {
   try {
     if (!isGoogleOAuthConfigured()) {
-      throw { status: 503, msg: "Google OAuth is not configured" };
+      throw httpError(503, "Google OAuth is not configured");
     }
 
     const state = generateOAuthState();
@@ -62,20 +64,16 @@ export const handleGoogleCallback = async (
   res: Response,
   next: NextFunction,
 ) => {
-  const client = await db.connect();
-
   try {
-    await client.query("BEGIN");
-
     const { code, state } = req.query;
     const cookies = parseCookies(req.headers.cookie);
 
     if (!code || typeof code !== "string") {
-      throw { status: 400, msg: "Authorization code missing" };
+      throw httpError(400, "Authorization code missing");
     }
 
     if (!state || state !== cookies.oauth_state) {
-      throw { status: 401, msg: "Invalid OAuth state" };
+      throw httpError(401, "Invalid OAuth state");
     }
 
     res.cookie(
@@ -90,29 +88,204 @@ export const handleGoogleCallback = async (
     const googleUser = await getGoogleUserInfo(tokens.access_token);
 
     if (!googleUser.verified_email) {
-      throw { status: 400, msg: "Google email not verified" };
+      throw httpError(400, "Google email not verified");
     }
 
-    let user = await getUserByGoogleId(googleUser.id);
+    // The callback has four outcomes. Only the database work belongs in the
+    // transaction; which cookies to set and what to respond with is decided
+    // afterwards, from the outcome it returns.
+    const outcome = await withTransaction(db, async (client) => {
+      const googleLinkedUser = await getUserByGoogleId(googleUser.id);
 
-    if (user) {
+      if (googleLinkedUser) {
+        const mfaStatus = await getMfaStatus(
+          googleLinkedUser.user_id!,
+          "user",
+          client,
+        );
+
+        if (mfaStatus?.mfa_enabled) {
+          return { kind: "mfa_required" as const, user: googleLinkedUser };
+        }
+
+        const accessKey = process.env.USER_ACCESS_KEY;
+        if (!accessKey) {
+          throw httpError(500, "Server configuration error");
+        }
+
+        const accessToken = jwt.sign(
+          {
+            role_id: googleLinkedUser.user_id,
+            role_type: "user",
+            email_verified: googleLinkedUser.email_verified,
+          },
+          accessKey,
+          { expiresIn: "15m" },
+        );
+
+        const { token: refreshToken } = await addRefresh(
+          { role_id: googleLinkedUser.user_id!, role_type: "user" },
+          client,
+        );
+
+        return {
+          kind: "logged_in" as const,
+          user: googleLinkedUser,
+          accessToken,
+          refreshToken,
+        };
+      }
+
+      const existingUser = await getUser(googleUser.email);
+
+      if (existingUser) {
+        return { kind: "needs_linking" as const };
+      }
+
+      const createdUser = await createGoogleUser(
+        googleUser.email,
+        googleUser.id,
+        client,
+      );
+
+      const accessKey = process.env.USER_ACCESS_KEY;
+      if (!accessKey) {
+        throw httpError(500, "Server configuration error");
+      }
+
+      const accessToken = jwt.sign(
+        {
+          role_id: createdUser.user_id,
+          role_type: "user",
+          email_verified: true,
+        },
+        accessKey,
+        { expiresIn: "15m" },
+      );
+
+      const { token: refreshToken } = await addRefresh(
+        { role_id: createdUser.user_id!, role_type: "user" },
+        client,
+      );
+
+      return {
+        kind: "created" as const,
+        user: createdUser,
+        accessToken,
+        refreshToken,
+      };
+    });
+
+    if (outcome.kind === "mfa_required") {
+      const challengeToken = createMfaChallengeToken(
+        outcome.user.user_id!,
+        "user",
+      );
+      setMfaChallengeCookie(res, challengeToken);
+
+      return sendSuccess(
+        res,
+        { mfa_required: true },
+        "MFA verification required",
+      );
+    }
+
+    if (outcome.kind === "needs_linking") {
+      const pendingData = Buffer.from(
+        JSON.stringify({ google_id: googleUser.id, email: googleUser.email }),
+      ).toString("base64");
+
+      res.cookie(
+        "oauth_pending",
+        pendingData,
+        createCookieOptions(OAUTH_PENDING_MAX_AGE, {
+          allowedOrigin: process.env.ALLOWED_ORIGIN,
+        }),
+      );
+
+      return sendSuccess(
+        res,
+        {
+          needs_linking: true,
+          email: googleUser.email,
+        },
+        "Account exists. Enter password to link Google.",
+      );
+    }
+
+    setAuthCookies(res, outcome.accessToken, outcome.refreshToken);
+
+    return sendSuccess(
+      res,
+      {
+        user_id: outcome.user.user_id,
+        email: outcome.user.email,
+        is_active: outcome.user.is_active,
+      },
+      outcome.kind === "created"
+        ? "Account created with Google"
+        : "Logged in with Google",
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const linkGoogleAccount = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { password } = req.body;
+    const cookies = parseCookies(req.headers.cookie);
+    const pendingData = cookies.oauth_pending;
+
+    if (!pendingData) {
+      throw httpError(400, "No pending Google link");
+    }
+
+    const { google_id, email } = JSON.parse(
+      Buffer.from(pendingData, "base64").toString("utf8"),
+    );
+
+    const user = await getUserWithPassword(email);
+    if (!user) {
+      throw httpError(404, "User not found");
+    }
+
+    if (!user.password_hash) {
+      throw httpError(400, "Cannot link to account without password");
+    }
+
+    const passwordMatch = await bcrypt.compare(password, user.password_hash);
+    if (!passwordMatch) {
+      throw httpError(401, "Invalid password");
+    }
+
+    // Cleared before the link is attempted, matching the original ordering:
+    // a failure part-way through still consumes the pending cookie.
+    res.cookie(
+      "oauth_pending",
+      "",
+      createCookieOptions(0, {
+        allowedOrigin: process.env.ALLOWED_ORIGIN,
+      }),
+    );
+
+    const outcome = await withTransaction(db, async (client) => {
+      await setGoogleId(user.user_id!, google_id, client);
+      await setAuthProvider(user.user_id!, "both", client);
+
       const mfaStatus = await getMfaStatus(user.user_id!, "user", client);
 
       if (mfaStatus?.mfa_enabled) {
-        const challengeToken = createMfaChallengeToken(user.user_id!, "user");
-        setMfaChallengeCookie(res, challengeToken);
-
-        await client.query("COMMIT");
-        return sendSuccess(
-          res,
-          { mfa_required: true },
-          "MFA verification required",
-        );
+        return { kind: "mfa_required" as const };
       }
 
       const accessKey = process.env.USER_ACCESS_KEY;
       if (!accessKey) {
-        throw { status: 500, msg: "Server configuration error" };
+        throw httpError(500, "Server configuration error");
       }
 
       const accessToken = jwt.sign(
@@ -130,145 +303,13 @@ export const handleGoogleCallback = async (
         client,
       );
 
-      await client.query("COMMIT");
+      return { kind: "linked" as const, accessToken, refreshToken };
+    });
 
-      setAuthCookies(res, accessToken, refreshToken);
-
-      return sendSuccess(
-        res,
-        {
-          user_id: user.user_id,
-          email: user.email,
-          is_active: user.is_active,
-        },
-        "Logged in with Google",
-      );
-    }
-
-    const existingUser = await getUser(googleUser.email);
-
-    if (existingUser) {
-      const pendingData = Buffer.from(
-        JSON.stringify({ google_id: googleUser.id, email: googleUser.email }),
-      ).toString("base64");
-
-      res.cookie(
-        "oauth_pending",
-        pendingData,
-        createCookieOptions(OAUTH_PENDING_MAX_AGE, {
-          allowedOrigin: process.env.ALLOWED_ORIGIN,
-        }),
-      );
-
-      await client.query("COMMIT");
-
-      return sendSuccess(
-        res,
-        {
-          needs_linking: true,
-          email: googleUser.email,
-        },
-        "Account exists. Enter password to link Google.",
-      );
-    }
-
-    user = await createGoogleUser(googleUser.email, googleUser.id, client);
-
-    const accessKey = process.env.USER_ACCESS_KEY;
-    if (!accessKey) {
-      throw { status: 500, msg: "Server configuration error" };
-    }
-
-    const accessToken = jwt.sign(
-      {
-        role_id: user.user_id,
-        role_type: "user",
-        email_verified: true,
-      },
-      accessKey,
-      { expiresIn: "15m" },
-    );
-
-    const { token: refreshToken } = await addRefresh(
-      { role_id: user.user_id!, role_type: "user" },
-      client,
-    );
-
-    await client.query("COMMIT");
-
-    setAuthCookies(res, accessToken, refreshToken);
-
-    return sendSuccess(
-      res,
-      {
-        user_id: user.user_id,
-        email: user.email,
-        is_active: user.is_active,
-      },
-      "Account created with Google",
-    );
-  } catch (error) {
-    await client.query("ROLLBACK");
-    next(error);
-  } finally {
-    client.release();
-  }
-};
-
-export const linkGoogleAccount = async (
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) => {
-  const client = await db.connect();
-
-  try {
-    await client.query("BEGIN");
-
-    const { password } = req.body;
-    const cookies = parseCookies(req.headers.cookie);
-    const pendingData = cookies.oauth_pending;
-
-    if (!pendingData) {
-      throw { status: 400, msg: "No pending Google link" };
-    }
-
-    const { google_id, email } = JSON.parse(
-      Buffer.from(pendingData, "base64").toString("utf8")
-    );
-
-    const user = await getUserWithPassword(email);
-    if (!user) {
-      throw { status: 404, msg: "User not found" };
-    }
-
-    if (!user.password_hash) {
-      throw { status: 400, msg: "Cannot link to account without password" };
-    }
-
-    const passwordMatch = await bcrypt.compare(password, user.password_hash);
-    if (!passwordMatch) {
-      throw { status: 401, msg: "Invalid password" };
-    }
-
-    await setGoogleId(user.user_id!, google_id, client);
-    await setAuthProvider(user.user_id!, "both", client);
-
-    res.cookie(
-      "oauth_pending",
-      "",
-      createCookieOptions(0, {
-        allowedOrigin: process.env.ALLOWED_ORIGIN,
-      }),
-    );
-
-    const mfaStatus = await getMfaStatus(user.user_id!, "user", client);
-
-    if (mfaStatus?.mfa_enabled) {
+    if (outcome.kind === "mfa_required") {
       const challengeToken = createMfaChallengeToken(user.user_id!, "user");
       setMfaChallengeCookie(res, challengeToken);
 
-      await client.query("COMMIT");
       return sendSuccess(
         res,
         { mfa_required: true },
@@ -276,29 +317,7 @@ export const linkGoogleAccount = async (
       );
     }
 
-    const accessKey = process.env.USER_ACCESS_KEY;
-    if (!accessKey) {
-      throw { status: 500, msg: "Server configuration error" };
-    }
-
-    const accessToken = jwt.sign(
-      {
-        role_id: user.user_id,
-        role_type: "user",
-        email_verified: user.email_verified,
-      },
-      accessKey,
-      { expiresIn: "15m" },
-    );
-
-    const { token: refreshToken } = await addRefresh(
-      { role_id: user.user_id!, role_type: "user" },
-      client,
-    );
-
-    await client.query("COMMIT");
-
-    setAuthCookies(res, accessToken, refreshToken);
+    setAuthCookies(res, outcome.accessToken, outcome.refreshToken);
 
     return sendSuccess(
       res,
@@ -306,10 +325,7 @@ export const linkGoogleAccount = async (
       "Google account linked successfully",
     );
   } catch (error) {
-    await client.query("ROLLBACK");
     next(error);
-  } finally {
-    client.release();
   }
 };
 
@@ -323,11 +339,11 @@ export const unlinkGoogle = async (
 
     const user = await getUserWithPasswordById(role_id);
     if (!user) {
-      throw { status: 404, msg: "User not found" };
+      throw httpError(404, "User not found");
     }
 
     if (!user.password_hash) {
-      throw { status: 400, msg: "Cannot unlink Google without a password set" };
+      throw httpError(400, "Cannot unlink Google without a password set");
     }
 
     await unlinkGoogleAccount(role_id);

@@ -15,12 +15,19 @@ import {
 } from "../../src/models/mfa.models";
 import { testUsers } from "../../src/database/test-data";
 import { testAdmins } from "../../src/database/test-data";
-import { getUserUuid, getAdminUuid } from "../../src/database/test-data/testUuids";
-import { hashBackupCodes, generateBackupCodes } from "../../src/utils/backupCodes";
+import {
+  getUserUuid,
+  getAdminUuid,
+} from "../../src/database/test-data/testUuids";
+import {
+  hashBackupCodes,
+  generateBackupCodes,
+} from "../../src/utils/backupCodes";
 
 describe("MFA Model CRUD Operations", () => {
   beforeAll(async () => {
-    process.env.MFA_ENCRYPTION_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    process.env.MFA_ENCRYPTION_KEY =
+      "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
     await seed({ usersData: testUsers, adminsData: testAdmins });
   });
 
@@ -48,7 +55,10 @@ describe("MFA Model CRUD Operations", () => {
     });
 
     it("should return null for non-existent user", async () => {
-      const status = await getMfaStatus("550e8400-e29b-41d4-a716-446655440999", "user");
+      const status = await getMfaStatus(
+        "550e8400-e29b-41d4-a716-446655440999",
+        "user",
+      );
       expect(status).toBeNull();
     });
   });
@@ -82,7 +92,7 @@ describe("MFA Model CRUD Operations", () => {
 
     it("should throw error for non-existent user", async () => {
       await expect(
-        setMfaSecret("550e8400-e29b-41d4-a716-446655440999", "user", "secret")
+        setMfaSecret("550e8400-e29b-41d4-a716-446655440999", "user", "secret"),
       ).rejects.toMatchObject({
         status: 404,
         msg: "User not found",
@@ -112,7 +122,7 @@ describe("MFA Model CRUD Operations", () => {
 
     it("should throw error for non-existent user on enable", async () => {
       await expect(
-        enableMfa("550e8400-e29b-41d4-a716-446655440999", "user")
+        enableMfa("550e8400-e29b-41d4-a716-446655440999", "user"),
       ).rejects.toMatchObject({
         status: 404,
         msg: "User not found",

@@ -1,6 +1,12 @@
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { toast } from "sonner";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { PasswordResetForm } from "../components";
 import { useResetPassword } from "@/api/queries/auth";
 import { useApiError } from "@/hooks";

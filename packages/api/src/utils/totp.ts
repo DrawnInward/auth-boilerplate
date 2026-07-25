@@ -9,7 +9,7 @@ export interface TotpSetupResult {
 }
 
 export async function generateTotpSecret(
-  email: string
+  email: string,
 ): Promise<TotpSetupResult> {
   const secret = new Secret({ size: 20 });
   const appName = getAppName();

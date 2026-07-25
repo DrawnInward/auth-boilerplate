@@ -1,7 +1,13 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useAuth } from "@/features/auth/context/AuthContext";
+import { useAuth } from "@/hooks";
 import { useConfig } from "@/api/queries/config";
 
 const GOOGLE_LINK_URL = import.meta.env.VITE_API_URL
@@ -17,15 +23,19 @@ export function OAuthTab() {
   const { data: config } = useConfig();
 
   const googleEnabled = config?.data?.oauth?.google ?? false;
-  const hasGoogle = user?.auth_provider === "google" || user?.auth_provider === "both";
-  const hasLocal = user?.auth_provider === "local" || user?.auth_provider === "both";
+  const hasGoogle =
+    user?.auth_provider === "google" || user?.auth_provider === "both";
+  const hasLocal =
+    user?.auth_provider === "local" || user?.auth_provider === "both";
 
   if (!googleEnabled && !hasGoogle) {
     return (
       <Card>
         <CardHeader>
           <CardTitle>Connected Accounts</CardTitle>
-          <CardDescription>No external authentication providers are configured</CardDescription>
+          <CardDescription>
+            No external authentication providers are configured
+          </CardDescription>
         </CardHeader>
       </Card>
     );
@@ -35,7 +45,9 @@ export function OAuthTab() {
     <Card>
       <CardHeader>
         <CardTitle>Connected Accounts</CardTitle>
-        <CardDescription>Manage your linked authentication providers</CardDescription>
+        <CardDescription>
+          Manage your linked authentication providers
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex items-center justify-between rounded-md border p-4">
@@ -85,7 +97,8 @@ export function OAuthTab() {
 
         {!hasLocal && (
           <p className="text-sm text-muted-foreground">
-            You signed up with Google. To unlink your Google account, first set a password in the Password tab.
+            You signed up with Google. To unlink your Google account, first set
+            a password in the Password tab.
           </p>
         )}
       </CardContent>

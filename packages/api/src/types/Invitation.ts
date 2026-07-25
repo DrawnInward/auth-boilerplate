@@ -1,14 +1,13 @@
 import { z } from "zod";
+import {
+  invitationTypeSchema,
+  orgInviteRoleSchema,
+} from "@auth-boilerplate/shared";
 
-export const invitationTypeSchema = z.enum([
-  "registration",
-  "org_invite",
-  "password_reset",
-  "email_change",
-  "admin_invite",
-]);
-
-export const orgInviteRoleSchema = z.enum(["admin", "member", "viewer"]);
+// Vocabularies are defined once in the shared package (which mirrors the DB
+// CHECK constraints) and re-exported here for the API's internal row schemas —
+// never re-typed, or the two copies drift apart silently.
+export { invitationTypeSchema, orgInviteRoleSchema };
 
 export const invitationSchema = z.object({
   id: z.string().uuid().optional(),
@@ -66,7 +65,10 @@ export const inviteMemberSchema = z.object({
 
 // Schema for accepting an org invite
 export const acceptInviteSchema = z.object({
-  password: z.string().min(8, "Password must be at least 8 characters").optional(),
+  password: z
+    .string()
+    .min(8, "Password must be at least 8 characters")
+    .optional(),
 });
 
 export type InvitationType = z.infer<typeof invitationTypeSchema>;
@@ -74,7 +76,9 @@ export type OrgInviteRole = z.infer<typeof orgInviteRoleSchema>;
 export type Invitation = z.infer<typeof invitationSchema>;
 export type CreateInvitationDto = z.infer<typeof createInvitationSchema>;
 export type RegisterDto = z.infer<typeof registerSchema>;
-export type CompleteRegistrationDto = z.infer<typeof completeRegistrationSchema>;
+export type CompleteRegistrationDto = z.infer<
+  typeof completeRegistrationSchema
+>;
 export type ForgotPasswordDto = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordDto = z.infer<typeof resetPasswordSchema>;
 export type InviteMemberDto = z.infer<typeof inviteMemberSchema>;

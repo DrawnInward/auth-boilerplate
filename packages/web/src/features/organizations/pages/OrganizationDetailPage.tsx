@@ -3,10 +3,19 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { updateOrganizationDtoSchema, type UpdateOrganizationDto } from "@auth-boilerplate/shared";
+import {
+  updateOrganizationDtoSchema,
+  type UpdateOrganizationDto,
+} from "@auth-boilerplate/shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -125,7 +134,9 @@ export function OrganizationDetailPage() {
           <TabsList>
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="members">Members</TabsTrigger>
-            {canManage && <TabsTrigger value="invitations">Invitations</TabsTrigger>}
+            {canManage && (
+              <TabsTrigger value="invitations">Invitations</TabsTrigger>
+            )}
             {isOwner && <TabsTrigger value="settings">Settings</TabsTrigger>}
           </TabsList>
         </div>
@@ -145,7 +156,9 @@ export function OrganizationDetailPage() {
                 <p className="font-medium">/{organization.slug}</p>
               </div>
               <div>
-                <span className="text-sm text-muted-foreground">Your Role:</span>
+                <span className="text-sm text-muted-foreground">
+                  Your Role:
+                </span>
                 <p className="font-medium capitalize">{organization.role}</p>
               </div>
             </CardContent>
@@ -160,7 +173,12 @@ export function OrganizationDetailPage() {
                 <CardDescription>Manage organization members</CardDescription>
               </div>
               {canManage && (
-                <Button onClick={() => setInviteModalOpen(true)} className="w-full sm:w-auto">Invite Member</Button>
+                <Button
+                  onClick={() => setInviteModalOpen(true)}
+                  className="w-full sm:w-auto"
+                >
+                  Invite Member
+                </Button>
               )}
             </CardHeader>
             <CardContent>
@@ -192,7 +210,10 @@ export function OrganizationDetailPage() {
               </CardHeader>
               <CardContent>
                 <Form {...form}>
-                  <form onSubmit={form.handleSubmit(handleUpdate)} className="space-y-4">
+                  <form
+                    onSubmit={form.handleSubmit(handleUpdate)}
+                    className="space-y-4"
+                  >
                     <FormField
                       control={form.control}
                       name="name"
@@ -240,7 +261,10 @@ export function OrganizationDetailPage() {
                       Transfer this organization to another member
                     </p>
                   </div>
-                  <Button variant="outline" onClick={() => setTransferModalOpen(true)}>
+                  <Button
+                    variant="outline"
+                    onClick={() => setTransferModalOpen(true)}
+                  >
                     Transfer
                   </Button>
                 </div>
@@ -251,7 +275,10 @@ export function OrganizationDetailPage() {
                       Permanently delete this organization and all its data
                     </p>
                   </div>
-                  <Button variant="destructive" onClick={() => setDeleteDialogOpen(true)}>
+                  <Button
+                    variant="destructive"
+                    onClick={() => setDeleteDialogOpen(true)}
+                  >
                     Delete
                   </Button>
                 </div>
@@ -278,12 +305,16 @@ export function OrganizationDetailPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete organization</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{organization.name}"? This action cannot be undone.
+              Are you sure you want to delete "{organization.name}"? This action
+              cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

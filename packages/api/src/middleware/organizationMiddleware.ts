@@ -6,32 +6,36 @@ import {
   getUserRoleInOrg,
 } from "../models/organizationMembers.models";
 import { OrganizationRoleType } from "@auth-boilerplate/shared";
+import { httpError } from "../utils/httpError";
 
 // Middleware to check if user is a member of the organization
 export const organizationMemberMiddleware = async (
   req: RequestWithUser,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const organizationId = req.params.organizationId as string;
 
     if (!organizationId) {
-      throw { status: 400, msg: "Organization ID is required" };
+      throw httpError(400, "Organization ID is required");
     }
 
     // Get organization to verify it exists
     const organization = await getOrganizationById(organizationId);
 
     if (!organization) {
-      throw { status: 404, msg: "Organization not found" };
+      throw httpError(404, "Organization not found");
     }
 
     // Verify user is a member of this organization
-    const membership = await getOrganizationMember(organizationId, req.user!.role_id);
+    const membership = await getOrganizationMember(
+      organizationId,
+      req.user!.role_id,
+    );
 
     if (!membership) {
-      throw { status: 403, msg: "Access denied: Not a member of this organization" };
+      throw httpError(403, "Access denied: Not a member of this organization");
     }
 
     req.organization = organization;
@@ -48,28 +52,34 @@ export const requireOrgRole = (allowedRoles: OrganizationRoleType[]) => {
       const organizationId = req.params.organizationId as string;
 
       if (!organizationId) {
-        throw { status: 400, msg: "Organization ID is required" };
+        throw httpError(400, "Organization ID is required");
       }
 
       // Get organization to verify it exists
       const organization = await getOrganizationById(organizationId);
 
       if (!organization) {
-        throw { status: 404, msg: "Organization not found" };
+        throw httpError(404, "Organization not found");
       }
 
       // Get user's role in this organization
-      const userRole = await getUserRoleInOrg(organizationId, req.user!.role_id);
+      const userRole = await getUserRoleInOrg(
+        organizationId,
+        req.user!.role_id,
+      );
 
       if (!userRole) {
-        throw { status: 403, msg: "Access denied: Not a member of this organization" };
+        throw httpError(
+          403,
+          "Access denied: Not a member of this organization",
+        );
       }
 
       if (!allowedRoles.includes(userRole)) {
-        throw {
-          status: 403,
-          msg: `Access denied: Requires one of these roles: ${allowedRoles.join(", ")}`,
-        };
+        throw httpError(
+          403,
+          `Access denied: Requires one of these roles: ${allowedRoles.join(", ")}`,
+        );
       }
 
       req.organization = organization;
@@ -84,4 +94,9 @@ export const requireOrgRole = (allowedRoles: OrganizationRoleType[]) => {
 export const requireOrgOwner = requireOrgRole(["owner"]);
 export const requireOrgAdmin = requireOrgRole(["owner", "admin"]);
 export const requireOrgMember = requireOrgRole(["owner", "admin", "member"]);
-export const requireOrgViewer = requireOrgRole(["owner", "admin", "member", "viewer"]);
+export const requireOrgViewer = requireOrgRole([
+  "owner",
+  "admin",
+  "member",
+  "viewer",
+]);

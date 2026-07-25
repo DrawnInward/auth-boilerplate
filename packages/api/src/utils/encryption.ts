@@ -1,11 +1,12 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
+import { httpError } from "./httpError";
 
 const ALGORITHM = "aes-256-gcm";
 
 function getEncryptionKey(): Buffer {
   const key = process.env.MFA_ENCRYPTION_KEY;
   if (!key) {
-    throw { status: 500, msg: "MFA_ENCRYPTION_KEY not configured" };
+    throw httpError(500, "MFA_ENCRYPTION_KEY not configured");
   }
   return Buffer.from(key, "hex");
 }

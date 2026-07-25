@@ -1,8 +1,10 @@
-export { sendVerificationEmail } from "./verificationEmail";
-export { sendPasswordResetEmail } from "./passwordResetEmail";
-export { sendOrgInviteEmail } from "./orgInviteEmail";
-export { sendMfaEnabledEmail } from "./mfaEnabledEmail";
-export { sendMfaDisabledEmail } from "./mfaDisabledEmail";
-export { sendEmailChangeVerificationEmail } from "./emailChangeVerificationEmail";
-export { sendEmailChangeNotificationEmail } from "./emailChangeNotificationEmail";
-export { sendAdminInviteEmail } from "./adminInviteEmail";
+// Pure builders: each returns EmailOptions and performs no IO, so the copy is
+// unit-testable and sending is the email service's job.
+export { buildVerificationEmail } from "./verificationEmail";
+export { buildPasswordResetEmail } from "./passwordResetEmail";
+export { buildOrgInviteEmail } from "./orgInviteEmail";
+export { buildMfaEnabledEmail } from "./mfaEnabledEmail";
+export { buildMfaDisabledEmail } from "./mfaDisabledEmail";
+export { buildEmailChangeVerificationEmail } from "./emailChangeVerificationEmail";
+export { buildEmailChangeNotificationEmail } from "./emailChangeNotificationEmail";
+export { buildAdminInviteEmail } from "./adminInviteEmail";

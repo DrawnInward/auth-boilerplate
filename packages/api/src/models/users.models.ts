@@ -9,13 +9,27 @@ import {
 } from "../types";
 import { PaginationOptions } from "../types/PaginationOptions";
 import { excludePasswordHash } from "../utils";
+import { isUniqueViolation, violatedConstraint } from "../utils/pgErrors";
+import { httpError } from "../utils/httpError";
+import { buildPatch } from "../utils/sqlPatch";
+import { pagedQuery } from "../utils/pagedQuery";
+
+const USER_PATCH_FIELDS = [
+  "email",
+  "email_verified",
+  "is_active",
+  "deactivated_at",
+  "deactivated_by",
+  "deleted_at",
+  "can_create_orgs",
+] as const;
 
 export const createUser = async (
   newUser: CreateUserDto,
-  client: PoolClient | Pool = db
+  client: PoolClient | Pool = db,
 ): Promise<Omit<User, "password_hash">> => {
   if (!newUser.email || !newUser.password_hash) {
-    throw { status: 400, msg: "Email and password_hash are required" };
+    throw httpError(400, "Email and password_hash are required");
   }
 
   const queryString = `
@@ -38,9 +52,9 @@ export const createUser = async (
     const result = await client.query(queryString, values);
     return excludePasswordHash(result.rows[0]);
   } catch (err: any) {
-    if (err.code === "23505") {
+    if (isUniqueViolation(err)) {
       // Unique constraint violation
-      throw { status: 409, msg: "Email already exists" };
+      throw httpError(409, "Email already exists");
     }
     throw err;
   }
@@ -48,7 +62,7 @@ export const createUser = async (
 
 export const getUser = async (
   email: string,
-  options: { includeSoftDeleted?: boolean } = {}
+  options: { includeSoftDeleted?: boolean } = {},
 ): Promise<Omit<User, "password_hash"> | null> => {
   let queryString = `
     SELECT * FROM users
@@ -67,7 +81,7 @@ export const getUser = async (
 };
 
 export const getUserById = async (
-  userId: string
+  userId: string,
 ): Promise<Omit<User, "password_hash"> | null> => {
   const queryString = `
     SELECT * FROM users
@@ -83,49 +97,25 @@ export const getUserById = async (
 
 export const getUsers = async (
   filters: GetUsersOptions = {},
-  pagination: PaginationOptions = {}
+  pagination: PaginationOptions = {},
 ): Promise<Omit<User, "password_hash">[]> => {
-  let queryString = `
-    SELECT * FROM users
-    WHERE deleted_at IS NULL
-  `;
+  const { text, values } = pagedQuery({
+    select: "SELECT * FROM users",
+    where: ["deleted_at IS NULL"],
+    equals: {
+      is_active: filters.is_active,
+      email_verified: filters.email_verified,
+    },
+    orderBy: "created_at DESC",
+    pagination,
+  });
 
-  const values: any[] = [];
-  let paramIndex = 1;
-
-  // Add filters
-  if (filters.is_active !== undefined) {
-    queryString += ` AND is_active = $${paramIndex}`;
-    values.push(filters.is_active);
-    paramIndex++;
-  }
-
-  if (filters.email_verified !== undefined) {
-    queryString += ` AND email_verified = $${paramIndex}`;
-    values.push(filters.email_verified);
-    paramIndex++;
-  }
-
-  queryString += ` ORDER BY created_at DESC`;
-
-  // Add pagination
-  if (pagination.limit) {
-    queryString += ` LIMIT $${paramIndex}`;
-    values.push(pagination.limit);
-    paramIndex++;
-  }
-
-  if (pagination.offset) {
-    queryString += ` OFFSET $${paramIndex}`;
-    values.push(pagination.offset);
-  }
-
-  const result = await db.query(queryString, values);
+  const result = await db.query(text, values);
   return result.rows.map(excludePasswordHash);
 };
 
 export const getUserWithPassword = async (
-  email: string
+  email: string,
 ): Promise<User | null> => {
   const queryString = `
     SELECT * FROM users
@@ -140,7 +130,7 @@ export const getUserWithPassword = async (
 };
 
 export const getUserWithPasswordById = async (
-  userId: string
+  userId: string,
 ): Promise<User | null> => {
   const queryString = `
     SELECT * FROM users
@@ -157,61 +147,34 @@ export const getUserWithPasswordById = async (
 export const modifyUser = async (
   userId: string,
   detailsToUpdate: UpdateUserDto,
-  client: PoolClient | Pool = db
+  client: PoolClient | Pool = db,
 ): Promise<Omit<User, "password_hash">> => {
   // Prevent password_hash updates through this function
   if ("password_hash" in detailsToUpdate) {
-    throw {
-      status: 403,
-      msg: "Password updates not allowed. Use updatePassword function instead",
-    };
+    throw httpError(
+      403,
+      "Password updates not allowed. Use updatePassword function instead",
+    );
   }
-  const allowedFields = [
-    "email",
-    "email_verified",
-    "is_active",
-    "deactivated_at",
-    "deactivated_by",
-    "deleted_at",
-    "can_create_orgs",
-  ];
-  const updates: string[] = [];
-  const values: any[] = [];
-  let paramIndex = 1;
-
-  Object.entries(detailsToUpdate).forEach(([key, value]) => {
-    if (allowedFields.includes(key)) {
-      updates.push(`${key} = $${paramIndex}`);
-      values.push(value);
-      paramIndex++;
-    }
-  });
-
-  if (updates.length === 0) {
-    throw { status: 400, msg: "No valid fields to update" };
-  }
-
-  updates.push(`updated_at = NOW()`);
+  const patch = buildPatch(detailsToUpdate, USER_PATCH_FIELDS);
 
   const queryString = `
     UPDATE users
-    SET ${updates.join(", ")}
-    WHERE user_id = $${paramIndex} AND deleted_at IS NULL
+    SET ${[...patch.setClauses(1), "updated_at = NOW()"].join(", ")}
+    WHERE user_id = $${patch.values.length + 1} AND deleted_at IS NULL
     RETURNING *;
   `;
 
-  values.push(userId);
-
   try {
-    const result = await client.query(queryString, values);
+    const result = await client.query(queryString, [...patch.values, userId]);
     if (result.rows.length === 0) {
-      throw { status: 404, msg: "User not found" };
+      throw httpError(404, "User not found");
     }
     return excludePasswordHash(result.rows[0]);
   } catch (err: any) {
-    if (err.code === "23505") {
+    if (isUniqueViolation(err)) {
       // Unique constraint violation
-      throw { status: 409, msg: "Email already exists" };
+      throw httpError(409, "Email already exists");
     }
     throw err;
   }
@@ -220,7 +183,7 @@ export const modifyUser = async (
 export const updatePassword = async (
   userId: string,
   newPasswordHash: string,
-  client: PoolClient | Pool = db
+  client: PoolClient | Pool = db,
 ): Promise<boolean> => {
   const queryString = `
     UPDATE users
@@ -231,14 +194,14 @@ export const updatePassword = async (
 
   const result = await client.query(queryString, [newPasswordHash, userId]);
   if (result.rows.length === 0) {
-    throw { status: 404, msg: "User not found" };
+    throw httpError(404, "User not found");
   }
   return true;
 };
 
 export const deleteUser = async (
   userId: string,
-  client: PoolClient | Pool = db
+  client: PoolClient | Pool = db,
 ): Promise<Omit<User, "password_hash">> => {
   const checkQuery = `
     SELECT deleted_at FROM users WHERE user_id = $1;
@@ -247,11 +210,11 @@ export const deleteUser = async (
   const checkResult = await client.query(checkQuery, [userId]);
 
   if (checkResult.rows.length === 0) {
-    throw { status: 404, msg: "User not found" };
+    throw httpError(404, "User not found");
   }
 
   if (checkResult.rows[0].deleted_at !== null) {
-    throw { status: 409, msg: "User already deleted" };
+    throw httpError(409, "User already deleted");
   }
 
   // Perform soft delete
@@ -268,7 +231,7 @@ export const deleteUser = async (
 
 export const activateUser = async (
   userId: string,
-  client: PoolClient | Pool = db
+  client: PoolClient | Pool = db,
 ): Promise<Omit<User, "password_hash">> => {
   const queryString = `
     UPDATE users
@@ -282,7 +245,7 @@ export const activateUser = async (
 
   const result = await client.query(queryString, [userId]);
   if (result.rows.length === 0) {
-    throw { status: 404, msg: "User not found" };
+    throw httpError(404, "User not found");
   }
   return excludePasswordHash(result.rows[0]);
 };
@@ -290,7 +253,7 @@ export const activateUser = async (
 export const deactivateUser = async (
   userId: string,
   deactivatorId: string,
-  client: PoolClient | Pool = db
+  client: PoolClient | Pool = db,
 ): Promise<Omit<User, "password_hash">> => {
   const queryString = `
     UPDATE users
@@ -304,14 +267,14 @@ export const deactivateUser = async (
 
   const result = await client.query(queryString, [userId, deactivatorId]);
   if (result.rows.length === 0) {
-    throw { status: 404, msg: "User not found" };
+    throw httpError(404, "User not found");
   }
   return excludePasswordHash(result.rows[0]);
 };
 
 export const verifyUserEmail = async (
   userId: string,
-  client: PoolClient | Pool = db
+  client: PoolClient | Pool = db,
 ): Promise<Omit<User, "password_hash">> => {
   const queryString = `
     UPDATE users
@@ -322,7 +285,7 @@ export const verifyUserEmail = async (
 
   const result = await client.query(queryString, [userId]);
   if (result.rows.length === 0) {
-    throw { status: 404, msg: "User not found" };
+    throw httpError(404, "User not found");
   }
   return excludePasswordHash(result.rows[0]);
 };
@@ -355,7 +318,7 @@ export const getUserStats = async (): Promise<UserStats> => {
 export type AuthProvider = "local" | "google" | "both";
 
 export const getUserByGoogleId = async (
-  googleId: string
+  googleId: string,
 ): Promise<Omit<User, "password_hash"> | null> => {
   const queryString = `
     SELECT * FROM users
@@ -372,7 +335,7 @@ export const getUserByGoogleId = async (
 export const setGoogleId = async (
   userId: string,
   googleId: string,
-  client: PoolClient | Pool = db
+  client: PoolClient | Pool = db,
 ): Promise<Omit<User, "password_hash">> => {
   const queryString = `
     UPDATE users
@@ -384,12 +347,12 @@ export const setGoogleId = async (
   try {
     const result = await client.query(queryString, [googleId, userId]);
     if (result.rows.length === 0) {
-      throw { status: 404, msg: "User not found" };
+      throw httpError(404, "User not found");
     }
     return excludePasswordHash(result.rows[0]);
   } catch (err: any) {
-    if (err.code === "23505") {
-      throw { status: 409, msg: "Google account already linked to another user" };
+    if (isUniqueViolation(err)) {
+      throw httpError(409, "Google account already linked to another user");
     }
     throw err;
   }
@@ -398,7 +361,7 @@ export const setGoogleId = async (
 export const setAuthProvider = async (
   userId: string,
   provider: AuthProvider,
-  client: PoolClient | Pool = db
+  client: PoolClient | Pool = db,
 ): Promise<Omit<User, "password_hash">> => {
   const queryString = `
     UPDATE users
@@ -409,7 +372,7 @@ export const setAuthProvider = async (
 
   const result = await client.query(queryString, [provider, userId]);
   if (result.rows.length === 0) {
-    throw { status: 404, msg: "User not found" };
+    throw httpError(404, "User not found");
   }
   return excludePasswordHash(result.rows[0]);
 };
@@ -417,7 +380,7 @@ export const setAuthProvider = async (
 export const createGoogleUser = async (
   email: string,
   googleId: string,
-  client: PoolClient | Pool = db
+  client: PoolClient | Pool = db,
 ): Promise<Omit<User, "password_hash">> => {
   const queryString = `
     INSERT INTO users
@@ -427,14 +390,17 @@ export const createGoogleUser = async (
   `;
 
   try {
-    const result = await client.query(queryString, [email.toLowerCase(), googleId]);
+    const result = await client.query(queryString, [
+      email.toLowerCase(),
+      googleId,
+    ]);
     return excludePasswordHash(result.rows[0]);
   } catch (err: any) {
-    if (err.code === "23505") {
-      if (err.constraint?.includes("google_id")) {
-        throw { status: 409, msg: "Google account already linked to another user" };
+    if (isUniqueViolation(err)) {
+      if (violatedConstraint(err)?.includes("google_id")) {
+        throw httpError(409, "Google account already linked to another user");
       }
-      throw { status: 409, msg: "Email already exists" };
+      throw httpError(409, "Email already exists");
     }
     throw err;
   }
@@ -442,7 +408,7 @@ export const createGoogleUser = async (
 
 export const unlinkGoogleAccount = async (
   userId: string,
-  client: PoolClient | Pool = db
+  client: PoolClient | Pool = db,
 ): Promise<Omit<User, "password_hash">> => {
   const queryString = `
     UPDATE users
@@ -453,13 +419,13 @@ export const unlinkGoogleAccount = async (
 
   const result = await client.query(queryString, [userId]);
   if (result.rows.length === 0) {
-    throw { status: 404, msg: "User not found" };
+    throw httpError(404, "User not found");
   }
   return excludePasswordHash(result.rows[0]);
 };
 
 export const getUserWithMfaStatus = async (
-  email: string
+  email: string,
 ): Promise<(User & { mfa_enabled: boolean }) | null> => {
   const queryString = `
     SELECT * FROM users
@@ -476,7 +442,7 @@ export const getUserWithMfaStatus = async (
 export const updateUserOrgPermission = async (
   userId: string,
   canCreateOrgs: boolean | null,
-  client: PoolClient | Pool = db
+  client: PoolClient | Pool = db,
 ): Promise<Omit<User, "password_hash">> => {
   const queryString = `
     UPDATE users
@@ -487,7 +453,7 @@ export const updateUserOrgPermission = async (
 
   const result = await client.query(queryString, [canCreateOrgs, userId]);
   if (result.rows.length === 0) {
-    throw { status: 404, msg: "User not found" };
+    throw httpError(404, "User not found");
   }
   return excludePasswordHash(result.rows[0]);
 };

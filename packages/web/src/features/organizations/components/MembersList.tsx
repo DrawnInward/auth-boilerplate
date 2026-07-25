@@ -27,8 +27,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useOrganizationMembers, useUpdateMemberRole, useRemoveMember, type OrganizationMemberWithEmail } from "@/api/queries/organizations";
-import { useAuth } from "@/features/auth/context/AuthContext";
+import {
+  useOrganizationMembers,
+  useUpdateMemberRole,
+  useRemoveMember,
+  type OrganizationMemberWithEmail,
+} from "@/api/queries/organizations";
+import { useAuth } from "@/hooks";
 import { useApiError } from "@/hooks";
 import { LoadingSpinner } from "@/components/shared";
 
@@ -44,12 +49,16 @@ export function MembersList({ orgId, userRole }: MembersListProps) {
   const removeMember = useRemoveMember(orgId);
   const { handleError } = useApiError();
 
-  const [memberToRemove, setMemberToRemove] = useState<OrganizationMemberWithEmail | null>(null);
+  const [memberToRemove, setMemberToRemove] =
+    useState<OrganizationMemberWithEmail | null>(null);
 
   const canManageMembers = userRole === "owner" || userRole === "admin";
   const members = data?.data ?? [];
 
-  const handleRoleChange = async (userId: string, role: "admin" | "member" | "viewer") => {
+  const handleRoleChange = async (
+    userId: string,
+    role: "admin" | "member" | "viewer",
+  ) => {
     try {
       await updateRole.mutateAsync({ userId, data: { role } });
       toast.success("Role updated successfully");
@@ -70,7 +79,11 @@ export function MembersList({ orgId, userRole }: MembersListProps) {
   };
 
   if (isLoading) {
-    return <div className="flex justify-center py-8"><LoadingSpinner /></div>;
+    return (
+      <div className="flex justify-center py-8">
+        <LoadingSpinner />
+      </div>
+    );
   }
 
   return (
@@ -80,7 +93,9 @@ export function MembersList({ orgId, userRole }: MembersListProps) {
           <TableRow>
             <TableHead>Email</TableHead>
             <TableHead>Role</TableHead>
-            {canManageMembers && <TableHead className="w-[100px]">Actions</TableHead>}
+            {canManageMembers && (
+              <TableHead className="w-[100px]">Actions</TableHead>
+            )}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -89,14 +104,23 @@ export function MembersList({ orgId, userRole }: MembersListProps) {
               <TableCell>
                 {member.email}
                 {member.user_id === user?.user_id && (
-                  <Badge variant="secondary" className="ml-2">You</Badge>
+                  <Badge variant="secondary" className="ml-2">
+                    You
+                  </Badge>
                 )}
               </TableCell>
               <TableCell>
-                {canManageMembers && member.role !== "owner" && member.user_id !== user?.user_id ? (
+                {canManageMembers &&
+                member.role !== "owner" &&
+                member.user_id !== user?.user_id ? (
                   <Select
                     value={member.role}
-                    onValueChange={(value) => handleRoleChange(member.user_id, value as "admin" | "member" | "viewer")}
+                    onValueChange={(value) =>
+                      handleRoleChange(
+                        member.user_id,
+                        value as "admin" | "member" | "viewer",
+                      )
+                    }
                   >
                     <SelectTrigger className="w-[120px]">
                       <SelectValue />
@@ -108,22 +132,25 @@ export function MembersList({ orgId, userRole }: MembersListProps) {
                     </SelectContent>
                   </Select>
                 ) : (
-                  <Badge variant={member.role === "owner" ? "default" : "outline"}>
+                  <Badge
+                    variant={member.role === "owner" ? "default" : "outline"}
+                  >
                     {member.role}
                   </Badge>
                 )}
               </TableCell>
               {canManageMembers && (
                 <TableCell>
-                  {member.role !== "owner" && member.user_id !== user?.user_id && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setMemberToRemove(member)}
-                    >
-                      Remove
-                    </Button>
-                  )}
+                  {member.role !== "owner" &&
+                    member.user_id !== user?.user_id && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setMemberToRemove(member)}
+                      >
+                        Remove
+                      </Button>
+                    )}
                 </TableCell>
               )}
             </TableRow>
@@ -131,12 +158,16 @@ export function MembersList({ orgId, userRole }: MembersListProps) {
         </TableBody>
       </Table>
 
-      <AlertDialog open={!!memberToRemove} onOpenChange={() => setMemberToRemove(null)}>
+      <AlertDialog
+        open={!!memberToRemove}
+        onOpenChange={() => setMemberToRemove(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Remove member</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to remove {memberToRemove?.email} from this organization?
+              Are you sure you want to remove {memberToRemove?.email} from this
+              organization?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

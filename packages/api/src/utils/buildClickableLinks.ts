@@ -2,7 +2,9 @@ import { ClickableLink } from "../interfaces/email";
 import { escapeHtml } from "./escapeHtml";
 import { sanitizeUrl } from "./sanitizeUrl";
 
-export const buildClickableLinks = (clickableLinks: ClickableLink[]): string => {
+export const buildClickableLinks = (
+  clickableLinks: ClickableLink[],
+): string => {
   if (!clickableLinks || clickableLinks.length === 0) {
     return "";
   }

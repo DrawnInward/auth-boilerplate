@@ -1,9 +1,15 @@
 import { EmailOptions, EmailProvider } from "../../../interfaces/email";
+import { childLogger } from "../../logger";
+
+const log = childLogger("sendGridEmailProvider");
 
 export class SendGridEmailProvider implements EmailProvider {
   async send(options: EmailOptions): Promise<void> {
     try {
-      // Dynamic import to avoid requiring the package if not used
+      // @sendgrid/mail is deliberately not a declared dependency — only
+      // deployments that select this provider need it installed. A static import
+      // would break every other deployment at load time, so the require stays.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const sgMail = require("@sendgrid/mail");
       sgMail.setApiKey(process.env.SENDGRID_API_KEY!);
 
@@ -18,9 +24,9 @@ export class SendGridEmailProvider implements EmailProvider {
         html: options.html || options.text,
       });
 
-      console.log(`Email sent to ${options.to}`);
+      log.info("Email sent");
     } catch (error) {
-      console.error("Error sending email via SendGrid:", error);
+      log.error({ err: error }, "Error sending email via SendGrid");
       throw error;
     }
   }

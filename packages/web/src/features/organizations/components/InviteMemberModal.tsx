@@ -1,7 +1,10 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { inviteMemberSchema, type InviteMemberDto } from "@auth-boilerplate/shared";
+import {
+  inviteMemberSchema,
+  type InviteMemberDto,
+} from "@auth-boilerplate/shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -35,7 +38,11 @@ interface InviteMemberModalProps {
   orgId: string;
 }
 
-export function InviteMemberModal({ open, onOpenChange, orgId }: InviteMemberModalProps) {
+export function InviteMemberModal({
+  open,
+  onOpenChange,
+  orgId,
+}: InviteMemberModalProps) {
   const inviteMember = useInviteMember(orgId);
   const { handleError } = useApiError();
 
@@ -65,7 +72,10 @@ export function InviteMemberModal({ open, onOpenChange, orgId }: InviteMemberMod
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+          <form
+            onSubmit={form.handleSubmit(handleSubmit)}
+            className="space-y-4"
+          >
             <FormField
               control={form.control}
               name="email"
@@ -73,7 +83,11 @@ export function InviteMemberModal({ open, onOpenChange, orgId }: InviteMemberMod
                 <FormItem>
                   <FormLabel>Email</FormLabel>
                   <FormControl>
-                    <Input type="email" placeholder="user@example.com" {...field} />
+                    <Input
+                      type="email"
+                      placeholder="user@example.com"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -85,7 +99,10 @@ export function InviteMemberModal({ open, onOpenChange, orgId }: InviteMemberMod
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Role</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                  >
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Select a role" />
@@ -102,7 +119,11 @@ export function InviteMemberModal({ open, onOpenChange, orgId }: InviteMemberMod
               )}
             />
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+              >
                 Cancel
               </Button>
               <Button type="submit" disabled={inviteMember.isPending}>

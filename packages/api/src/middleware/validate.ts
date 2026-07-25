@@ -1,11 +1,14 @@
 import { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { ValidationErrorResponse } from "../types/ValidationErrorResponse";
+import { childLogger } from "../utils/logger";
 
-require("dotenv").config({quiet: true});
+const log = childLogger("validate");
+
+import "../utils/loadEnv";
 
 const formatZodError = (
-  error: z.ZodError
+  error: z.ZodError,
 ): ValidationErrorResponse["errors"] => {
   return error.issues.map((issue) => ({
     field: issue.path.length > 0 ? issue.path.join(".") : "root",
@@ -16,7 +19,7 @@ const formatZodError = (
 
 const getValidationErrorResponse = (
   message: string,
-  error: z.ZodError
+  error: z.ZodError,
 ): ValidationErrorResponse => {
   if (process.env.NODE_ENV === "production") {
     return {
@@ -48,18 +51,29 @@ export const validateBody =
           .json(
             getValidationErrorResponse(
               "Request body validation failed",
-              result.error
-            )
+              result.error,
+            ),
           );
       }
       req.body = result.data;
       next();
     } catch (error) {
-      console.error("Unexpected error in body validation:", error);
+      log.error({ err: error }, "Unexpected error in body validation");
       next(error);
     }
   };
 
+// Unlike req.query, req.params is writable, so the parsed output goes back onto
+// the request — where controllers already read req.body from — rather than into
+// res.locals. Read it with the shape declared on the request type
+// (`RequestWithUser<OrganizationParams>`), never an `as string` cast.
+//
+// One constraint, because it fails silently: Express reassigns req.params for
+// each *route layer* it matches, so this must sit in the same `router.<verb>()`
+// call as the handler it validates for. Behind a `router.use()` or a mount, the
+// rejection still happens but a transformed value is discarded and the handler
+// sees the raw one. Keep param schemas pure validators (no transforms, no
+// coercion, no defaults) and that hazard cannot arise at all.
 export const validateParams =
   (schema: z.ZodTypeAny) =>
   async (req: Request, res: Response, next: NextFunction) => {
@@ -71,14 +85,14 @@ export const validateParams =
           .json(
             getValidationErrorResponse(
               "URL parameters validation failed",
-              result.error
-            )
+              result.error,
+            ),
           );
       }
       req.params = result.data as { [key: string]: string };
       next();
     } catch (error) {
-      console.error("Unexpected error in params validation:", error);
+      log.error({ err: error }, "Unexpected error in params validation");
       next(error);
     }
   };
@@ -94,15 +108,23 @@ export const validateQuery =
           .json(
             getValidationErrorResponse(
               "Query parameters validation failed",
-              result.error
-            )
+              result.error,
+            ),
           );
       }
-      // Note: req.query is read-only in Express, so we just validate without reassigning
-      // Controllers should handle the query params directly from req.query
+      // req.query is read-only in Express 5, so the parsed (coerced, defaulted)
+      // output is stashed on res.locals instead. Controllers read it via
+      // getValidatedQuery — never by re-parsing the schema themselves, which
+      // would duplicate the contract and silently drift from it.
+      res.locals.query = result.data;
       next();
     } catch (error) {
-      console.error("Unexpected error in query validation:", error);
+      log.error({ err: error }, "Unexpected error in query validation");
       next(error);
     }
   };
+
+// The typed accessor for whatever validateQuery parsed. Typing is the caller's
+// assertion: pass the schema's inferred type, e.g.
+// getValidatedQuery<OrganizationsQuery>(res).
+export const getValidatedQuery = <T>(res: Response): T => res.locals.query as T;

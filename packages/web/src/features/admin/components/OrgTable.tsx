@@ -33,7 +33,9 @@ export function OrgTable({ organizations }: OrgTableProps) {
             <TableCell>/{org.slug}</TableCell>
             <TableCell>{org.member_count}</TableCell>
             <TableCell>
-              {org.created_at ? new Date(org.created_at).toLocaleDateString() : "-"}
+              {org.created_at
+                ? new Date(org.created_at).toLocaleDateString()
+                : "-"}
             </TableCell>
             <TableCell>
               <Button variant="ghost" size="sm" asChild>

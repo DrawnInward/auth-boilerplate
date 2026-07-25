@@ -77,6 +77,7 @@ Start registration process. Sends verification email.
 ```
 
 **Errors:**
+
 - `400` - Invalid email format
 - `403` - Registration disabled (when `ACCOUNT_CREATION_MODE` is not `open`)
 - `409` - Email already registered
@@ -103,6 +104,7 @@ Verify email token from registration email.
 ```
 
 **Errors:**
+
 - `400` - Invalid or expired token
 
 ---
@@ -465,7 +467,18 @@ Complete MFA setup by verifying TOTP code.
 {
   "success": true,
   "data": {
-    "backup_codes": ["code1", "code2", "code3", "code4", "code5", "code6", "code7", "code8", "code9", "code10"]
+    "backup_codes": [
+      "code1",
+      "code2",
+      "code3",
+      "code4",
+      "code5",
+      "code6",
+      "code7",
+      "code8",
+      "code9",
+      "code10"
+    ]
   },
   "msg": "MFA enabled"
 }
@@ -684,6 +697,7 @@ Frontend should redirect user to the returned URL.
 Handle Google OAuth callback. Called by Google after user authorizes.
 
 **Query Parameters:**
+
 - `code` - Authorization code from Google
 - `state` - State parameter for CSRF protection
 
@@ -830,6 +844,7 @@ Create a new organization.
 ```
 
 **Errors:**
+
 - `403` - User cannot create organizations (based on `ORG_CREATION_MODE` or `can_create_orgs`)
 
 ---
@@ -1466,6 +1481,7 @@ List all users.
 **Authentication:** Admin required
 
 **Query Parameters:**
+
 - `page` (optional) - Page number
 - `limit` (optional) - Items per page
 - `search` (optional) - Search by email
@@ -1670,6 +1686,7 @@ List all organizations.
 **Authentication:** Admin required
 
 **Query Parameters:**
+
 - `page` (optional)
 - `limit` (optional)
 - `search` (optional) - Search by name or slug
