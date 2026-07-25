@@ -2,12 +2,12 @@ import { createCookieOptions } from "./createCookieOptions";
 import { getRefreshTokenDays } from "./config";
 import { Response } from "express";
 
-require("dotenv").config({ quiet: true });
+import "./loadEnv";
 
 export const setAccessTokenCookie = (
   res: Response,
   token: string,
-  maxAge: number = 15 * 60 * 1000 // 15 minutes default
+  maxAge: number = 15 * 60 * 1000, // 15 minutes default
 ): void => {
   const cookieOptions = createCookieOptions(maxAge, {
     allowedOrigin: process.env.ALLOWED_ORIGIN,
@@ -19,7 +19,7 @@ export const setAccessTokenCookie = (
 export const setRefreshTokenCookie = (
   res: Response,
   token: string,
-  maxAge: number = getRefreshTokenDays() * 24 * 60 * 60 * 1000
+  maxAge: number = getRefreshTokenDays() * 24 * 60 * 60 * 1000,
 ): void => {
   const cookieOptions = createCookieOptions(maxAge, {
     allowedOrigin: process.env.ALLOWED_ORIGIN,
@@ -35,7 +35,7 @@ export const setAuthCookies = (
   options?: {
     accessTokenMaxAge?: number;
     refreshTokenMaxAge?: number;
-  }
+  },
 ): void => {
   setAccessTokenCookie(res, accessToken, options?.accessTokenMaxAge);
   setRefreshTokenCookie(res, refreshToken, options?.refreshTokenMaxAge);

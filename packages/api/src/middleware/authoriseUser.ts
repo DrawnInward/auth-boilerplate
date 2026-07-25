@@ -5,7 +5,7 @@ import { parseCookies, setAuthCookies } from "../utils";
 import { createAccessToken } from "../models/refresh.models";
 import { httpError } from "../utils/httpError";
 
-require("dotenv").config({ quiet: true });
+import "../utils/loadEnv";
 
 export const authoriseUser =
   (allowedRoles: string[]) =>
@@ -73,7 +73,7 @@ export const authoriseUser =
         return res.status(403).json({ msg: "Insufficient permissions" });
       }
       next();
-    } catch (error) {
+    } catch {
       res.status(403).send({ msg: "Invalid Token" });
     }
   };

@@ -3,16 +3,28 @@
  * Centralized access to common environment variables.
  */
 
+import { readPositiveNumberEnv } from "./envNumber";
+
 export const getAppName = (): string => process.env.APP_NAME || "App";
 
 export const getFrontendUrl = (): string =>
-  process.env.FRONTEND_URL || process.env.ALLOWED_ORIGIN || "http://localhost:5173";
+  process.env.FRONTEND_URL ||
+  process.env.ALLOWED_ORIGIN ||
+  "http://localhost:5173";
 
 export type AccountCreationMode = "open" | "invite_only" | "admin_only";
 export type OrgCreationMode = "open" | "self_registered_only" | "admin_only";
 
-const validAccountModes: AccountCreationMode[] = ["open", "invite_only", "admin_only"];
-const validOrgModes: OrgCreationMode[] = ["open", "self_registered_only", "admin_only"];
+const validAccountModes: AccountCreationMode[] = [
+  "open",
+  "invite_only",
+  "admin_only",
+];
+const validOrgModes: OrgCreationMode[] = [
+  "open",
+  "self_registered_only",
+  "admin_only",
+];
 
 export const getAccountCreationMode = (): AccountCreationMode => {
   const mode = process.env.ACCOUNT_CREATION_MODE as AccountCreationMode;
@@ -30,7 +42,11 @@ export const getOrgCreationMode = (): OrgCreationMode => {
   return "open";
 };
 
-export const getRefreshTokenDays = (): number => {
-  const days = parseInt(process.env.REFRESH_TOKEN_DAYS || "7");
-  return isNaN(days) ? 7 : days;
-};
+const REFRESH_TOKEN_DAYS_DEFAULT = 7;
+
+// Shares envNumber's notion of "well-formed positive integer" with the boot
+// check in validateEnv, so a value this silently falls back on is a value the
+// process would have refused to start with.
+export const getRefreshTokenDays = (): number =>
+  readPositiveNumberEnv("REFRESH_TOKEN_DAYS", { integer: true }) ??
+  REFRESH_TOKEN_DAYS_DEFAULT;
