@@ -1,13 +1,18 @@
-import { sendEmail } from "../sendEmail";
+import { EmailOptions } from "../../../interfaces/email";
 import { textToHtml } from "../textToHtml";
-import { getAppName } from "../../config";
 
-export async function sendEmailChangeNotificationEmail(
-  oldEmail: string,
-  newEmail: string,
-): Promise<void> {
-  const appName = getAppName();
+export interface EmailChangeNotificationEmailParams {
+  /** The current address, warned that a change was requested. */
+  to: string;
+  newEmail: string;
+  appName: string;
+}
 
+export function buildEmailChangeNotificationEmail({
+  to,
+  newEmail,
+  appName,
+}: EmailChangeNotificationEmailParams): EmailOptions {
   const text = `Email Change Request
 
 Someone has requested to change your ${appName} account email address to ${newEmail}.
@@ -16,20 +21,10 @@ If this was you, you can ignore this message. The change will only take effect a
 
 If you did not request this change, please secure your account immediately by changing your password.`;
 
-  const htmlText = `Email Change Request
-
-Someone has requested to change your ${appName} account email address to ${newEmail}.
-
-If this was you, you can ignore this message. The change will only take effect after verification from the new email address.
-
-If you did not request this change, please secure your account immediately by changing your password.`;
-
-  const html = textToHtml(htmlText);
-
-  await sendEmail({
-    to: oldEmail,
+  return {
+    to,
     subject: `Email change requested - ${appName}`,
     text,
-    html,
-  });
+    html: textToHtml(text, { appName }),
+  };
 }

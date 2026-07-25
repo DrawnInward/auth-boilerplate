@@ -1,23 +1,37 @@
-import { sendEmail } from "../sendEmail";
+import { EmailOptions } from "../../../interfaces/email";
 import { textToHtml } from "../textToHtml";
-import { getAppName, getFrontendUrl } from "../../config";
 
-export async function sendOrgInviteEmail(
-  email: string,
-  token: string,
-  organizationName: string,
-  role: string,
-  inviterEmail?: string
-): Promise<void> {
-  const acceptUrl = `${getFrontendUrl()}/invitations/${token}`;
-  const appName = getAppName();
+export interface OrgInviteEmailParams {
+  to: string;
+  token: string;
+  organizationName: string;
+  role: string;
+  inviterEmail?: string;
+  appName: string;
+  frontendUrl: string;
+}
 
-  const inviterText = inviterEmail ? `${inviterEmail} has` : "You have been";
+export function buildOrgInviteEmail({
+  to,
+  token,
+  organizationName,
+  role,
+  inviterEmail,
+  appName,
+  frontendUrl,
+}: OrgInviteEmailParams): EmailOptions {
+  const acceptUrl = `${frontendUrl}/invitations/${token}`;
+
+  // The whole clause, not just its subject: the two branches need different
+  // verb forms ("X has invited you" vs "You have been invited").
+  const invitedClause = inviterEmail
+    ? `${inviterEmail} has invited you`
+    : "You have been invited";
 
   // Plain text includes URL for non-HTML email clients
   const text = `You're invited to join ${organizationName}
 
-${inviterText} invited you to join "${organizationName}" as a ${role} on ${appName}.
+${invitedClause} to join "${organizationName}" as a ${role} on ${appName}.
 
 Click the link below to accept the invitation:
 
@@ -30,7 +44,7 @@ If you don't want to join this organization, you can safely ignore this email.`;
   // HTML version - no URL text, just the button
   const htmlText = `You're invited to join ${organizationName}
 
-${inviterText} invited you to join "${organizationName}" as a ${role} on ${appName}.
+${invitedClause} to join "${organizationName}" as a ${role} on ${appName}.
 
 Click the button below to accept the invitation.
 
@@ -38,14 +52,13 @@ This invitation will expire in 7 days.
 
 If you don't want to join this organization, you can safely ignore this email.`;
 
-  const html = textToHtml(htmlText, {
-    links: [{ url: acceptUrl, text: "Accept Invitation" }],
-  });
-
-  await sendEmail({
-    to: email,
+  return {
+    to,
     subject: `You're invited to join ${organizationName} - ${appName}`,
     text,
-    html,
-  });
+    html: textToHtml(htmlText, {
+      appName,
+      links: [{ url: acceptUrl, text: "Accept Invitation" }],
+    }),
+  };
 }

@@ -5,10 +5,10 @@ import { childLogger } from "../utils/logger";
 
 const log = childLogger("validate");
 
-require("dotenv").config({quiet: true});
+import "../utils/loadEnv";
 
 const formatZodError = (
-  error: z.ZodError
+  error: z.ZodError,
 ): ValidationErrorResponse["errors"] => {
   return error.issues.map((issue) => ({
     field: issue.path.length > 0 ? issue.path.join(".") : "root",
@@ -19,7 +19,7 @@ const formatZodError = (
 
 const getValidationErrorResponse = (
   message: string,
-  error: z.ZodError
+  error: z.ZodError,
 ): ValidationErrorResponse => {
   if (process.env.NODE_ENV === "production") {
     return {
@@ -51,8 +51,8 @@ export const validateBody =
           .json(
             getValidationErrorResponse(
               "Request body validation failed",
-              result.error
-            )
+              result.error,
+            ),
           );
       }
       req.body = result.data;
@@ -63,6 +63,17 @@ export const validateBody =
     }
   };
 
+// Unlike req.query, req.params is writable, so the parsed output goes back onto
+// the request — where controllers already read req.body from — rather than into
+// res.locals. Read it with the shape declared on the request type
+// (`RequestWithUser<OrganizationParams>`), never an `as string` cast.
+//
+// One constraint, because it fails silently: Express reassigns req.params for
+// each *route layer* it matches, so this must sit in the same `router.<verb>()`
+// call as the handler it validates for. Behind a `router.use()` or a mount, the
+// rejection still happens but a transformed value is discarded and the handler
+// sees the raw one. Keep param schemas pure validators (no transforms, no
+// coercion, no defaults) and that hazard cannot arise at all.
 export const validateParams =
   (schema: z.ZodTypeAny) =>
   async (req: Request, res: Response, next: NextFunction) => {
@@ -74,8 +85,8 @@ export const validateParams =
           .json(
             getValidationErrorResponse(
               "URL parameters validation failed",
-              result.error
-            )
+              result.error,
+            ),
           );
       }
       req.params = result.data as { [key: string]: string };
@@ -97,8 +108,8 @@ export const validateQuery =
           .json(
             getValidationErrorResponse(
               "Query parameters validation failed",
-              result.error
-            )
+              result.error,
+            ),
           );
       }
       // req.query is read-only in Express 5, so the parsed (coerced, defaulted)
@@ -116,5 +127,4 @@ export const validateQuery =
 // The typed accessor for whatever validateQuery parsed. Typing is the caller's
 // assertion: pass the schema's inferred type, e.g.
 // getValidatedQuery<OrganizationsQuery>(res).
-export const getValidatedQuery = <T>(res: Response): T =>
-  res.locals.query as T;
+export const getValidatedQuery = <T>(res: Response): T => res.locals.query as T;

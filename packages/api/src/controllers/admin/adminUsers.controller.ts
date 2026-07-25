@@ -14,11 +14,9 @@ import {
   invalidatePendingInvitations,
 } from "../../models/invitations.models";
 import { sendSuccess, sendCreated } from "../../utils/responseUtils";
-import {
-  sendAdminInviteEmail,
-  sendPasswordResetEmail,
-  sendMfaDisabledEmail,
-} from "../../utils/email";
+import { getValidatedQuery } from "../../middleware/validate";
+import type { UserParams, UsersQuery } from "@auth-boilerplate/shared";
+import { services } from "../../services";
 import { hashPassword } from "../../utils";
 import { httpError } from "../../utils/httpError";
 import { withTransaction } from "../../utils/withTransaction";
@@ -44,7 +42,7 @@ export const createUserHandler = async (
       type: "admin_invite",
     });
 
-    await sendAdminInviteEmail(email, token);
+    await services.email.sendAdminInvite(email, token);
 
     return sendCreated(
       res,
@@ -63,16 +61,10 @@ export const getAllUsers = async (
   next: NextFunction,
 ) => {
   try {
-    const { is_active, email_verified, limit, offset } = req.query;
-
-    const filters: any = {};
-    if (is_active !== undefined) filters.is_active = is_active === "true";
-    if (email_verified !== undefined)
-      filters.email_verified = email_verified === "true";
-
-    const pagination: any = {};
-    if (limit) pagination.limit = parseInt(limit as string);
-    if (offset) pagination.offset = parseInt(offset as string);
+    const { is_active, email_verified, limit, offset } =
+      getValidatedQuery<UsersQuery>(res);
+    const filters = { is_active, email_verified };
+    const pagination = { limit, offset };
 
     const users = await getUsers(filters, pagination);
 
@@ -84,14 +76,14 @@ export const getAllUsers = async (
 
 // GET /api/admin/users/:userId
 export const getUserByIdHandler = async (
-  req: Request,
+  req: Request<UserParams>,
   res: Response,
   next: NextFunction,
 ) => {
   try {
     const { userId } = req.params;
 
-    const user = await getUserById(userId as string);
+    const user = await getUserById(userId);
 
     if (!user) {
       throw httpError(404, "User not found");
@@ -105,7 +97,7 @@ export const getUserByIdHandler = async (
 
 // PUT /api/admin/users/:userId
 export const updateUser = async (
-  req: Request,
+  req: Request<UserParams>,
   res: Response,
   next: NextFunction,
 ) => {
@@ -119,7 +111,7 @@ export const updateUser = async (
       delete updates.password;
     }
 
-    const updatedUser = await modifyUser(userId as string, updates);
+    const updatedUser = await modifyUser(userId, updates);
 
     return sendSuccess(res, updatedUser, "User updated successfully");
   } catch (error) {
@@ -128,14 +120,14 @@ export const updateUser = async (
 };
 
 export const sendPasswordReset = async (
-  req: Request,
+  req: Request<UserParams>,
   res: Response,
   next: NextFunction,
 ) => {
   try {
     const { userId } = req.params;
 
-    const user = await getUserById(userId as string);
+    const user = await getUserById(userId);
     if (!user) {
       throw httpError(404, "User not found");
     }
@@ -147,7 +139,7 @@ export const sendPasswordReset = async (
       type: "password_reset",
     });
 
-    await sendPasswordResetEmail(user.email!, token);
+    await services.email.sendPasswordReset(user.email!, token);
 
     return sendSuccess(res, { email: user.email }, "Password reset email sent");
   } catch (error) {
@@ -157,14 +149,14 @@ export const sendPasswordReset = async (
 
 // DELETE /api/admin/users/:userId
 export const deleteUserHandler = async (
-  req: Request,
+  req: Request<UserParams>,
   res: Response,
   next: NextFunction,
 ) => {
   try {
     const { userId } = req.params;
 
-    const deletedUser = await deleteUser(userId as string);
+    const deletedUser = await deleteUser(userId);
 
     return sendSuccess(res, deletedUser, "User deleted successfully");
   } catch (error) {
@@ -174,7 +166,7 @@ export const deleteUserHandler = async (
 
 // PATCH /api/admin/users/:userId/org-permission
 export const updateOrgPermission = async (
-  req: Request,
+  req: Request<UserParams>,
   res: Response,
   next: NextFunction,
 ) => {
@@ -190,10 +182,7 @@ export const updateOrgPermission = async (
       throw httpError(400, "can_create_orgs must be true, false, or null");
     }
 
-    const updatedUser = await updateUserOrgPermission(
-      userId as string,
-      can_create_orgs,
-    );
+    const updatedUser = await updateUserOrgPermission(userId, can_create_orgs);
 
     return sendSuccess(
       res,
@@ -206,14 +195,14 @@ export const updateOrgPermission = async (
 };
 
 export const disableUserMfa = async (
-  req: Request,
+  req: Request<UserParams>,
   res: Response,
   next: NextFunction,
 ) => {
   try {
     const { userId } = req.params;
 
-    const user = await getUserById(userId as string);
+    const user = await getUserById(userId);
     if (!user) {
       throw httpError(404, "User not found");
     }
@@ -223,11 +212,11 @@ export const disableUserMfa = async (
     }
 
     await withTransaction(db, async (client) => {
-      await disableMfa(userId as string, "user", client);
-      await deleteAllBackupCodes(userId as string, "user", client);
+      await disableMfa(userId, "user", client);
+      await deleteAllBackupCodes(userId, "user", client);
     });
 
-    await sendMfaDisabledEmail(user.email!);
+    await services.email.sendMfaDisabled(user.email!);
 
     return sendSuccess(res, null, "MFA disabled for user");
   } catch (error) {

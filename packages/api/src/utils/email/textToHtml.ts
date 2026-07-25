@@ -2,21 +2,25 @@ import { ClickableLink } from "../../interfaces/email";
 import { escapeHtml } from "../escapeHtml";
 import { sanitizeUrl } from "../sanitizeUrl";
 import { buildClickableLinks } from "../buildClickableLinks";
-import { getAppName } from "../config";
 
 export interface TextToHtmlOptions {
+  /** Branding for the header and footer. Passed in so this stays pure. */
+  appName: string;
   links?: ClickableLink[];
   unsubscribeUrl?: string;
 }
 
-export function textToHtml(text: string, options: TextToHtmlOptions = {}): string {
+export function textToHtml(text: string, options: TextToHtmlOptions): string {
   const { links, unsubscribeUrl } = options;
-  const appName = escapeHtml(getAppName());
+  const appName = escapeHtml(options.appName);
   const escapedText = escapeHtml(text);
 
   const paragraphs = escapedText
     .split("\n\n")
-    .map((p) => `<p style="margin: 0 0 16px 0; line-height: 1.6;">${p.replace(/\n/g, "<br>")}</p>`)
+    .map(
+      (p) =>
+        `<p style="margin: 0 0 16px 0; line-height: 1.6;">${p.replace(/\n/g, "<br>")}</p>`,
+    )
     .join("");
 
   const linksHtml = links ? buildClickableLinks(links) : "";

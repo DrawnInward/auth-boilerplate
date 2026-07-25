@@ -1,7 +1,11 @@
 import express from "express";
 
-import { validateParams, validateBody } from "../../middleware/validate";
-import { userParamsSchema } from "@auth-boilerplate/shared";
+import {
+  validateParams,
+  validateBody,
+  validateQuery,
+} from "../../middleware/validate";
+import { userParamsSchema, usersQuerySchema } from "@auth-boilerplate/shared";
 import { adminInviteUserSchema, updateUserSchema } from "../../types";
 import {
   createUserHandler,
@@ -21,23 +25,28 @@ router.post(
   "/",
   authoriseUser(["admin"]),
   validateBody(adminInviteUserSchema),
-  createUserHandler
+  createUserHandler,
 );
 
-router.get("/", authoriseUser(["admin"]), getAllUsers);
+router.get(
+  "/",
+  authoriseUser(["admin"]),
+  validateQuery(usersQuerySchema),
+  getAllUsers,
+);
 
 router.post(
   "/reset-password/:userId",
   authoriseUser(["admin"]),
   validateParams(userParamsSchema),
-  sendPasswordReset
+  sendPasswordReset,
 );
 
 router.get(
   "/:userId",
   authoriseUser(["admin"]),
   validateParams(userParamsSchema),
-  getUserByIdHandler
+  getUserByIdHandler,
 );
 
 router.put(
@@ -45,28 +54,28 @@ router.put(
   authoriseUser(["admin"]),
   validateParams(userParamsSchema),
   validateBody(updateUserSchema),
-  updateUser
+  updateUser,
 );
 
 router.delete(
   "/:userId",
   authoriseUser(["admin"]),
   validateParams(userParamsSchema),
-  deleteUserHandler
+  deleteUserHandler,
 );
 
 router.patch(
   "/:userId/org-permission",
   authoriseUser(["admin"]),
   validateParams(userParamsSchema),
-  updateOrgPermission
+  updateOrgPermission,
 );
 
 router.post(
   "/:userId/disable-mfa",
   authoriseUser(["admin"]),
   validateParams(userParamsSchema),
-  disableUserMfa
+  disableUserMfa,
 );
 
 export default router;

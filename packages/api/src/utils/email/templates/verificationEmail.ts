@@ -1,13 +1,20 @@
-import { sendEmail } from "../sendEmail";
+import { EmailOptions } from "../../../interfaces/email";
 import { textToHtml } from "../textToHtml";
-import { getAppName, getFrontendUrl } from "../../config";
 
-export async function sendVerificationEmail(
-  email: string,
-  token: string,
-): Promise<void> {
-  const verifyUrl = `${getFrontendUrl()}/verify-email/${token}`;
-  const appName = getAppName();
+export interface VerificationEmailParams {
+  to: string;
+  token: string;
+  appName: string;
+  frontendUrl: string;
+}
+
+export function buildVerificationEmail({
+  to,
+  token,
+  appName,
+  frontendUrl,
+}: VerificationEmailParams): EmailOptions {
+  const verifyUrl = `${frontendUrl}/verify-email/${token}`;
 
   // Plain text includes URL for non-HTML email clients
   const text = `Welcome to ${appName}!
@@ -29,14 +36,13 @@ This link will expire in 24 hours.
 
 If you didn't create an account with ${appName}, you can safely ignore this email.`;
 
-  const html = textToHtml(htmlText, {
-    links: [{ url: verifyUrl, text: "Verify Email" }],
-  });
-
-  await sendEmail({
-    to: email,
+  return {
+    to,
     subject: `Verify your email - ${appName}`,
     text,
-    html,
-  });
+    html: textToHtml(htmlText, {
+      appName,
+      links: [{ url: verifyUrl, text: "Verify Email" }],
+    }),
+  };
 }

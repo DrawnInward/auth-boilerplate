@@ -1,13 +1,21 @@
-import { sendEmail } from "../sendEmail";
+import { EmailOptions } from "../../../interfaces/email";
 import { textToHtml } from "../textToHtml";
-import { getAppName, getFrontendUrl } from "../../config";
 
-export async function sendEmailChangeVerificationEmail(
-  newEmail: string,
-  token: string,
-): Promise<void> {
-  const verifyUrl = `${getFrontendUrl()}/confirm-email-change/${token}`;
-  const appName = getAppName();
+export interface EmailChangeVerificationEmailParams {
+  /** The proposed new address — this email goes there, not to the old one. */
+  to: string;
+  token: string;
+  appName: string;
+  frontendUrl: string;
+}
+
+export function buildEmailChangeVerificationEmail({
+  to,
+  token,
+  appName,
+  frontendUrl,
+}: EmailChangeVerificationEmailParams): EmailOptions {
+  const verifyUrl = `${frontendUrl}/confirm-email-change/${token}`;
 
   const text = `Email Change Request
 
@@ -31,14 +39,13 @@ This link will expire in 24 hours.
 
 If you didn't request this change, you can safely ignore this email.`;
 
-  const html = textToHtml(htmlText, {
-    links: [{ url: verifyUrl, text: "Confirm Email Change" }],
-  });
-
-  await sendEmail({
-    to: newEmail,
+  return {
+    to,
     subject: `Confirm your new email - ${appName}`,
     text,
-    html,
-  });
+    html: textToHtml(htmlText, {
+      appName,
+      links: [{ url: verifyUrl, text: "Confirm Email Change" }],
+    }),
+  };
 }

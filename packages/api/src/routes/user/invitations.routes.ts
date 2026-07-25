@@ -11,7 +11,12 @@ import {
 const router = express.Router();
 
 // GET /api/invitations/:token - Get invitation details (public, rate limited)
-router.get("/:token", authLimiter, validateParams(tokenParamsSchema), getInvitation);
+router.get(
+  "/:token",
+  authLimiter,
+  validateParams(tokenParamsSchema),
+  getInvitation,
+);
 
 // POST /api/invitations/:token/accept - Accept invitation (public, rate limited)
 router.post(
@@ -19,7 +24,7 @@ router.post(
   authLimiter,
   validateParams(tokenParamsSchema),
   validateBody(acceptInviteSchema),
-  acceptInvitation
+  acceptInvitation,
 );
 
 export default router;

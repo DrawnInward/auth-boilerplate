@@ -25,20 +25,27 @@ import {
 } from "../../models/users.models";
 import { addRefresh } from "../../models/refresh.models";
 import { sendSuccess, sendCreated } from "../../utils/responseUtils";
-import { sendOrgInviteEmail } from "../../utils/email";
+import { getValidatedQuery } from "../../middleware/validate";
+import type {
+  OrganizationInvitationParams,
+  OrganizationParams,
+  PaginationQuery,
+  TokenParams,
+} from "@auth-boilerplate/shared";
+import { services } from "../../services";
 import { setAuthCookies, hashPassword } from "../../utils";
 import { httpError } from "../../utils/httpError";
 import { withTransaction } from "../../utils/withTransaction";
 
-require("dotenv").config({ quiet: true });
+import "../../utils/loadEnv";
 
 export const inviteMember = async (
-  req: RequestWithUser,
+  req: RequestWithUser<OrganizationParams>,
   res: Response,
   next: NextFunction,
 ) => {
   try {
-    const organizationId = req.params.organizationId as string;
+    const organizationId = req.params.organizationId;
     const { email, role } = req.body;
     const invitedBy = req.user!.role_id;
 
@@ -70,13 +77,13 @@ export const inviteMember = async (
 
     const inviter = await getUserById(req.user!.role_id);
 
-    await sendOrgInviteEmail(
-      email,
+    await services.email.sendOrgInvite({
+      to: email,
       token,
-      organization.name,
+      organizationName: organization.name,
       role,
-      inviter?.email,
-    );
+      inviterEmail: inviter?.email,
+    });
 
     return sendCreated(
       res,
@@ -94,17 +101,14 @@ export const inviteMember = async (
 };
 
 export const listInvitations = async (
-  req: RequestWithUser,
+  req: RequestWithUser<OrganizationParams>,
   res: Response,
   next: NextFunction,
 ) => {
   try {
-    const organizationId = req.params.organizationId as string;
-    const { limit, offset } = req.query;
-
-    const pagination: any = {};
-    if (limit) pagination.limit = parseInt(limit as string);
-    if (offset) pagination.offset = parseInt(offset as string);
+    const organizationId = req.params.organizationId;
+    const { limit, offset } = getValidatedQuery<PaginationQuery>(res);
+    const pagination = { limit, offset };
 
     const invitations = await listInvitationsByOrganization(
       organizationId,
@@ -133,13 +137,13 @@ export const listInvitations = async (
 };
 
 export const cancelInvitation = async (
-  req: RequestWithUser,
+  req: RequestWithUser<OrganizationInvitationParams>,
   res: Response,
   next: NextFunction,
 ) => {
   try {
-    const organizationId = req.params.organizationId as string;
-    const invitationId = req.params.invitationId as string;
+    const organizationId = req.params.organizationId;
+    const invitationId = req.params.invitationId;
 
     const invitation = await getInvitationById(invitationId);
     if (!invitation) {
@@ -163,12 +167,12 @@ export const cancelInvitation = async (
 };
 
 export const getInvitation = async (
-  req: Request,
+  req: Request<TokenParams>,
   res: Response,
   next: NextFunction,
 ) => {
   try {
-    const token = req.params.token as string;
+    const token = req.params.token;
 
     const invitation = await validateInvitationToken(token, "org_invite");
 
@@ -198,12 +202,12 @@ export const getInvitation = async (
 };
 
 export const acceptInvitation = async (
-  req: Request,
+  req: Request<TokenParams>,
   res: Response,
   next: NextFunction,
 ) => {
   try {
-    const token = req.params.token as string;
+    const token = req.params.token;
     const { password } = req.body;
 
     const { invitation, userId, accessToken, refreshToken } =

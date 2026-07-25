@@ -14,6 +14,12 @@ import {
   transferOwnership,
 } from "../../models/organizationMembers.models";
 import { sendSuccess, sendCreated } from "../../utils/responseUtils";
+import { getValidatedQuery } from "../../middleware/validate";
+import type {
+  PaginationQuery,
+  OrganizationParams,
+  OrganizationMemberParams,
+} from "@auth-boilerplate/shared";
 import db from "../../database/db";
 import { httpError } from "../../utils/httpError";
 import { withTransaction } from "../../utils/withTransaction";
@@ -25,11 +31,8 @@ export const getMyOrganizations = async (
 ) => {
   try {
     const userId = req.user!.role_id;
-    const { limit, offset } = req.query;
-
-    const pagination: any = {};
-    if (limit) pagination.limit = parseInt(limit as string);
-    if (offset) pagination.offset = parseInt(offset as string);
+    const { limit, offset } = getValidatedQuery<PaginationQuery>(res);
+    const pagination = { limit, offset };
 
     const organizations = await getOrganizationsByUserId(userId, pagination);
 
@@ -96,12 +99,12 @@ export const getOrganization = async (
 };
 
 export const updateOrganization = async (
-  req: RequestWithUser,
+  req: RequestWithUser<OrganizationParams>,
   res: Response,
   next: NextFunction,
 ) => {
   try {
-    const organizationId = req.params.organizationId as string;
+    const organizationId = req.params.organizationId;
     const updates = req.body;
 
     const updatedOrganization = await modifyOrganization(
@@ -120,12 +123,12 @@ export const updateOrganization = async (
 };
 
 export const deleteOrganizationHandler = async (
-  req: RequestWithUser,
+  req: RequestWithUser<OrganizationParams>,
   res: Response,
   next: NextFunction,
 ) => {
   try {
-    const organizationId = req.params.organizationId as string;
+    const organizationId = req.params.organizationId;
 
     const deletedOrganization = await deleteOrganization(organizationId);
 
@@ -140,17 +143,14 @@ export const deleteOrganizationHandler = async (
 };
 
 export const getMembers = async (
-  req: RequestWithUser,
+  req: RequestWithUser<OrganizationParams>,
   res: Response,
   next: NextFunction,
 ) => {
   try {
-    const organizationId = req.params.organizationId as string;
-    const { limit, offset } = req.query;
-
-    const pagination: any = {};
-    if (limit) pagination.limit = parseInt(limit as string);
-    if (offset) pagination.offset = parseInt(offset as string);
+    const organizationId = req.params.organizationId;
+    const { limit, offset } = getValidatedQuery<PaginationQuery>(res);
+    const pagination = { limit, offset };
 
     const members = await getOrganizationMembers(organizationId, pagination);
 
@@ -161,12 +161,12 @@ export const getMembers = async (
 };
 
 export const addMember = async (
-  req: RequestWithUser,
+  req: RequestWithUser<OrganizationParams>,
   res: Response,
   next: NextFunction,
 ) => {
   try {
-    const organizationId = req.params.organizationId as string;
+    const organizationId = req.params.organizationId;
     const { user_id, role } = req.body;
     const invitedBy = req.user!.role_id;
 
@@ -190,13 +190,13 @@ export const addMember = async (
 };
 
 export const updateMember = async (
-  req: RequestWithUser,
+  req: RequestWithUser<OrganizationMemberParams>,
   res: Response,
   next: NextFunction,
 ) => {
   try {
-    const organizationId = req.params.organizationId as string;
-    const userId = req.params.userId as string;
+    const organizationId = req.params.organizationId;
+    const userId = req.params.userId;
     const { role } = req.body;
 
     const updatedMember = await updateMemberRole(organizationId, userId, role);
@@ -208,13 +208,13 @@ export const updateMember = async (
 };
 
 export const removeMember = async (
-  req: RequestWithUser,
+  req: RequestWithUser<OrganizationMemberParams>,
   res: Response,
   next: NextFunction,
 ) => {
   try {
-    const organizationId = req.params.organizationId as string;
-    const userId = req.params.userId as string;
+    const organizationId = req.params.organizationId;
+    const userId = req.params.userId;
     const currentUserId = req.user!.role_id;
 
     // Allow users to remove themselves (leave org)
@@ -238,12 +238,12 @@ export const removeMember = async (
 };
 
 export const transferOwnershipHandler = async (
-  req: RequestWithUser,
+  req: RequestWithUser<OrganizationParams>,
   res: Response,
   next: NextFunction,
 ) => {
   try {
-    const organizationId = req.params.organizationId as string;
+    const organizationId = req.params.organizationId;
     const { new_owner_id } = req.body;
     const currentOwnerId = req.user!.role_id;
 
@@ -262,12 +262,12 @@ export const transferOwnershipHandler = async (
 // POST /api/organizations/:organizationId/leave
 // Leave an organization (cannot leave if owner)
 export const leaveOrganization = async (
-  req: RequestWithUser,
+  req: RequestWithUser<OrganizationParams>,
   res: Response,
   next: NextFunction,
 ) => {
   try {
-    const organizationId = req.params.organizationId as string;
+    const organizationId = req.params.organizationId;
     const userId = req.user!.role_id;
 
     const removedMember = await removeOrganizationMember(

@@ -1,6 +1,10 @@
 import express from "express";
 import { authoriseUser } from "../../middleware/authoriseUser";
-import { validateParams, validateBody } from "../../middleware/validate";
+import {
+  validateParams,
+  validateBody,
+  validateQuery,
+} from "../../middleware/validate";
 import {
   organizationParamsSchema,
   organizationMemberParamsSchema,
@@ -8,6 +12,8 @@ import {
   updateOrganizationDtoSchema,
   addOrganizationMemberDtoSchema,
   updateMemberRoleDtoSchema,
+  organizationsQuerySchema,
+  paginationQuerySchema,
 } from "@auth-boilerplate/shared";
 import {
   createOrganizationHandler,
@@ -31,13 +37,18 @@ router.post(
   validateBody(
     createOrganizationDtoSchema.extend({
       owner_id: createOrganizationDtoSchema.shape.name, // Reuse string validation, owner_id is required for admin
-    })
+    }),
   ),
-  createOrganizationHandler
+  createOrganizationHandler,
 );
 
 // GET /api/admin/organizations - Get all organizations
-router.get("/", authoriseUser(["admin"]), getAllOrganizations);
+router.get(
+  "/",
+  authoriseUser(["admin"]),
+  validateQuery(organizationsQuerySchema),
+  getAllOrganizations,
+);
 
 // GET /api/admin/organizations/stats - Get organization statistics
 router.get("/stats", authoriseUser(["admin"]), getOrganizationStatsHandler);
@@ -47,7 +58,7 @@ router.get(
   "/:organizationId",
   authoriseUser(["admin"]),
   validateParams(organizationParamsSchema),
-  getOrganizationByIdHandler
+  getOrganizationByIdHandler,
 );
 
 // PUT /api/admin/organizations/:organizationId - Update organization
@@ -56,7 +67,7 @@ router.put(
   authoriseUser(["admin"]),
   validateParams(organizationParamsSchema),
   validateBody(updateOrganizationDtoSchema),
-  updateOrganization
+  updateOrganization,
 );
 
 // DELETE /api/admin/organizations/:organizationId - Delete organization
@@ -64,7 +75,7 @@ router.delete(
   "/:organizationId",
   authoriseUser(["admin"]),
   validateParams(organizationParamsSchema),
-  deleteOrganizationHandler
+  deleteOrganizationHandler,
 );
 
 // GET /api/admin/organizations/:organizationId/members - Get members
@@ -72,7 +83,8 @@ router.get(
   "/:organizationId/members",
   authoriseUser(["admin"]),
   validateParams(organizationParamsSchema),
-  getOrganizationMembersHandler
+  validateQuery(paginationQuerySchema),
+  getOrganizationMembersHandler,
 );
 
 // POST /api/admin/organizations/:organizationId/members - Add member
@@ -81,7 +93,7 @@ router.post(
   authoriseUser(["admin"]),
   validateParams(organizationParamsSchema),
   validateBody(addOrganizationMemberDtoSchema),
-  addOrganizationMemberHandler
+  addOrganizationMemberHandler,
 );
 
 // PUT /api/admin/organizations/:organizationId/members/:userId - Update member role
@@ -90,7 +102,7 @@ router.put(
   authoriseUser(["admin"]),
   validateParams(organizationMemberParamsSchema),
   validateBody(updateMemberRoleDtoSchema),
-  updateOrganizationMemberHandler
+  updateOrganizationMemberHandler,
 );
 
 // DELETE /api/admin/organizations/:organizationId/members/:userId - Remove member
@@ -98,7 +110,7 @@ router.delete(
   "/:organizationId/members/:userId",
   authoriseUser(["admin"]),
   validateParams(organizationMemberParamsSchema),
-  removeOrganizationMemberHandler
+  removeOrganizationMemberHandler,
 );
 
 export default router;

@@ -1,6 +1,6 @@
 import express from "express";
 import { authoriseUser } from "../../middleware/authoriseUser";
-import { validateBody } from "../../middleware/validate";
+import { validateBody, validateParams } from "../../middleware/validate";
 import { authLimiter } from "../../middleware/rateLimiter";
 import {
   loginUserSchema,
@@ -16,6 +16,7 @@ import {
   mfaVerifySchema,
   mfaBackupVerifySchema,
   setPasswordSchema,
+  tokenParamsSchema,
 } from "@auth-boilerplate/shared";
 import {
   login,
@@ -39,34 +40,84 @@ const router = express.Router();
 
 // Public auth routes (rate limited to prevent abuse)
 router.post("/register", authLimiter, validateBody(registerSchema), register);
-router.get("/verify/:token", authLimiter, verifyToken);
+router.get(
+  "/verify/:token",
+  authLimiter,
+  validateParams(tokenParamsSchema),
+  verifyToken,
+);
 router.post(
   "/complete-registration",
   authLimiter,
   validateBody(completeRegistrationSchema),
-  completeRegistration
+  completeRegistration,
 );
-router.post("/forgot-password", authLimiter, validateBody(forgotPasswordSchema), forgotPassword);
-router.post("/reset-password", authLimiter, validateBody(resetPasswordSchema), resetPassword);
+router.post(
+  "/forgot-password",
+  authLimiter,
+  validateBody(forgotPasswordSchema),
+  forgotPassword,
+);
+router.post(
+  "/reset-password",
+  authLimiter,
+  validateBody(resetPasswordSchema),
+  resetPassword,
+);
 
 // Standard auth routes
 router.post("/login", authLimiter, validateBody(loginUserSchema), login);
 router.post("/logout", authoriseUser(["user"]), logout);
 
 // MFA login verification routes
-router.post("/mfa/login-verify", authLimiter, validateBody(mfaVerifySchema), mfaLoginVerify);
-router.post("/mfa/login-backup", authLimiter, validateBody(mfaBackupVerifySchema), mfaLoginBackupVerify);
+router.post(
+  "/mfa/login-verify",
+  authLimiter,
+  validateBody(mfaVerifySchema),
+  mfaLoginVerify,
+);
+router.post(
+  "/mfa/login-backup",
+  authLimiter,
+  validateBody(mfaBackupVerifySchema),
+  mfaLoginBackupVerify,
+);
 
 // Protected user routes
 router.get("/me", authoriseUser(["user"]), getMe);
-router.put("/change-password", authoriseUser(["user"]), validateBody(changePasswordSchema), changePassword);
-router.put("/profile", authoriseUser(["user"]), validateBody(updateProfileSchema), updateProfile);
-router.post("/request-email-change", authoriseUser(["user"]), validateBody(requestEmailChangeSchema), requestEmailChange);
+router.put(
+  "/change-password",
+  authoriseUser(["user"]),
+  validateBody(changePasswordSchema),
+  changePassword,
+);
+router.put(
+  "/profile",
+  authoriseUser(["user"]),
+  validateBody(updateProfileSchema),
+  updateProfile,
+);
+router.post(
+  "/request-email-change",
+  authoriseUser(["user"]),
+  validateBody(requestEmailChangeSchema),
+  requestEmailChange,
+);
 
 // Email change confirmation (public route with token)
-router.post("/confirm-email-change/:token", authLimiter, confirmEmailChange);
+router.post(
+  "/confirm-email-change/:token",
+  authLimiter,
+  validateParams(tokenParamsSchema),
+  confirmEmailChange,
+);
 
 // Set password for OAuth users
-router.post("/set-password", authoriseUser(["user"]), validateBody(setPasswordSchema), setPassword);
+router.post(
+  "/set-password",
+  authoriseUser(["user"]),
+  validateBody(setPasswordSchema),
+  setPassword,
+);
 
 export default router;

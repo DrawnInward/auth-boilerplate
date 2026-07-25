@@ -15,6 +15,13 @@ import {
   removeOrganizationMember,
 } from "../../models/organizationMembers.models";
 import { sendSuccess, sendCreated } from "../../utils/responseUtils";
+import { getValidatedQuery } from "../../middleware/validate";
+import type {
+  OrganizationMemberParams,
+  OrganizationParams,
+  OrganizationsQuery,
+  PaginationQuery,
+} from "@auth-boilerplate/shared";
 import db from "../../database/db";
 import { httpError } from "../../utils/httpError";
 import { withTransaction } from "../../utils/withTransaction";
@@ -56,15 +63,10 @@ export const getAllOrganizations = async (
   next: NextFunction,
 ) => {
   try {
-    const { owner_id, user_id, limit, offset } = req.query;
-
-    const filters: any = {};
-    if (owner_id) filters.owner_id = owner_id as string;
-    if (user_id) filters.user_id = user_id as string;
-
-    const pagination: any = {};
-    if (limit) pagination.limit = parseInt(limit as string);
-    if (offset) pagination.offset = parseInt(offset as string);
+    const { owner_id, user_id, limit, offset } =
+      getValidatedQuery<OrganizationsQuery>(res);
+    const filters = { owner_id, user_id };
+    const pagination = { limit, offset };
 
     const organizations = await getOrganizations(filters, pagination);
 
@@ -93,12 +95,12 @@ export const getOrganizationStatsHandler = async (
 };
 
 export const getOrganizationByIdHandler = async (
-  req: Request,
+  req: Request<OrganizationParams>,
   res: Response,
   next: NextFunction,
 ) => {
   try {
-    const organizationId = req.params.organizationId as string;
+    const organizationId = req.params.organizationId;
 
     const organization = await getOrganizationWithMemberCount(organizationId);
 
@@ -117,12 +119,12 @@ export const getOrganizationByIdHandler = async (
 };
 
 export const updateOrganization = async (
-  req: Request,
+  req: Request<OrganizationParams>,
   res: Response,
   next: NextFunction,
 ) => {
   try {
-    const organizationId = req.params.organizationId as string;
+    const organizationId = req.params.organizationId;
     const updates = req.body;
 
     const updatedOrganization = await modifyOrganization(
@@ -141,12 +143,12 @@ export const updateOrganization = async (
 };
 
 export const deleteOrganizationHandler = async (
-  req: Request,
+  req: Request<OrganizationParams>,
   res: Response,
   next: NextFunction,
 ) => {
   try {
-    const organizationId = req.params.organizationId as string;
+    const organizationId = req.params.organizationId;
 
     const deletedOrganization = await deleteOrganization(organizationId);
 
@@ -161,24 +163,23 @@ export const deleteOrganizationHandler = async (
 };
 
 export const getOrganizationMembersHandler = async (
-  req: Request,
+  req: Request<OrganizationParams>,
   res: Response,
   next: NextFunction,
 ) => {
   try {
-    const organizationId = req.params.organizationId as string;
-    const { limit, offset } = req.query;
+    const organizationId = req.params.organizationId;
+    const { limit, offset } = getValidatedQuery<PaginationQuery>(res);
 
     const org = await getOrganizationById(organizationId);
     if (!org) {
       throw httpError(404, "Organization not found");
     }
 
-    const pagination: any = {};
-    if (limit) pagination.limit = parseInt(limit as string);
-    if (offset) pagination.offset = parseInt(offset as string);
-
-    const members = await getOrganizationMembers(organizationId, pagination);
+    const members = await getOrganizationMembers(organizationId, {
+      limit,
+      offset,
+    });
 
     return sendSuccess(res, members, "Members retrieved successfully");
   } catch (error) {
@@ -187,12 +188,12 @@ export const getOrganizationMembersHandler = async (
 };
 
 export const addOrganizationMemberHandler = async (
-  req: Request,
+  req: Request<OrganizationParams>,
   res: Response,
   next: NextFunction,
 ) => {
   try {
-    const organizationId = req.params.organizationId as string;
+    const organizationId = req.params.organizationId;
     const { user_id, role } = req.body;
 
     const org = await getOrganizationById(organizationId);
@@ -212,13 +213,13 @@ export const addOrganizationMemberHandler = async (
 };
 
 export const updateOrganizationMemberHandler = async (
-  req: Request,
+  req: Request<OrganizationMemberParams>,
   res: Response,
   next: NextFunction,
 ) => {
   try {
-    const organizationId = req.params.organizationId as string;
-    const userId = req.params.userId as string;
+    const organizationId = req.params.organizationId;
+    const userId = req.params.userId;
     const { role } = req.body;
 
     const org = await getOrganizationById(organizationId);
@@ -235,13 +236,13 @@ export const updateOrganizationMemberHandler = async (
 };
 
 export const removeOrganizationMemberHandler = async (
-  req: Request,
+  req: Request<OrganizationMemberParams>,
   res: Response,
   next: NextFunction,
 ) => {
   try {
-    const organizationId = req.params.organizationId as string;
-    const userId = req.params.userId as string;
+    const organizationId = req.params.organizationId;
+    const userId = req.params.userId;
 
     const org = await getOrganizationById(organizationId);
     if (!org) {

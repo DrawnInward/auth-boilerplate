@@ -6,7 +6,11 @@ import {
   requireOrgOwner,
 } from "../../middleware/organizationMiddleware";
 import { canCreateOrg } from "../../middleware/canCreateOrg";
-import { validateParams, validateBody } from "../../middleware/validate";
+import {
+  validateParams,
+  validateBody,
+  validateQuery,
+} from "../../middleware/validate";
 import { inviteMemberSchema } from "../../types/Invitation";
 import {
   organizationParamsSchema,
@@ -16,6 +20,7 @@ import {
   updateOrganizationDtoSchema,
   addOrganizationMemberDtoSchema,
   updateMemberRoleDtoSchema,
+  paginationQuerySchema,
 } from "@auth-boilerplate/shared";
 import {
   getMyOrganizations,
@@ -39,7 +44,12 @@ import {
 const router = express.Router();
 
 // GET /api/organizations - Get all organizations user is a member of
-router.get("/", authoriseUser(["user"]), getMyOrganizations);
+router.get(
+  "/",
+  authoriseUser(["user"]),
+  validateQuery(paginationQuerySchema),
+  getMyOrganizations,
+);
 
 // POST /api/organizations - Create a new organization
 router.post(
@@ -47,7 +57,7 @@ router.post(
   authoriseUser(["user"]),
   canCreateOrg,
   validateBody(createOrganizationDtoSchema),
-  createOrganizationHandler
+  createOrganizationHandler,
 );
 
 // GET /api/organizations/:organizationId - Get organization details
@@ -56,7 +66,7 @@ router.get(
   authoriseUser(["user"]),
   validateParams(organizationParamsSchema),
   organizationMemberMiddleware,
-  getOrganization
+  getOrganization,
 );
 
 // PUT /api/organizations/:organizationId - Update organization (owner/admin only)
@@ -66,7 +76,7 @@ router.put(
   validateParams(organizationParamsSchema),
   validateBody(updateOrganizationDtoSchema),
   requireOrgAdmin,
-  updateOrganization
+  updateOrganization,
 );
 
 // DELETE /api/organizations/:organizationId - Delete organization (owner only)
@@ -75,7 +85,7 @@ router.delete(
   authoriseUser(["user"]),
   validateParams(organizationParamsSchema),
   requireOrgOwner,
-  deleteOrganizationHandler
+  deleteOrganizationHandler,
 );
 
 // GET /api/organizations/:organizationId/members - Get organization members
@@ -83,8 +93,9 @@ router.get(
   "/:organizationId/members",
   authoriseUser(["user"]),
   validateParams(organizationParamsSchema),
+  validateQuery(paginationQuerySchema),
   organizationMemberMiddleware,
-  getMembers
+  getMembers,
 );
 
 // POST /api/organizations/:organizationId/members - Add a member (owner/admin only)
@@ -94,7 +105,7 @@ router.post(
   validateParams(organizationParamsSchema),
   validateBody(addOrganizationMemberDtoSchema),
   requireOrgAdmin,
-  addMember
+  addMember,
 );
 
 // PUT /api/organizations/:organizationId/members/:userId - Update member role (owner/admin only)
@@ -104,7 +115,7 @@ router.put(
   validateParams(organizationMemberParamsSchema),
   validateBody(updateMemberRoleDtoSchema),
   requireOrgAdmin,
-  updateMember
+  updateMember,
 );
 
 // DELETE /api/organizations/:organizationId/members/:userId - Remove member (owner/admin, or self)
@@ -113,7 +124,7 @@ router.delete(
   authoriseUser(["user"]),
   validateParams(organizationMemberParamsSchema),
   organizationMemberMiddleware,
-  removeMember
+  removeMember,
 );
 
 // POST /api/organizations/:organizationId/transfer-ownership - Transfer ownership (owner only)
@@ -122,7 +133,7 @@ router.post(
   authoriseUser(["user"]),
   validateParams(organizationParamsSchema),
   requireOrgOwner,
-  transferOwnershipHandler
+  transferOwnershipHandler,
 );
 
 // POST /api/organizations/:organizationId/leave - Leave organization
@@ -131,7 +142,7 @@ router.post(
   authoriseUser(["user"]),
   validateParams(organizationParamsSchema),
   organizationMemberMiddleware,
-  leaveOrganization
+  leaveOrganization,
 );
 
 // POST /api/organizations/:organizationId/invite - Invite a member (owner/admin only)
@@ -141,7 +152,7 @@ router.post(
   validateParams(organizationParamsSchema),
   validateBody(inviteMemberSchema),
   requireOrgAdmin,
-  inviteMember
+  inviteMember,
 );
 
 // GET /api/organizations/:organizationId/invitations - List pending invitations (owner/admin only)
@@ -149,8 +160,9 @@ router.get(
   "/:organizationId/invitations",
   authoriseUser(["user"]),
   validateParams(organizationParamsSchema),
+  validateQuery(paginationQuerySchema),
   requireOrgAdmin,
-  listInvitations
+  listInvitations,
 );
 
 // DELETE /api/organizations/:organizationId/invitations/:invitationId - Cancel invitation (owner/admin only)
@@ -159,7 +171,7 @@ router.delete(
   authoriseUser(["user"]),
   validateParams(organizationInvitationParamsSchema),
   requireOrgAdmin,
-  cancelInvitation
+  cancelInvitation,
 );
 
 export default router;

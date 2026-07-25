@@ -18,7 +18,7 @@ import {
   deleteAllBackupCodes,
 } from "../../models/mfa.models";
 import { getAdminById } from "../../models/admins.models";
-import { sendMfaEnabledEmail, sendMfaDisabledEmail } from "../../utils/email";
+import { services } from "../../services";
 import { httpError } from "../../utils/httpError";
 import { withTransaction } from "../../utils/withTransaction";
 
@@ -89,7 +89,7 @@ export const verifySetup = async (
       return codes;
     });
 
-    await sendMfaEnabledEmail(admin.email!);
+    await services.email.sendMfaEnabled(admin.email!);
 
     return sendSuccess(
       res,
@@ -175,7 +175,7 @@ export const disable = async (
       await deleteAllBackupCodes(role_id, "admin", client);
     });
 
-    await sendMfaDisabledEmail(admin.email!);
+    await services.email.sendMfaDisabled(admin.email!);
 
     return sendSuccess(res, null, "MFA disabled successfully");
   } catch (error) {

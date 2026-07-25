@@ -25,35 +25,35 @@ router.post(
   "/verify-setup",
   authoriseUser(["admin"]),
   validateBody(mfaVerifySetupSchema),
-  verifySetup
+  verifySetup,
 );
 
 router.post(
   "/verify",
   authoriseUser(["admin"]),
   validateBody(mfaVerifySchema),
-  verify
+  verify,
 );
 
 router.post(
   "/disable",
   authoriseUser(["admin"]),
   validateBody(mfaDisableSchema),
-  disable
+  disable,
 );
 
 router.post(
   "/backup/verify",
   authoriseUser(["admin"]),
   validateBody(mfaBackupVerifySchema),
-  verifyBackup
+  verifyBackup,
 );
 
 router.post(
   "/backup/regenerate",
   authoriseUser(["admin"]),
   validateBody(mfaVerifySchema),
-  regenerateBackupCodes
+  regenerateBackupCodes,
 );
 
 router.get("/status", authoriseUser(["admin"]), getStatus);

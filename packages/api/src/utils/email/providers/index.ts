@@ -7,6 +7,7 @@ const log = childLogger("emailProviders");
 
 export { ConsoleEmailProvider } from "./ConsoleEmailProvider";
 export { SendGridEmailProvider } from "./SendGridEmailProvider";
+export { MemoryEmailProvider } from "./MemoryEmailProvider";
 
 /**
  * Get the appropriate email provider based on environment.

@@ -20,14 +20,10 @@ import {
   invalidatePendingInvitations,
 } from "../../models/invitations.models";
 import { sendSuccess, sendCreated } from "../../utils/responseUtils";
+import type { TokenParams } from "@auth-boilerplate/shared";
 import { setAuthCookies, hashPassword } from "../../utils";
 import { clearAuthCookies } from "../../utils/clearAuthCookies";
-import {
-  sendVerificationEmail,
-  sendPasswordResetEmail,
-  sendEmailChangeVerificationEmail,
-  sendEmailChangeNotificationEmail,
-} from "../../utils/email";
+import { services } from "../../services";
 import {
   createMfaChallengeToken,
   setMfaChallengeCookie,
@@ -45,7 +41,7 @@ import { getAccountCreationMode, getOrgCreationMode } from "../../utils/config";
 import { httpError } from "../../utils/httpError";
 import { withTransaction } from "../../utils/withTransaction";
 
-require("dotenv").config({ quiet: true });
+import "../../utils/loadEnv";
 
 interface UserRecord {
   user_id?: string;
@@ -361,7 +357,7 @@ export const register = async (
       type: "registration",
     });
 
-    await sendVerificationEmail(email, token);
+    await services.email.sendVerification(email, token);
 
     return sendCreated(
       res,
@@ -374,12 +370,12 @@ export const register = async (
 };
 
 export const verifyToken = async (
-  req: Request,
+  req: Request<TokenParams>,
   res: Response,
   next: NextFunction,
 ) => {
   try {
-    const token = req.params.token as string;
+    const token = req.params.token;
 
     const invitation = await validateInvitationToken(token);
 
@@ -504,7 +500,7 @@ export const forgotPassword = async (
       });
 
       // Send password reset email
-      await sendPasswordResetEmail(email, token);
+      await services.email.sendPasswordReset(email, token);
     }
 
     // Always return success (don't leak whether email exists)
@@ -718,9 +714,9 @@ export const requestEmailChange = async (
       user_id: role_id,
     });
 
-    await sendEmailChangeVerificationEmail(newEmail, token);
+    await services.email.sendEmailChangeVerification(newEmail, token);
 
-    await sendEmailChangeNotificationEmail(user.email!, newEmail);
+    await services.email.sendEmailChangeNotification(user.email!, newEmail);
 
     return sendSuccess(
       res,
@@ -733,13 +729,13 @@ export const requestEmailChange = async (
 };
 
 export const confirmEmailChange = async (
-  req: Request,
+  req: Request<TokenParams>,
   res: Response,
   next: NextFunction,
 ) => {
   try {
     const { invitation } = await withTransaction(db, async (client) => {
-      const token = req.params.token as string;
+      const token = req.params.token;
 
       const invitation = await validateInvitationToken(
         token,

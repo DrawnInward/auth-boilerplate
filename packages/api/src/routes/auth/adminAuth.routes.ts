@@ -7,29 +7,30 @@ import {
   mfaVerifySchema,
   mfaBackupVerifySchema,
 } from "@auth-boilerplate/shared";
-import { login, mfaLoginVerify, mfaLoginBackupVerify, getMe, logout } from "../../controllers/admin/adminAuth.controller";
+import {
+  login,
+  mfaLoginVerify,
+  mfaLoginBackupVerify,
+  getMe,
+  logout,
+} from "../../controllers/admin/adminAuth.controller";
 
 const router = express.Router();
 
-router.post(
-  "/login",
-  authLimiter,
-  validateBody(loginAdminSchema),
-  login
-);
+router.post("/login", authLimiter, validateBody(loginAdminSchema), login);
 
 router.post(
   "/mfa/login-verify",
   authLimiter,
   validateBody(mfaVerifySchema),
-  mfaLoginVerify
+  mfaLoginVerify,
 );
 
 router.post(
   "/mfa/login-backup",
   authLimiter,
   validateBody(mfaBackupVerifySchema),
-  mfaLoginBackupVerify
+  mfaLoginBackupVerify,
 );
 
 // Protected admin routes

@@ -26,7 +26,7 @@ import { RequestWithUser } from "../../types";
 import { httpError } from "../../utils/httpError";
 import { withTransaction } from "../../utils/withTransaction";
 
-require("dotenv").config({ quiet: true });
+import "../../utils/loadEnv";
 
 export const login = async (
   req: Request,

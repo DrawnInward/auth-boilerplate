@@ -1,13 +1,20 @@
-import { sendEmail } from "../sendEmail";
+import { EmailOptions } from "../../../interfaces/email";
 import { textToHtml } from "../textToHtml";
-import { getAppName, getFrontendUrl } from "../../config";
 
-export async function sendAdminInviteEmail(
-  email: string,
-  token: string,
-): Promise<void> {
-  const setupUrl = `${getFrontendUrl()}/complete-registration?token=${token}`;
-  const appName = getAppName();
+export interface AdminInviteEmailParams {
+  to: string;
+  token: string;
+  appName: string;
+  frontendUrl: string;
+}
+
+export function buildAdminInviteEmail({
+  to,
+  token,
+  appName,
+  frontendUrl,
+}: AdminInviteEmailParams): EmailOptions {
+  const setupUrl = `${frontendUrl}/complete-registration?token=${token}`;
 
   const text = `Welcome to ${appName}!
 
@@ -31,14 +38,13 @@ This link will expire in 7 days.
 
 If you weren't expecting this invitation, you can safely ignore this email.`;
 
-  const html = textToHtml(htmlText, {
-    links: [{ url: setupUrl, text: "Set Up Account" }],
-  });
-
-  await sendEmail({
-    to: email,
+  return {
+    to,
     subject: `You've been invited to ${appName}`,
     text,
-    html,
-  });
+    html: textToHtml(htmlText, {
+      appName,
+      links: [{ url: setupUrl, text: "Set Up Account" }],
+    }),
+  };
 }
