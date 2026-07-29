@@ -469,6 +469,45 @@ describe("User Authentication Integration Tests", () => {
 
       expect(replayResponse.body.msg).toBe("Invalid Token");
     });
+
+    it("keeps the session alive when concurrent requests race to refresh (S1)", async () => {
+      // The bug this guards: after the access token expires, an SPA fires
+      // several requests at once, all carrying the same refresh cookie. Before
+      // the reuse-interval, the first rotated and the rest were treated as a
+      // replay, revoking every session on every device. Now both must succeed.
+      const loginResponse = await request(app)
+        .post("/api/auth/login")
+        .send({ email: "alice@example.com", password: "Password1" })
+        .expect(200);
+
+      const cookies = loginResponse.headers["set-cookie"];
+      const cookieArray = Array.isArray(cookies) ? cookies : [cookies];
+      const refreshTokenCookie = cookieArray.find((c: string) =>
+        c.includes("refresh_token"),
+      );
+
+      // Sending only the refresh cookie forces the rotation path immediately,
+      // standing in for an expired access token.
+      const [a, b] = await Promise.all([
+        request(app)
+          .get("/api/organizations")
+          .set("Cookie", [refreshTokenCookie!]),
+        request(app)
+          .get("/api/organizations")
+          .set("Cookie", [refreshTokenCookie!]),
+      ]);
+
+      expect([a.status, b.status].sort()).toEqual([200, 200]);
+
+      // The session survives: the freshly issued cookies still authenticate.
+      const rotated = (b.headers["set-cookie"] ??
+        a.headers["set-cookie"]) as unknown as string[];
+      const follow = await request(app)
+        .get("/api/organizations")
+        .set("Cookie", rotated)
+        .expect(200);
+      expect(follow.body.status).toBe("success");
+    });
   });
 
   describe("Security Tests", () => {

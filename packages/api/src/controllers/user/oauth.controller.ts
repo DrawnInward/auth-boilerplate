@@ -6,6 +6,7 @@ import { RequestWithUser } from "../../types";
 import { sendSuccess } from "../../utils/responseUtils";
 import { createCookieOptions } from "../../utils/createCookieOptions";
 import { setAuthCookies, parseCookies } from "../../utils";
+import { signOauthPending, verifyOauthPending } from "../../utils/oauthPending";
 import {
   generateOAuthState,
   getGoogleAuthUrl,
@@ -191,9 +192,7 @@ export const handleGoogleCallback = async (
     }
 
     if (outcome.kind === "needs_linking") {
-      const pendingData = Buffer.from(
-        JSON.stringify({ google_id: googleUser.id, email: googleUser.email }),
-      ).toString("base64");
+      const pendingData = signOauthPending(googleUser.id, googleUser.email);
 
       res.cookie(
         "oauth_pending",
@@ -245,9 +244,7 @@ export const linkGoogleAccount = async (
       throw httpError(400, "No pending Google link");
     }
 
-    const { google_id, email } = JSON.parse(
-      Buffer.from(pendingData, "base64").toString("utf8"),
-    );
+    const { google_id, email } = verifyOauthPending(pendingData);
 
     const user = await getUserWithPassword(email);
     if (!user) {

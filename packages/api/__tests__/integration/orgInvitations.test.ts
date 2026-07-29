@@ -433,6 +433,84 @@ describe("Organization Invitation Integration Tests", () => {
       expect(response.body.message).toContain("password");
     });
 
+    it("requires MFA and issues no session for an MFA-enabled existing user (S2)", async () => {
+      const { createUser } = await import("../../src/models/users.models");
+      const { hashPassword } = await import("../../src/utils");
+      const { createInvitation } =
+        await import("../../src/models/invitations.models");
+
+      const user = await createUser({
+        email: "mfa.invitee@example.com",
+        password_hash: await hashPassword("Password1"),
+        email_verified: true,
+        is_active: true,
+        created_through: "self_registered",
+      });
+      await db.query("UPDATE users SET mfa_enabled = true WHERE user_id = $1", [
+        user.user_id,
+      ]);
+
+      const result = await createInvitation({
+        email: "mfa.invitee@example.com",
+        type: "org_invite",
+        organization_id: getOrganizationUuid(2),
+        role: "member",
+        invited_by: getUserUuid(3),
+      });
+
+      const response = await request(app)
+        .post(`/api/invitations/${result.token}/accept`)
+        .send({ password: "Password1" })
+        .expect(200);
+
+      // MFA is demanded, and crucially NO session is issued — a known password
+      // must not skip the second factor through this path.
+      expect(response.body.data.mfa_required).toBe(true);
+      const setCookie = (response.headers["set-cookie"] ??
+        []) as unknown as string[];
+      expect(setCookie.some((c) => c.startsWith("access_token="))).toBe(false);
+      expect(setCookie.some((c) => c.startsWith("refresh_token="))).toBe(false);
+      // A challenge cookie IS set so the user can complete MFA and log in.
+      expect(setCookie.some((c) => c.startsWith("mfa_challenge="))).toBe(true);
+
+      // The org-join is still committed — the invite was validly accepted.
+      const membership = await db.query(
+        "SELECT 1 FROM organization_members WHERE organization_id = $1 AND user_id = $2",
+        [getOrganizationUuid(2), user.user_id],
+      );
+      expect(membership.rows.length).toBe(1);
+    });
+
+    it("rejects a deactivated existing user accepting an invitation (S2)", async () => {
+      const { createUser } = await import("../../src/models/users.models");
+      const { hashPassword } = await import("../../src/utils");
+      const { createInvitation } =
+        await import("../../src/models/invitations.models");
+
+      await createUser({
+        email: "deactivated.invitee@example.com",
+        password_hash: await hashPassword("Password1"),
+        email_verified: true,
+        is_active: false,
+        created_through: "self_registered",
+      });
+
+      const result = await createInvitation({
+        email: "deactivated.invitee@example.com",
+        type: "org_invite",
+        organization_id: getOrganizationUuid(2),
+        role: "member",
+        invited_by: getUserUuid(3),
+      });
+
+      const response = await request(app)
+        .post(`/api/invitations/${result.token}/accept`)
+        .send({ password: "Password1" })
+        .expect(403);
+
+      expect(response.body.status).toBe("error");
+    });
+
     it("should reject new user without password", async () => {
       const { createInvitation } =
         await import("../../src/models/invitations.models");

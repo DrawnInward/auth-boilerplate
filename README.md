@@ -137,9 +137,10 @@ The setup script generates three env files in `packages/api/`:
 
 ### Token Settings
 
-| Variable             | Default | Description                    |
-| -------------------- | ------- | ------------------------------ |
-| `REFRESH_TOKEN_DAYS` | `7`     | Refresh token lifetime in days |
+| Variable                      | Default | Description                                                                                                                  |
+| ----------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `REFRESH_TOKEN_DAYS`          | `7`     | Refresh token lifetime in days                                                                                               |
+| `REFRESH_REUSE_GRACE_SECONDS` | `30`    | Leeway in which a just-rotated refresh token may be re-presented by a concurrent request without triggering breach detection |
 
 ### Registration Modes
 

@@ -249,6 +249,26 @@ describe("User OAuth Integration Tests", () => {
 
       expect(response.body.message).toBe("No pending Google link");
     });
+
+    it("rejects a forged (unsigned) oauth_pending cookie (S3)", async () => {
+      // The old format was plain base64, so an attacker could forge a cookie
+      // binding any google_id to an account they hold the password for. An
+      // unsigned cookie must now be rejected rather than trusted.
+      const forged = Buffer.from(
+        JSON.stringify({
+          google_id: "attacker-chosen-google-id",
+          email: "test@example.com",
+        }),
+      ).toString("base64");
+
+      const response = await request(app)
+        .post("/api/oauth/google/link")
+        .set("Cookie", [`oauth_pending=${forged}`])
+        .send({ password: "Password1" })
+        .expect(400);
+
+      expect(response.body.message).toBe("Invalid pending Google link");
+    });
   });
 
   describe("POST /api/oauth/google/unlink", () => {

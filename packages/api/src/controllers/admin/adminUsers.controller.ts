@@ -8,6 +8,7 @@ import {
   updateUserOrgPermission,
 } from "../../models/users.models";
 import { disableMfa, deleteAllBackupCodes } from "../../models/mfa.models";
+import { revokeUserTokens } from "../../models/refresh.models";
 import db from "../../database/db";
 import {
   createInvitation,
@@ -111,7 +112,15 @@ export const updateUser = async (
       delete updates.password;
     }
 
-    const updatedUser = await modifyUser(userId, updates);
+    const updatedUser = await withTransaction(db, async (client) => {
+      const updated = await modifyUser(userId, updates, client);
+      // Deactivating an account must end its live sessions in the same
+      // transaction, so a banned user can't keep working from an open tab. (S4)
+      if (updates.is_active === false) {
+        await revokeUserTokens(userId, "user", client);
+      }
+      return updated;
+    });
 
     return sendSuccess(res, updatedUser, "User updated successfully");
   } catch (error) {
@@ -156,7 +165,12 @@ export const deleteUserHandler = async (
   try {
     const { userId } = req.params;
 
-    const deletedUser = await deleteUser(userId);
+    const deletedUser = await withTransaction(db, async (client) => {
+      const deleted = await deleteUser(userId, client);
+      // A deleted account keeps no working sessions. (S4)
+      await revokeUserTokens(userId, "user", client);
+      return deleted;
+    });
 
     return sendSuccess(res, deletedUser, "User deleted successfully");
   } catch (error) {

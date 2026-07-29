@@ -46,6 +46,64 @@ describe("Admin User Management Integration Tests", () => {
     await db.end();
   });
 
+  describe("Session invalidation on deactivation/deletion (S4)", () => {
+    const loginRefreshCookie = async (email: string) => {
+      const login = await request(app)
+        .post("/api/auth/login")
+        .send({ email, password: "Password1" })
+        .expect(200);
+      const cookies = login.headers["set-cookie"] as unknown as string[];
+      return cookies.find((c) => c.startsWith("refresh_token="))!;
+    };
+
+    it("kills a deactivated user's sessions so they cannot refresh", async () => {
+      const { hashPassword } = await import("../../src/utils");
+      const user = await createUser({
+        email: "s4.deactivate@test.com",
+        password_hash: await hashPassword("Password1"),
+        email_verified: true,
+        is_active: true,
+        created_through: "self_registered",
+      });
+      // Only the refresh cookie is sent, forcing the rotation path (an expired
+      // access token would behave the same).
+      const refreshCookie = await loginRefreshCookie("s4.deactivate@test.com");
+
+      await request(app)
+        .put(`/api/admin/users/${user.user_id}`)
+        .set("Cookie", adminCookies)
+        .send({ is_active: false })
+        .expect(200);
+
+      await request(app)
+        .get("/api/organizations")
+        .set("Cookie", [refreshCookie])
+        .expect(403);
+    });
+
+    it("kills a deleted user's sessions so they cannot refresh", async () => {
+      const { hashPassword } = await import("../../src/utils");
+      const user = await createUser({
+        email: "s4.delete@test.com",
+        password_hash: await hashPassword("Password1"),
+        email_verified: true,
+        is_active: true,
+        created_through: "self_registered",
+      });
+      const refreshCookie = await loginRefreshCookie("s4.delete@test.com");
+
+      await request(app)
+        .delete(`/api/admin/users/${user.user_id}`)
+        .set("Cookie", adminCookies)
+        .expect(200);
+
+      await request(app)
+        .get("/api/organizations")
+        .set("Cookie", [refreshCookie])
+        .expect(403);
+    });
+  });
+
   describe("POST /api/admin/users", () => {
     it("should create an invitation for a new user", async () => {
       const response = await request(app)

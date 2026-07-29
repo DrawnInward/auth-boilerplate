@@ -34,6 +34,10 @@ import type {
 } from "@auth-boilerplate/shared";
 import { services } from "../../services";
 import { setAuthCookies, hashPassword } from "../../utils";
+import {
+  createMfaChallengeToken,
+  setMfaChallengeCookie,
+} from "../../utils/mfaChallenge";
 import { httpError } from "../../utils/httpError";
 import { withTransaction } from "../../utils/withTransaction";
 
@@ -210,112 +214,147 @@ export const acceptInvitation = async (
     const token = req.params.token;
     const { password } = req.body;
 
-    const { invitation, userId, accessToken, refreshToken } =
-      await withTransaction(db, async (client) => {
-        const invitation = await validateInvitationToken(
-          token,
-          "org_invite",
-          client,
+    const outcome = await withTransaction(db, async (client) => {
+      const invitation = await validateInvitationToken(
+        token,
+        "org_invite",
+        client,
+      );
+
+      if (!invitation.organization_id || !invitation.role) {
+        throw httpError(400, "Invalid organization invitation");
+      }
+
+      let userId: string;
+      // An existing account can carry MFA and a deactivated flag; a freshly
+      // created one never does.
+      let mfaRequired = false;
+
+      if (invitation.is_existing_user) {
+        // Existing user - verify password
+        if (!password) {
+          throw httpError(400, "Password is required to verify your identity");
+        }
+
+        const user = await getUserWithPassword(invitation.email);
+        if (!user) {
+          throw httpError(404, "User not found");
+        }
+
+        // Mirror login exactly: a deactivated account cannot authenticate
+        // through this path either.
+        if (!user.is_active) {
+          throw httpError(403, "Account is deactivated");
+        }
+
+        const passwordMatch = await bcrypt.compare(
+          password,
+          user.password_hash!,
         );
-
-        if (!invitation.organization_id || !invitation.role) {
-          throw httpError(400, "Invalid organization invitation");
+        if (!passwordMatch) {
+          throw httpError(401, "Invalid password");
         }
 
-        let userId: string;
-
-        if (invitation.is_existing_user) {
-          // Existing user - verify password
-          if (!password) {
-            throw httpError(
-              400,
-              "Password is required to verify your identity",
-            );
-          }
-
-          const user = await getUserWithPassword(invitation.email);
-          if (!user) {
-            throw httpError(404, "User not found");
-          }
-
-          const passwordMatch = await bcrypt.compare(
-            password,
-            user.password_hash!,
-          );
-          if (!passwordMatch) {
-            throw httpError(401, "Invalid password");
-          }
-
-          userId = user.user_id!;
-        } else {
-          // New user - create account
-          if (!password) {
-            throw httpError(400, "Password is required to create your account");
-          }
-
-          const passwordHash = await hashPassword(password);
-          const user = await createUser(
-            {
-              email: invitation.email,
-              password_hash: passwordHash,
-              email_verified: true,
-              is_active: true,
-              created_through: "org_invited",
-            },
-            client,
-          );
-
-          userId = user.user_id!;
+        userId = user.user_id!;
+        mfaRequired = !!user.mfa_enabled;
+      } else {
+        // New user - create account
+        if (!password) {
+          throw httpError(400, "Password is required to create your account");
         }
 
-        await addOrganizationMember(
-          invitation.organization_id,
+        const passwordHash = await hashPassword(password);
+        const user = await createUser(
           {
-            user_id: userId,
-            role: invitation.role as "admin" | "member" | "viewer",
-          },
-          invitation.invited_by || null,
-          client,
-        );
-
-        await markInvitationUsed(invitation.id!, client);
-
-        const accessKey = process.env.USER_ACCESS_KEY;
-        if (!accessKey) {
-          throw httpError(500, "Server configuration error");
-        }
-
-        const accessToken = jwt.sign(
-          {
-            role_id: userId,
-            role_type: "user",
+            email: invitation.email,
+            password_hash: passwordHash,
             email_verified: true,
-          },
-          accessKey,
-          { expiresIn: "15m" },
-        );
-
-        const { token: refreshToken } = await addRefresh(
-          {
-            role_id: userId,
-            role_type: "user",
+            is_active: true,
+            created_through: "org_invited",
           },
           client,
         );
 
-        return { invitation, userId, accessToken, refreshToken };
-      });
+        userId = user.user_id!;
+      }
 
-    setAuthCookies(res, accessToken, refreshToken);
+      await addOrganizationMember(
+        invitation.organization_id,
+        {
+          user_id: userId,
+          role: invitation.role as "admin" | "member" | "viewer",
+        },
+        invitation.invited_by || null,
+        client,
+      );
+
+      await markInvitationUsed(invitation.id!, client);
+
+      // The user has proven password + invite-token possession, so the org-join
+      // is committed — but an MFA-enabled account must clear its second factor
+      // before it gets a session, exactly as login requires. Issuing auth
+      // cookies here would let a known password skip MFA entirely. (S2)
+      if (mfaRequired) {
+        return { kind: "mfa_required" as const, invitation, userId };
+      }
+
+      const accessKey = process.env.USER_ACCESS_KEY;
+      if (!accessKey) {
+        throw httpError(500, "Server configuration error");
+      }
+
+      const accessToken = jwt.sign(
+        {
+          role_id: userId,
+          role_type: "user",
+          email_verified: true,
+        },
+        accessKey,
+        { expiresIn: "15m" },
+      );
+
+      const { token: refreshToken } = await addRefresh(
+        {
+          role_id: userId,
+          role_type: "user",
+        },
+        client,
+      );
+
+      return {
+        kind: "logged_in" as const,
+        invitation,
+        userId,
+        accessToken,
+        refreshToken,
+      };
+    });
+
+    if (outcome.kind === "mfa_required") {
+      const challengeToken = createMfaChallengeToken(outcome.userId, "user");
+      setMfaChallengeCookie(res, challengeToken);
+
+      return sendSuccess(
+        res,
+        {
+          mfa_required: true,
+          organization_id: outcome.invitation.organization_id,
+          role: outcome.invitation.role,
+        },
+        "MFA verification required",
+      );
+    }
+
+    setAuthCookies(res, outcome.accessToken, outcome.refreshToken);
 
     return sendSuccess(
       res,
       {
-        user_id: userId,
-        organization_id: invitation.organization_id,
-        role: invitation.role,
+        user_id: outcome.userId,
+        organization_id: outcome.invitation.organization_id,
+        role: outcome.invitation.role,
       },
-      invitation.is_existing_user
+      outcome.invitation.is_existing_user
         ? "You have joined the organization"
         : "Account created and joined the organization",
     );

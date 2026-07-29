@@ -13,7 +13,11 @@ import {
 } from "../../src/models/refresh.models";
 import { determinateHash } from "../../src/utils";
 import jwt from "jsonwebtoken";
-import { testRefreshTokens, testUsers } from "../../src/database/test-data";
+import {
+  testRefreshTokens,
+  testUsers,
+  testAdmins,
+} from "../../src/database/test-data";
 import { PoolClient } from "pg";
 import {
   getAdminUuid,
@@ -37,6 +41,7 @@ describe("Refresh Token Model CRUD Operations", () => {
     });
     await seed({
       usersData: testUsers,
+      adminsData: testAdmins,
       refreshTokensData: testRefreshTokens,
     });
   });
@@ -483,22 +488,62 @@ describe("Refresh Token Model CRUD Operations", () => {
       expect(timeDiff).toBeLessThan(120000); // Less than 2 minutes
     });
 
-    it("should handle replay attack scenario correctly", async () => {
-      // Create a fresh token for user 1
+    it("honours a token reused within the grace window without revoking the session", async () => {
+      // A legitimate client (e.g. an SPA firing several requests at once after
+      // the access token expired) can present the same refresh token twice in
+      // quick succession. Within the reuse-interval this is a concurrent
+      // exchange, not a replay: both succeed and no other session is revoked.
+      const other = await addRefresh({
+        role_id: getUserUuid(2),
+        role_type: "user",
+      });
       const freshToken = await addRefresh({
         role_id: getUserUuid(2),
         role_type: "user",
       });
-
       const decoded = jwt.verify(
         freshToken.token,
         process.env.REFRESH_KEY!,
       ) as any;
 
-      // First use should succeed
+      const first = await createAccessToken(decoded, freshToken.token);
+      const second = await createAccessToken(decoded, freshToken.token);
+
+      // Both exchanges yielded a usable new refresh token.
+      expect(first.newRefreshToken).toBeTruthy();
+      expect(second.newRefreshToken).toBeTruthy();
+      expect(second.newRefreshToken).not.toBe(first.newRefreshToken);
+
+      // The unrelated session for the same user is untouched.
+      const otherRow = await fetchRefreshByTokenHash(
+        determinateHash(other.token),
+      );
+      expect(otherRow.is_active).toBe(true);
+    });
+
+    it("treats a token reused outside the grace window as a replay attack", async () => {
+      const other = await addRefresh({
+        role_id: getUserUuid(2),
+        role_type: "user",
+      });
+      const freshToken = await addRefresh({
+        role_id: getUserUuid(2),
+        role_type: "user",
+      });
+      const decoded = jwt.verify(
+        freshToken.token,
+        process.env.REFRESH_KEY!,
+      ) as any;
+
       await createAccessToken(decoded, freshToken.token);
 
-      // Second use should fail and revoke all user tokens
+      // Push the rotation's used_at back beyond the grace window so the next
+      // presentation reads as a stale replay rather than a concurrent exchange.
+      await db.query(
+        "UPDATE refresh SET used_at = NOW() - INTERVAL '1 hour' WHERE refresh_id = $1",
+        [freshToken.refresh_id],
+      );
+
       await expect(
         createAccessToken(decoded, freshToken.token),
       ).rejects.toMatchObject({
@@ -506,14 +551,40 @@ describe("Refresh Token Model CRUD Operations", () => {
         msg: "Refresh token has already been used - possible security breach",
       });
 
-      // Check that all tokens for user 1 are revoked
+      // Breach detection revokes every active token for the user, including the
+      // unrelated session.
       const tokens = await db.query(
-        "SELECT * FROM refresh WHERE role_id = $1 AND role_type = $2",
+        "SELECT is_active FROM refresh WHERE role_id = $1 AND role_type = $2",
         [getUserUuid(2), "user"],
       );
+      tokens.rows.forEach((token) => expect(token.is_active).toBe(false));
+      expect(
+        (await fetchRefreshByTokenHash(determinateHash(other.token))).is_active,
+      ).toBe(false);
+    });
 
-      tokens.rows.forEach((token) => {
-        expect(token.is_active).toBe(false);
+    it("does not resurrect a rotated-then-revoked token even within the grace window", async () => {
+      // Rotating then revoking (e.g. logout) leaves the presented token used
+      // with a dead successor. Reusing it within the window must be rejected —
+      // grace is for live races, not for reviving an ended session.
+      const freshToken = await addRefresh({
+        role_id: getUserUuid(2),
+        role_type: "user",
+      });
+      const decoded = jwt.verify(
+        freshToken.token,
+        process.env.REFRESH_KEY!,
+      ) as any;
+
+      await createAccessToken(decoded, freshToken.token);
+      // Kill the whole family, as logout does.
+      await revokeUserTokens(getUserUuid(2), "user");
+
+      await expect(
+        createAccessToken(decoded, freshToken.token),
+      ).rejects.toMatchObject({
+        status: 401,
+        msg: "Refresh token has been revoked",
       });
     });
   });

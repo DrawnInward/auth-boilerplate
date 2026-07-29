@@ -10,6 +10,7 @@ export const refreshTokenSchema = z.object({
   last_used_time: z.string().nullable().optional(),
   is_active: z.boolean().optional(),
   used_at: z.string().nullable().optional(),
+  replaced_by: z.string().uuid().nullable().optional(),
 });
 
 export const createRefreshTokenSchema = refreshTokenSchema.pick({
