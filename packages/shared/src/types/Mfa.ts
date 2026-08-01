@@ -18,8 +18,12 @@ export const mfaVerifySchema = z.object({
 
 export type MfaVerifyDto = z.infer<typeof mfaVerifySchema>;
 
+// Disabling a second factor is a step-up operation (S8): it requires the
+// account password as well as a current TOTP or backup code, so a stolen
+// session plus one leaked backup code cannot silently remove MFA.
 export const mfaDisableSchema = z.object({
   code: z.string().min(1, "Code is required"),
+  password: z.string().min(1, "Password is required"),
 });
 
 export type MfaDisableDto = z.infer<typeof mfaDisableSchema>;

@@ -148,6 +148,21 @@ export const getAdminWithPassword = async (
   return result.rows[0];
 };
 
+export const getAdminWithPasswordById = async (
+  adminId: string,
+): Promise<Admin | null> => {
+  const queryString = `
+    SELECT * FROM admins
+    WHERE admin_id = $1 AND deleted_at IS NULL;
+  `;
+
+  const result = await db.query(queryString, [adminId]);
+  if (result.rows.length === 0) {
+    return null;
+  }
+  return result.rows[0];
+};
+
 export const modifyAdmin = async (
   adminId: string,
   detailsToUpdate: UpdateAdminDto,

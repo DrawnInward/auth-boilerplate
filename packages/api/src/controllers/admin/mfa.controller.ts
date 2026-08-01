@@ -17,7 +17,10 @@ import {
   markBackupCodeUsed,
   deleteAllBackupCodes,
 } from "../../models/mfa.models";
-import { getAdminById } from "../../models/admins.models";
+import {
+  getAdminById,
+  getAdminWithPasswordById,
+} from "../../models/admins.models";
 import { services } from "../../services";
 import { httpError } from "../../utils/httpError";
 import { withTransaction } from "../../utils/withTransaction";
@@ -132,11 +135,18 @@ export const disable = async (
 ) => {
   try {
     const { role_id } = req.user!;
-    const { code } = req.body;
+    const { code, password } = req.body;
 
-    const admin = await getAdminById(role_id);
+    const admin = await getAdminWithPasswordById(role_id);
     if (!admin) {
       throw httpError(404, "Admin not found");
+    }
+
+    // S8: disabling a second factor is a step-up operation — the account
+    // password is required alongside a current code, so a stolen session
+    // plus one leaked backup code cannot silently remove MFA.
+    if (!(await bcrypt.compare(password, admin.password_hash))) {
+      throw httpError(401, "Invalid password");
     }
 
     await withTransaction(db, async (client) => {

@@ -192,6 +192,17 @@ notification email.
 **Tests.** Integration (user + admin): disable without password → 400/401; with wrong password →
 401; with password + code → 200. Update the one existing disable test to the new contract.
 
+**Status (2026-08-01) — DONE.** `mfaDisableSchema` gains a required `password` (shared, so the
+SecurityTab form validates with the same contract). Both disable handlers verify the password
+before the code check: wrong password → 401 "Invalid password" (MFA stays enabled — asserted);
+a passwordless OAuth user → 400 "No password set. Use set-password endpoint instead." (same
+message as change-password); admins always have a password so no such branch. New
+`getAdminWithPasswordById` mirrors the user model's lookup. SecurityTab's disable dialog gains
+the password field — and loses its `maxLength={6}` on the code input, which had made
+backup-code entry (9 chars) impossible there despite the endpoint accepting them. Specs
+updated/added in `userMfa.test.ts` (+3) and `adminMfa.test.ts` (+2). Phase A is now fully
+closed; the suite freezes here for Phase C.
+
 ### A6 · S7 + the 0.3 straggler — unguarded decode & non-standard error shape (MEDIUM, cheap)
 
 **Issue.** `authoriseUser` base64-decodes and `JSON.parse`s the access cookie _before_ its try

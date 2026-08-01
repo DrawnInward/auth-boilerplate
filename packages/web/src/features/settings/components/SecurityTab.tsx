@@ -66,7 +66,7 @@ export function SecurityTab() {
 
   const disableForm = useForm<MfaDisableDto>({
     resolver: zodResolver(mfaDisableSchema),
-    defaultValues: { code: "" },
+    defaultValues: { code: "", password: "" },
   });
 
   const regenerateForm = useForm<MfaVerifySetupDto>({
@@ -221,7 +221,8 @@ export function SecurityTab() {
           <DialogHeader>
             <DialogTitle>Disable two-factor authentication</DialogTitle>
             <DialogDescription>
-              Enter your current TOTP code to disable MFA
+              Enter your password and a current TOTP or backup code to disable
+              MFA
             </DialogDescription>
           </DialogHeader>
           <Form {...disableForm}>
@@ -231,12 +232,29 @@ export function SecurityTab() {
             >
               <FormField
                 control={disableForm.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Password</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="password"
+                        placeholder="Your account password"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={disableForm.control}
                 name="code"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Verification code</FormLabel>
                     <FormControl>
-                      <Input placeholder="000000" maxLength={6} {...field} />
+                      <Input placeholder="000000" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

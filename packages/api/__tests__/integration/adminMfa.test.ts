@@ -202,11 +202,11 @@ describe("Admin MFA Integration Tests", () => {
     beforeEach(enableAdminMfa);
     afterEach(resetAdminMfa);
 
-    it("disables MFA with a valid TOTP code", async () => {
+    it("disables MFA with a valid password and TOTP code (S8)", async () => {
       const response = await request(app)
         .post("/api/admin/auth/mfa/disable")
         .set("Cookie", adminCookies)
-        .send({ code: generateTotpCode(testSecret) })
+        .send({ code: generateTotpCode(testSecret), password: "Password1" })
         .expect(200);
 
       expect(response.body.message).toBe("MFA disabled successfully");
@@ -217,21 +217,47 @@ describe("Admin MFA Integration Tests", () => {
       expect(statusResponse.body.data.mfa_enabled).toBe(false);
     });
 
-    it("disables MFA with a valid backup code", async () => {
+    it("disables MFA with a valid password and backup code (S8)", async () => {
       const response = await request(app)
         .post("/api/admin/auth/mfa/disable")
         .set("Cookie", adminCookies)
-        .send({ code: testBackupCodes[0] })
+        .send({ code: testBackupCodes[0], password: "Password1" })
         .expect(200);
 
       expect(response.body.message).toBe("MFA disabled successfully");
+    });
+
+    it("rejects disable without a password (S8)", async () => {
+      await request(app)
+        .post("/api/admin/auth/mfa/disable")
+        .set("Cookie", adminCookies)
+        .send({ code: generateTotpCode(testSecret) })
+        .expect(400);
+    });
+
+    it("rejects disable with a wrong password even with a valid code (S8)", async () => {
+      const response = await request(app)
+        .post("/api/admin/auth/mfa/disable")
+        .set("Cookie", adminCookies)
+        .send({
+          code: generateTotpCode(testSecret),
+          password: "WrongPassword1",
+        })
+        .expect(401);
+
+      expect(response.body.message).toBe("Invalid password");
+
+      const statusResponse = await request(app)
+        .get("/api/admin/auth/mfa/status")
+        .set("Cookie", adminCookies);
+      expect(statusResponse.body.data.mfa_enabled).toBe(true);
     });
 
     it("rejects an invalid code", async () => {
       const response = await request(app)
         .post("/api/admin/auth/mfa/disable")
         .set("Cookie", adminCookies)
-        .send({ code: "invalid" })
+        .send({ code: "invalid", password: "Password1" })
         .expect(401);
 
       expect(response.body.message).toBe("Invalid code");

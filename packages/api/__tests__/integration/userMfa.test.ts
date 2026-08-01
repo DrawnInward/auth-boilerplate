@@ -359,13 +359,13 @@ describe("User MFA Integration Tests", () => {
       await deleteAllBackupCodes(disableUserId, "user");
     });
 
-    it("should disable MFA with valid TOTP code", async () => {
+    it("should disable MFA with valid password and TOTP code (S8)", async () => {
       const code = generateTotpCode(testSecret);
 
       const response = await request(app)
         .post("/api/auth/mfa/disable")
         .set("Cookie", authCookies)
-        .send({ code })
+        .send({ code, password: "Password1" })
         .expect(200);
 
       expect(response.body.message).toBe("MFA disabled successfully");
@@ -377,21 +377,75 @@ describe("User MFA Integration Tests", () => {
       expect(statusResponse.body.data.mfa_enabled).toBe(false);
     });
 
-    it("should disable MFA with valid backup code", async () => {
+    it("should disable MFA with valid password and backup code (S8)", async () => {
       const response = await request(app)
         .post("/api/auth/mfa/disable")
         .set("Cookie", authCookies)
-        .send({ code: testBackupCodes[0] })
+        .send({ code: testBackupCodes[0], password: "Password1" })
         .expect(200);
 
       expect(response.body.message).toBe("MFA disabled successfully");
+    });
+
+    it("rejects disable without a password (S8)", async () => {
+      await request(app)
+        .post("/api/auth/mfa/disable")
+        .set("Cookie", authCookies)
+        .send({ code: generateTotpCode(testSecret) })
+        .expect(400);
+    });
+
+    it("rejects disable with a wrong password even with a valid code (S8)", async () => {
+      const response = await request(app)
+        .post("/api/auth/mfa/disable")
+        .set("Cookie", authCookies)
+        .send({
+          code: generateTotpCode(testSecret),
+          password: "WrongPassword1",
+        })
+        .expect(401);
+
+      expect(response.body.message).toBe("Invalid password");
+
+      const statusResponse = await request(app)
+        .get("/api/auth/mfa/status")
+        .set("Cookie", authCookies);
+      expect(statusResponse.body.data.mfa_enabled).toBe(true);
+    });
+
+    it("directs a passwordless (OAuth) account to set-password instead (S8)", async () => {
+      const saved = await db.query(
+        "SELECT password_hash FROM users WHERE user_id = $1",
+        [disableUserId],
+      );
+      await db.query(
+        "UPDATE users SET password_hash = NULL WHERE user_id = $1",
+        [disableUserId],
+      );
+
+      try {
+        const response = await request(app)
+          .post("/api/auth/mfa/disable")
+          .set("Cookie", authCookies)
+          .send({ code: generateTotpCode(testSecret), password: "Password1" })
+          .expect(400);
+
+        expect(response.body.message).toBe(
+          "No password set. Use set-password endpoint instead.",
+        );
+      } finally {
+        await db.query(
+          "UPDATE users SET password_hash = $1 WHERE user_id = $2",
+          [saved.rows[0].password_hash, disableUserId],
+        );
+      }
     });
 
     it("should reject invalid code", async () => {
       const response = await request(app)
         .post("/api/auth/mfa/disable")
         .set("Cookie", authCookies)
-        .send({ code: "invalid" })
+        .send({ code: "invalid", password: "Password1" })
         .expect(401);
 
       expect(response.body.message).toBe("Invalid code");
