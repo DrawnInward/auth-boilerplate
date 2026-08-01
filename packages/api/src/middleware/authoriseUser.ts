@@ -3,7 +3,7 @@ import { Response, NextFunction } from "express";
 import { AccessJwtPayload, RefreshJwtPayload, RequestWithUser } from "../types";
 import { parseCookies, setAuthCookies } from "../utils";
 import { createAccessToken } from "../models/refresh.models";
-import { httpError } from "../utils/httpError";
+import { httpError, isHttpError } from "../utils/httpError";
 
 import "../utils/loadEnv";
 
@@ -17,14 +17,21 @@ export const authoriseUser =
     const parsedCookies = parseCookies(req.headers.cookie);
 
     if (parsedCookies.access_token) {
-      const [, payload] = parsedCookies.access_token.split(".");
-      const decodedPayload = Buffer.from(payload, "base64").toString("utf-8");
-      const payloadObject = JSON.parse(decodedPayload);
-      const expirationTime = payloadObject.exp;
-      isAdminToken = payloadObject.role_type === "admin";
+      // A cookie that doesn't parse is treated as no cookie at all — parsing
+      // outside a try meant one malformed cookie 500'd every request from
+      // that browser until it was manually cleared.
+      try {
+        const [, payload] = parsedCookies.access_token.split(".");
+        const decodedPayload = Buffer.from(payload, "base64").toString("utf-8");
+        const payloadObject = JSON.parse(decodedPayload);
+        const expirationTime = payloadObject.exp;
+        isAdminToken = payloadObject.role_type === "admin";
 
-      if (Math.floor(Date.now() / 1000) < expirationTime) {
-        token = parsedCookies.access_token;
+        if (Math.floor(Date.now() / 1000) < expirationTime) {
+          token = parsedCookies.access_token;
+        }
+      } catch {
+        // fall through to the refresh token, if present
       }
     }
 
@@ -34,7 +41,7 @@ export const authoriseUser =
     }
 
     if (!token) {
-      return res.status(401).send({ msg: "Credentials missing" });
+      return next(httpError(401, "Credentials missing"));
     }
 
     try {
@@ -70,10 +77,17 @@ export const authoriseUser =
       }
 
       if (!allowedRoles.includes(req.user.role_type)) {
-        return res.status(403).json({ msg: "Insufficient permissions" });
+        return next(httpError(403, "Insufficient permissions"));
       }
       next();
-    } catch {
-      res.status(403).send({ msg: "Invalid Token" });
+    } catch (error) {
+      // Config errors surface as the 500s they are. Every auth failure —
+      // bad signature, expired/revoked/replayed refresh lineage — flattens
+      // to one 403 so the response doesn't reveal which check failed;
+      // per-cause refresh statuses are a Phase C (dedicated endpoint) concern.
+      if (isHttpError(error) && error.status >= 500) {
+        return next(error);
+      }
+      next(httpError(403, "Invalid Token"));
     }
   };

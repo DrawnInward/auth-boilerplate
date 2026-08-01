@@ -6,7 +6,6 @@ export * from "./parseCookies";
 export * from "./setAuthCookies";
 export * from "./clearAuthCookies";
 export * from "./generateApiKey";
-export * from "./excludePasswordHash";
 export * from "./responseUtils";
 export * from "./errorHandling";
 export * from "./httpError";

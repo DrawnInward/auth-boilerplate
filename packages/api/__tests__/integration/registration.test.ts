@@ -31,14 +31,25 @@ describe("User Registration Integration Tests", () => {
       expect(response.body.data.email).toBe("newregistration@example.com");
     });
 
-    it("should reject registration with existing email", async () => {
-      const response = await request(app)
+    it("answers identically for an existing email — no enumeration (S5)", async () => {
+      const newResponse = await request(app)
+        .post("/api/auth/register")
+        .send({ email: "enumeration-probe@example.com" })
+        .expect(201);
+
+      const existingResponse = await request(app)
         .post("/api/auth/register")
         .send({ email: "test@example.com" }) // Existing user
-        .expect(409);
+        .expect(201);
 
-      expect(response.body.status).toBe("error");
-      expect(response.body.message).toBe("Email already registered");
+      // Same status, message and shape either way: the response must not be
+      // an oracle for which addresses have accounts.
+      expect(existingResponse.body.status).toBe(newResponse.body.status);
+      expect(existingResponse.body.message).toBe(newResponse.body.message);
+      expect(Object.keys(existingResponse.body.data)).toEqual(
+        Object.keys(newResponse.body.data),
+      );
+      expect(existingResponse.body.data.email).toBe("test@example.com");
     });
 
     it("should reject registration with invalid email", async () => {

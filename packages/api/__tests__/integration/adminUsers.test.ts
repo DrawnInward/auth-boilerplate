@@ -183,7 +183,7 @@ describe("Admin User Management Integration Tests", () => {
         .send({ email: "noauth@test.com" })
         .expect(401);
 
-      expect(response.body.msg).toBe("Credentials missing");
+      expect(response.body.message).toBe("Credentials missing");
     });
   });
 
@@ -199,12 +199,14 @@ describe("Admin User Management Integration Tests", () => {
       expect(Array.isArray(response.body.data)).toBe(true);
       expect(response.body.data.length).toBeGreaterThan(0);
 
-      // Check user structure
+      // Check user structure — and that credential material never appears in
+      // an admin listing (S10)
       response.body.data.forEach((user: any) => {
         expect(user).toHaveProperty("user_id");
         expect(user).toHaveProperty("email");
         expect(user).toHaveProperty("is_active");
         expect(user).not.toHaveProperty("password_hash");
+        expect(user).not.toHaveProperty("mfa_secret");
       });
     });
 
@@ -262,7 +264,7 @@ describe("Admin User Management Integration Tests", () => {
     it("should reject request without authentication", async () => {
       const response = await request(app).get("/api/admin/users").expect(401);
 
-      expect(response.body.msg).toBe("Credentials missing");
+      expect(response.body.message).toBe("Credentials missing");
     });
   });
 
@@ -314,7 +316,7 @@ describe("Admin User Management Integration Tests", () => {
         .get(`/api/admin/users/${fakeUuid}`)
         .expect(401);
 
-      expect(response.body.msg).toBe("Credentials missing");
+      expect(response.body.message).toBe("Credentials missing");
     });
   });
 
@@ -472,7 +474,7 @@ describe("Admin User Management Integration Tests", () => {
         })
         .expect(401);
 
-      expect(response.body.msg).toBe("Credentials missing");
+      expect(response.body.message).toBe("Credentials missing");
     });
   });
 
@@ -558,7 +560,7 @@ describe("Admin User Management Integration Tests", () => {
         .delete(`/api/admin/users/${fakeUuid}`)
         .expect(401);
 
-      expect(response.body.msg).toBe("Credentials missing");
+      expect(response.body.message).toBe("Credentials missing");
     });
   });
 

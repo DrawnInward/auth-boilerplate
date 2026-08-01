@@ -331,7 +331,10 @@ export const acceptInvitation = async (
     });
 
     if (outcome.kind === "mfa_required") {
-      const challengeToken = createMfaChallengeToken(outcome.userId, "user");
+      const challengeToken = await createMfaChallengeToken(
+        outcome.userId,
+        "user",
+      );
       setMfaChallengeCookie(res, challengeToken);
 
       return sendSuccess(

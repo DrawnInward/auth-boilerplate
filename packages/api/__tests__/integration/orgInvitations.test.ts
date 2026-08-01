@@ -93,7 +93,7 @@ describe("Organization Invitation Integration Tests", () => {
         })
         .expect(401);
 
-      expect(response.body.msg).toBe("Credentials missing");
+      expect(response.body.message).toBe("Credentials missing");
     });
 
     it("should reject invite for existing member", async () => {

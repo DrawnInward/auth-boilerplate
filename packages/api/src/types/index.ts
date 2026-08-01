@@ -8,3 +8,4 @@ export * from "./TokenCookieOptions";
 export * from "./AccessJWTPayload";
 export * from "./RefreshJWTPayload";
 export * from "./PaginationOptions";
+export * from "./MfaChallenge";

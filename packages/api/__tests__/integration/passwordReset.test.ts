@@ -281,7 +281,7 @@ describe("Password Reset Integration Tests", () => {
         .set("Cookie", [refreshTokenCookie!])
         .expect(403);
 
-      expect(logoutResponse.body.msg).toBe("Invalid Token");
+      expect(logoutResponse.body.message).toBe("Invalid Token");
     });
   });
 

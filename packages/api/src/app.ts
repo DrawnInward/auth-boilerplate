@@ -1,14 +1,17 @@
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
 import pinoHttp from "pino-http";
 import userRouter from "./routes/user.routes";
 import adminRouter from "./routes/admin.routes";
 import { catchAllError, handleCustomError } from "./utils/errorHandling";
 import { logger } from "./utils/logger";
 import { globalLimiter } from "./middleware/rateLimiter";
+import { originCheck } from "./middleware/originCheck";
+import { getAllowedOrigin } from "./utils/config";
 
 const corsOptions = {
-  origin: process.env.ALLOWED_ORIGIN || "http://localhost:5173",
+  origin: getAllowedOrigin(),
   credentials: true,
 };
 
@@ -16,7 +19,12 @@ const app = express();
 // First in the chain so every downstream handler has req.log carrying the
 // request id, and every request/response pair is logged once.
 app.use(pinoHttp({ logger }));
+app.use(helmet());
 app.use(cors(corsOptions));
+// CORS only governs what a browser lets a page *read* — it does not stop a
+// cross-site form or fetch from *sending* a cookie-carrying request, which is
+// why the origin check is a separate middleware.
+app.use(originCheck);
 app.use(express.json());
 app.use(globalLimiter);
 app.use("/api", userRouter);

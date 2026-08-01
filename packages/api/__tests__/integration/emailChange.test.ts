@@ -70,7 +70,7 @@ describe("Email Change Integration Tests", () => {
       expect(response.body.message).toContain("same as current");
     });
 
-    it("should reject if new email is already taken", async () => {
+    it("answers identically when the new email is already taken — no enumeration (S5)", async () => {
       const response = await request(app)
         .post("/api/auth/request-email-change")
         .set("Cookie", userCookies)
@@ -78,10 +78,13 @@ describe("Email Change Integration Tests", () => {
           newEmail: "alice@example.com", // Already exists
           password: "Password1",
         })
-        .expect(409);
+        .expect(200);
 
-      expect(response.body.status).toBe("error");
-      expect(response.body.message).toContain("already in use");
+      // Indistinguishable from the success path: the owner of the taken
+      // address is notified by email instead.
+      expect(response.body.status).toBe("success");
+      expect(response.body.message).toContain("Verification email sent");
+      expect(response.body.data.newEmail).toBe("alice@example.com");
     });
 
     it("should reject invalid email format", async () => {
@@ -131,7 +134,7 @@ describe("Email Change Integration Tests", () => {
         })
         .expect(401);
 
-      expect(response.body.msg).toBe("Credentials missing");
+      expect(response.body.message).toBe("Credentials missing");
     });
 
     it("should invalidate previous email change requests", async () => {
@@ -393,7 +396,7 @@ describe("Email Change Integration Tests", () => {
         })
         .expect(401);
 
-      expect(response.body.msg).toBe("Credentials missing");
+      expect(response.body.message).toBe("Credentials missing");
     });
   });
 });

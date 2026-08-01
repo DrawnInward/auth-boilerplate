@@ -348,7 +348,7 @@ describe("User Authentication Integration Tests", () => {
         .set("Cookie", [refreshTokenCookie!])
         .expect(403);
 
-      expect(logoutResponse.body.msg).toBe("Invalid Token");
+      expect(logoutResponse.body.message).toBe("Invalid Token");
     });
   });
 
@@ -421,13 +421,13 @@ describe("User Authentication Integration Tests", () => {
         .set("Cookie", [refreshTokenCookie!])
         .expect(403);
 
-      expect(secondResponse.body.msg).toBe("Invalid Token");
+      expect(secondResponse.body.message).toBe("Invalid Token");
     });
 
     it("should reject request without any tokens", async () => {
       const response = await request(app).post("/api/auth/logout").expect(401);
 
-      expect(response.body.msg).toBe("Credentials missing");
+      expect(response.body.message).toBe("Credentials missing");
     });
 
     it("should reject request with invalid refresh token", async () => {
@@ -436,7 +436,52 @@ describe("User Authentication Integration Tests", () => {
         .set("Cookie", ["refresh_token=invalid_token"])
         .expect(403);
 
-      expect(response.body.msg).toBe("Invalid Token");
+      expect(response.body.message).toBe("Invalid Token");
+    });
+
+    it("treats a malformed access_token cookie as absent, not a 500 (S7)", async () => {
+      // Not a JWT at all — no dots, payload segment undefined. Previously the
+      // decode ran outside a try, so this cookie 500'd every request.
+      const response = await request(app)
+        .post("/api/auth/logout")
+        .set("Cookie", ["access_token=garbage-not-a-jwt"])
+        .expect(401);
+
+      expect(response.body).toEqual({
+        status: "error",
+        message: "Credentials missing",
+      });
+    });
+
+    it("rejects an access_token whose payload is not JSON cleanly (S7)", async () => {
+      // Well-formed shape (three segments) but the middle one decodes to
+      // garbage, so JSON.parse throws rather than Buffer.from.
+      const notJson = Buffer.from("not json").toString("base64");
+      await request(app)
+        .post("/api/auth/logout")
+        .set("Cookie", [`access_token=aaa.${notJson}.bbb`])
+        .expect(401);
+    });
+
+    it("falls through to a valid refresh token when the access cookie is malformed (S7)", async () => {
+      const loginResponse = await request(app)
+        .post("/api/auth/login")
+        .send({
+          email: "alice@example.com",
+          password: "Password1",
+        })
+        .expect(200);
+
+      const cookies = loginResponse.headers["set-cookie"];
+      const cookieArray = Array.isArray(cookies) ? cookies : [cookies];
+      const refreshTokenCookie = cookieArray.find((c: string) =>
+        c.includes("refresh_token"),
+      );
+
+      await request(app)
+        .post("/api/auth/logout")
+        .set("Cookie", ["access_token=garbage-not-a-jwt", refreshTokenCookie!])
+        .expect(200);
     });
 
     it("should detect and prevent token replay attacks via middleware", async () => {
@@ -467,7 +512,7 @@ describe("User Authentication Integration Tests", () => {
         .set("Cookie", [refreshTokenCookie!])
         .expect(403);
 
-      expect(replayResponse.body.msg).toBe("Invalid Token");
+      expect(replayResponse.body.message).toBe("Invalid Token");
     });
 
     it("keeps the session alive when concurrent requests race to refresh (S1)", async () => {

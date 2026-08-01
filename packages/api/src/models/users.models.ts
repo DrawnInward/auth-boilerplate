@@ -8,11 +8,19 @@ import {
   UserStats,
 } from "../types";
 import { PaginationOptions } from "../types/PaginationOptions";
-import { excludePasswordHash } from "../utils";
 import { isUniqueViolation, violatedConstraint } from "../utils/pgErrors";
 import { httpError } from "../utils/httpError";
 import { buildPatch } from "../utils/sqlPatch";
 import { pagedQuery } from "../utils/pagedQuery";
+
+// S10: the projection every general-purpose read and write returns — explicit
+// columns, never SELECT/RETURNING *, so credential material (password_hash,
+// mfa_secret) cannot leak into a response by default. Secrets leave this table
+// only through the explicitly-named getUserWithPassword*/getUserWithMfaStatus
+// lookups.
+const SAFE_USER_COLUMNS = `user_id, email, email_verified, deleted_at,
+  is_active, deactivated_at, deactivated_by, mfa_enabled, google_id,
+  auth_provider, created_through, can_create_orgs, created_at, updated_at`;
 
 const USER_PATCH_FIELDS = [
   "email",
@@ -36,7 +44,7 @@ export const createUser = async (
     INSERT INTO users
     (email, password_hash, email_verified, is_active, created_through, can_create_orgs)
     VALUES ($1, $2, $3, $4, $5, $6)
-    RETURNING *;
+    RETURNING ${SAFE_USER_COLUMNS};
   `;
 
   const values = [
@@ -50,7 +58,7 @@ export const createUser = async (
 
   try {
     const result = await client.query(queryString, values);
-    return excludePasswordHash(result.rows[0]);
+    return result.rows[0];
   } catch (err: any) {
     if (isUniqueViolation(err)) {
       // Unique constraint violation
@@ -65,7 +73,7 @@ export const getUser = async (
   options: { includeSoftDeleted?: boolean } = {},
 ): Promise<Omit<User, "password_hash"> | null> => {
   let queryString = `
-    SELECT * FROM users
+    SELECT ${SAFE_USER_COLUMNS} FROM users
     WHERE email = $1
   `;
 
@@ -77,14 +85,14 @@ export const getUser = async (
   if (result.rows.length === 0) {
     return null;
   }
-  return excludePasswordHash(result.rows[0]);
+  return result.rows[0];
 };
 
 export const getUserById = async (
   userId: string,
 ): Promise<Omit<User, "password_hash"> | null> => {
   const queryString = `
-    SELECT * FROM users
+    SELECT ${SAFE_USER_COLUMNS} FROM users
     WHERE user_id = $1 AND deleted_at IS NULL;
   `;
 
@@ -92,7 +100,7 @@ export const getUserById = async (
   if (result.rows.length === 0) {
     return null;
   }
-  return excludePasswordHash(result.rows[0]);
+  return result.rows[0];
 };
 
 export const getUsers = async (
@@ -100,7 +108,7 @@ export const getUsers = async (
   pagination: PaginationOptions = {},
 ): Promise<Omit<User, "password_hash">[]> => {
   const { text, values } = pagedQuery({
-    select: "SELECT * FROM users",
+    select: `SELECT ${SAFE_USER_COLUMNS} FROM users`,
     where: ["deleted_at IS NULL"],
     equals: {
       is_active: filters.is_active,
@@ -111,7 +119,7 @@ export const getUsers = async (
   });
 
   const result = await db.query(text, values);
-  return result.rows.map(excludePasswordHash);
+  return result.rows;
 };
 
 export const getUserWithPassword = async (
@@ -162,7 +170,7 @@ export const modifyUser = async (
     UPDATE users
     SET ${[...patch.setClauses(1), "updated_at = NOW()"].join(", ")}
     WHERE user_id = $${patch.values.length + 1} AND deleted_at IS NULL
-    RETURNING *;
+    RETURNING ${SAFE_USER_COLUMNS};
   `;
 
   try {
@@ -170,7 +178,7 @@ export const modifyUser = async (
     if (result.rows.length === 0) {
       throw httpError(404, "User not found");
     }
-    return excludePasswordHash(result.rows[0]);
+    return result.rows[0];
   } catch (err: any) {
     if (isUniqueViolation(err)) {
       // Unique constraint violation
@@ -222,11 +230,11 @@ export const deleteUser = async (
     UPDATE users
     SET deleted_at = NOW(), updated_at = NOW()
     WHERE user_id = $1
-    RETURNING *;
+    RETURNING ${SAFE_USER_COLUMNS};
   `;
 
   const result = await client.query(deleteQuery, [userId]);
-  return excludePasswordHash(result.rows[0]);
+  return result.rows[0];
 };
 
 export const activateUser = async (
@@ -240,14 +248,14 @@ export const activateUser = async (
         deactivated_by = NULL,
         updated_at = NOW()
     WHERE user_id = $1 AND deleted_at IS NULL
-    RETURNING *;
+    RETURNING ${SAFE_USER_COLUMNS};
   `;
 
   const result = await client.query(queryString, [userId]);
   if (result.rows.length === 0) {
     throw httpError(404, "User not found");
   }
-  return excludePasswordHash(result.rows[0]);
+  return result.rows[0];
 };
 
 export const deactivateUser = async (
@@ -262,14 +270,14 @@ export const deactivateUser = async (
         deactivated_by = $2,
         updated_at = NOW()
     WHERE user_id = $1 AND deleted_at IS NULL
-    RETURNING *;
+    RETURNING ${SAFE_USER_COLUMNS};
   `;
 
   const result = await client.query(queryString, [userId, deactivatorId]);
   if (result.rows.length === 0) {
     throw httpError(404, "User not found");
   }
-  return excludePasswordHash(result.rows[0]);
+  return result.rows[0];
 };
 
 export const verifyUserEmail = async (
@@ -280,14 +288,14 @@ export const verifyUserEmail = async (
     UPDATE users
     SET email_verified = true, updated_at = NOW()
     WHERE user_id = $1 AND deleted_at IS NULL
-    RETURNING *;
+    RETURNING ${SAFE_USER_COLUMNS};
   `;
 
   const result = await client.query(queryString, [userId]);
   if (result.rows.length === 0) {
     throw httpError(404, "User not found");
   }
-  return excludePasswordHash(result.rows[0]);
+  return result.rows[0];
 };
 
 export const getUserStats = async (): Promise<UserStats> => {
@@ -321,7 +329,7 @@ export const getUserByGoogleId = async (
   googleId: string,
 ): Promise<Omit<User, "password_hash"> | null> => {
   const queryString = `
-    SELECT * FROM users
+    SELECT ${SAFE_USER_COLUMNS} FROM users
     WHERE google_id = $1 AND deleted_at IS NULL;
   `;
 
@@ -329,7 +337,7 @@ export const getUserByGoogleId = async (
   if (result.rows.length === 0) {
     return null;
   }
-  return excludePasswordHash(result.rows[0]);
+  return result.rows[0];
 };
 
 export const setGoogleId = async (
@@ -341,7 +349,7 @@ export const setGoogleId = async (
     UPDATE users
     SET google_id = $1, updated_at = NOW()
     WHERE user_id = $2 AND deleted_at IS NULL
-    RETURNING *;
+    RETURNING ${SAFE_USER_COLUMNS};
   `;
 
   try {
@@ -349,7 +357,7 @@ export const setGoogleId = async (
     if (result.rows.length === 0) {
       throw httpError(404, "User not found");
     }
-    return excludePasswordHash(result.rows[0]);
+    return result.rows[0];
   } catch (err: any) {
     if (isUniqueViolation(err)) {
       throw httpError(409, "Google account already linked to another user");
@@ -367,14 +375,14 @@ export const setAuthProvider = async (
     UPDATE users
     SET auth_provider = $1, updated_at = NOW()
     WHERE user_id = $2 AND deleted_at IS NULL
-    RETURNING *;
+    RETURNING ${SAFE_USER_COLUMNS};
   `;
 
   const result = await client.query(queryString, [provider, userId]);
   if (result.rows.length === 0) {
     throw httpError(404, "User not found");
   }
-  return excludePasswordHash(result.rows[0]);
+  return result.rows[0];
 };
 
 export const createGoogleUser = async (
@@ -386,7 +394,7 @@ export const createGoogleUser = async (
     INSERT INTO users
     (email, google_id, auth_provider, email_verified, is_active)
     VALUES ($1, $2, 'google', true, true)
-    RETURNING *;
+    RETURNING ${SAFE_USER_COLUMNS};
   `;
 
   try {
@@ -394,7 +402,7 @@ export const createGoogleUser = async (
       email.toLowerCase(),
       googleId,
     ]);
-    return excludePasswordHash(result.rows[0]);
+    return result.rows[0];
   } catch (err: any) {
     if (isUniqueViolation(err)) {
       if (violatedConstraint(err)?.includes("google_id")) {
@@ -414,14 +422,14 @@ export const unlinkGoogleAccount = async (
     UPDATE users
     SET google_id = NULL, auth_provider = 'local', updated_at = NOW()
     WHERE user_id = $1 AND deleted_at IS NULL
-    RETURNING *;
+    RETURNING ${SAFE_USER_COLUMNS};
   `;
 
   const result = await client.query(queryString, [userId]);
   if (result.rows.length === 0) {
     throw httpError(404, "User not found");
   }
-  return excludePasswordHash(result.rows[0]);
+  return result.rows[0];
 };
 
 export const getUserWithMfaStatus = async (
@@ -448,12 +456,12 @@ export const updateUserOrgPermission = async (
     UPDATE users
     SET can_create_orgs = $1, updated_at = NOW()
     WHERE user_id = $2 AND deleted_at IS NULL
-    RETURNING *;
+    RETURNING ${SAFE_USER_COLUMNS};
   `;
 
   const result = await client.query(queryString, [canCreateOrgs, userId]);
   if (result.rows.length === 0) {
     throw httpError(404, "User not found");
   }
-  return excludePasswordHash(result.rows[0]);
+  return result.rows[0];
 };

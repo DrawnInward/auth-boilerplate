@@ -8,6 +8,7 @@
 
 import { EmailProvider } from "../interfaces/email";
 import {
+  buildAccountExistsEmail,
   buildAdminInviteEmail,
   buildEmailChangeNotificationEmail,
   buildEmailChangeVerificationEmail,
@@ -26,6 +27,7 @@ export type EmailServiceDeps = {
 };
 
 export type EmailService = {
+  sendAccountExists(to: string): Promise<void>;
   sendVerification(to: string, token: string): Promise<void>;
   sendPasswordReset(to: string, token: string): Promise<void>;
   sendAdminInvite(to: string, token: string): Promise<void>;
@@ -53,6 +55,9 @@ export const createEmailService = ({
   const branding = { appName, frontendUrl };
 
   return {
+    sendAccountExists: (to) =>
+      provider.send(buildAccountExistsEmail({ to, ...branding })),
+
     sendVerification: (to, token) =>
       provider.send(buildVerificationEmail({ to, token, ...branding })),
 

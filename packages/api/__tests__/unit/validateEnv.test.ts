@@ -91,6 +91,8 @@ describe("validateEnv", () => {
       ["PORT", "3000.5"],
       ["REFRESH_TOKEN_DAYS", "0"],
       ["REFRESH_TOKEN_DAYS", "not-a-number"],
+      ["BCRYPT_COST", "0"],
+      ["BCRYPT_COST", "twelve"],
     ])("rejects %s=%s", (name, value) => {
       process.env[name] = value;
 
@@ -102,6 +104,7 @@ describe("validateEnv", () => {
     it.each([
       ["PORT", "3000"],
       ["REFRESH_TOKEN_DAYS", "30"],
+      ["BCRYPT_COST", "12"],
     ])("accepts %s=%s", (name, value) => {
       process.env[name] = value;
 

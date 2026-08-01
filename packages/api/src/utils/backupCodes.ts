@@ -1,8 +1,8 @@
 import crypto from "crypto";
 import bcrypt from "bcrypt";
+import { getBcryptCost } from "./config";
 
 const BACKUP_CODE_COUNT = 10;
-const SALT_ROUNDS = 10;
 
 export function generateBackupCodes(): string[] {
   const codes: string[] = [];
@@ -15,7 +15,7 @@ export function generateBackupCodes(): string[] {
 }
 
 export async function hashBackupCodes(codes: string[]): Promise<string[]> {
-  return Promise.all(codes.map((code) => bcrypt.hash(code, SALT_ROUNDS)));
+  return Promise.all(codes.map((code) => bcrypt.hash(code, getBcryptCost())));
 }
 
 export async function verifyBackupCode(

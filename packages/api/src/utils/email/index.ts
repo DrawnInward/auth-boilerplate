@@ -1,6 +1,7 @@
 export { textToHtml } from "./textToHtml";
 export { getEmailProvider } from "./providers";
 export {
+  buildAccountExistsEmail,
   buildVerificationEmail,
   buildPasswordResetEmail,
   buildOrgInviteEmail,

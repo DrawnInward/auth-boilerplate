@@ -11,6 +11,7 @@ import {
   deleteAllBackupCodes,
 } from "../../src/models/mfa.models";
 import { hashBackupCodes } from "../../src/utils/backupCodes";
+import { MFA_CHALLENGE_MAX_ATTEMPTS } from "../../src/utils/mfaChallenge";
 import { getUserUuid } from "../../src/database/test-data/testUuids";
 
 require("dotenv").config({ quiet: true });
@@ -261,6 +262,81 @@ describe("User MFA Integration Tests", () => {
         .expect(401);
 
       expect(response.body.message).toBe("Invalid verification code");
+    });
+
+    it("rejects a replayed challenge after a successful verification (S9)", async () => {
+      const loginResponse = await request(app)
+        .post("/api/auth/login")
+        .send({ email: "alice@example.com", password: "Password1" });
+
+      const mfaCookies = loginResponse.headers["set-cookie"];
+
+      await request(app)
+        .post("/api/auth/mfa/login-verify")
+        .set("Cookie", mfaCookies)
+        .send({ code: generateTotpCode(testSecret) })
+        .expect(200);
+
+      // A captured challenge cookie is now single-use: replaying it with a
+      // fresh, valid TOTP code must not mint a second session.
+      const replay = await request(app)
+        .post("/api/auth/mfa/login-verify")
+        .set("Cookie", mfaCookies)
+        .send({ code: generateTotpCode(testSecret) })
+        .expect(401);
+
+      expect(replay.body.message).toBe("Invalid MFA challenge token");
+    });
+
+    it("invalidates a challenge after repeated failed codes (S9)", async () => {
+      const loginResponse = await request(app)
+        .post("/api/auth/login")
+        .send({ email: "alice@example.com", password: "Password1" });
+
+      const mfaCookies = loginResponse.headers["set-cookie"];
+
+      for (let i = 0; i < MFA_CHALLENGE_MAX_ATTEMPTS; i++) {
+        const response = await request(app)
+          .post("/api/auth/mfa/login-verify")
+          .set("Cookie", mfaCookies)
+          .send({ code: "000000" })
+          .expect(401);
+
+        expect(response.body.message).toBe("Invalid verification code");
+      }
+
+      // Even the correct code is refused once the attempt budget is spent.
+      const exhausted = await request(app)
+        .post("/api/auth/mfa/login-verify")
+        .set("Cookie", mfaCookies)
+        .send({ code: generateTotpCode(testSecret) })
+        .expect(401);
+
+      expect(exhausted.body.message).toBe("Invalid MFA challenge token");
+    });
+
+    it("counts failed backup-code attempts against the same challenge (S9)", async () => {
+      const loginResponse = await request(app)
+        .post("/api/auth/login")
+        .send({ email: "alice@example.com", password: "Password1" });
+
+      const mfaCookies = loginResponse.headers["set-cookie"];
+
+      for (let i = 0; i < MFA_CHALLENGE_MAX_ATTEMPTS; i++) {
+        await request(app)
+          .post("/api/auth/mfa/login-backup")
+          .set("Cookie", mfaCookies)
+          .send({ code: "WRONGCODE1" })
+          .expect(401);
+      }
+
+      const exhausted = await request(app)
+        .post("/api/auth/mfa/login-backup")
+        .set("Cookie", mfaCookies)
+        .send({ code: testBackupCodes[2] })
+        .expect(401);
+
+      expect(exhausted.body.message).toBe("Invalid MFA challenge token");
     });
   });
 

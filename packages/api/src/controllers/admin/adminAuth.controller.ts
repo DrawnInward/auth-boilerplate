@@ -15,6 +15,9 @@ import {
   setMfaChallengeCookie,
   verifyMfaChallengeToken,
   clearMfaChallengeCookie,
+  guardMfaChallenge,
+  failMfaChallenge,
+  consumeMfaChallengeOrThrow,
 } from "../../utils/mfaChallenge";
 import {
   getMfaSecret,
@@ -53,7 +56,10 @@ export const login = async (
     }
 
     if (admin.mfa_enabled) {
-      const challengeToken = createMfaChallengeToken(admin.admin_id!, "admin");
+      const challengeToken = await createMfaChallengeToken(
+        admin.admin_id!,
+        "admin",
+      );
       setMfaChallengeCookie(res, challengeToken);
 
       return sendSuccess(
@@ -122,14 +128,19 @@ export const mfaLoginVerify = async (
       throw httpError(401, "Invalid MFA challenge");
     }
 
+    await guardMfaChallenge(payload.jti);
+
     const secret = await getMfaSecret(payload.role_id, "admin");
     if (!secret) {
       throw httpError(400, "MFA not configured");
     }
 
     if (!verifyTotpCode(secret, code)) {
+      await failMfaChallenge(payload.jti);
       throw httpError(401, "Invalid verification code");
     }
+
+    await consumeMfaChallengeOrThrow(payload.jti);
 
     clearMfaChallengeCookie(res);
 
@@ -182,6 +193,11 @@ export const mfaLoginBackupVerify = async (
       throw httpError(401, "Invalid MFA challenge");
     }
 
+    // On the pool, before the transaction opens (mirrored by the user
+    // handler): the guard is a fail-fast pre-check, the CAS consume below is
+    // the enforcement.
+    await guardMfaChallenge(payload.jti);
+
     const { accessToken, refreshToken } = await withTransaction(
       db,
       async (client) => {
@@ -200,10 +216,13 @@ export const mfaLoginBackupVerify = async (
         }
 
         if (!matchedCode) {
+          await failMfaChallenge(payload.jti);
           throw httpError(401, "Invalid backup code");
         }
 
         await markBackupCodeUsed(matchedCode.id, client);
+
+        await consumeMfaChallengeOrThrow(payload.jti, client);
 
         clearMfaChallengeCookie(res);
 

@@ -178,7 +178,7 @@ export const handleGoogleCallback = async (
     });
 
     if (outcome.kind === "mfa_required") {
-      const challengeToken = createMfaChallengeToken(
+      const challengeToken = await createMfaChallengeToken(
         outcome.user.user_id!,
         "user",
       );
@@ -304,7 +304,10 @@ export const linkGoogleAccount = async (
     });
 
     if (outcome.kind === "mfa_required") {
-      const challengeToken = createMfaChallengeToken(user.user_id!, "user");
+      const challengeToken = await createMfaChallengeToken(
+        user.user_id!,
+        "user",
+      );
       setMfaChallengeCookie(res, challengeToken);
 
       return sendSuccess(

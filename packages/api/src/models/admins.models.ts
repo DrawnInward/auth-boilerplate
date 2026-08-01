@@ -8,11 +8,19 @@ import {
   AdminStats,
 } from "../types";
 import { PaginationOptions } from "../types/PaginationOptions";
-import { excludePasswordHash } from "../utils";
 import { isUniqueViolation } from "../utils/pgErrors";
 import { httpError } from "../utils/httpError";
 import { buildPatch } from "../utils/sqlPatch";
 import { pagedQuery } from "../utils/pagedQuery";
+
+// S10: the projection every general-purpose read and write returns — explicit
+// columns, never SELECT/RETURNING *, so credential material (password_hash,
+// mfa_secret) cannot leak into a response by default. Secrets leave this table
+// only through the explicitly-named getAdminWithPassword/getAdminWithMfaStatus
+// lookups.
+const SAFE_ADMIN_COLUMNS = `admin_id, email, root, email_verified, deleted_at,
+  is_active, deactivated_at, deactivated_by, mfa_enabled, created_at,
+  updated_at`;
 
 const ADMIN_PATCH_FIELDS = [
   "email",
@@ -48,7 +56,7 @@ export const createAdmin = async (
     INSERT INTO admins
     (email, password_hash, root, email_verified, is_active)
     VALUES ($1, $2, $3, $4, $5)
-    RETURNING *;
+    RETURNING ${SAFE_ADMIN_COLUMNS};
   `;
 
   const values = [
@@ -61,7 +69,7 @@ export const createAdmin = async (
 
   try {
     const result = await client.query(queryString, values);
-    return excludePasswordHash(result.rows[0]);
+    return result.rows[0];
   } catch (err: any) {
     if (isUniqueViolation(err)) {
       throw httpError(409, "Email already exists");
@@ -75,7 +83,7 @@ export const getAdmin = async (
   options: { includeSoftDeleted?: boolean } = {},
 ): Promise<Omit<Admin, "password_hash"> | null> => {
   let queryString = `
-    SELECT * FROM admins
+    SELECT ${SAFE_ADMIN_COLUMNS} FROM admins
     WHERE email = $1
   `;
 
@@ -87,14 +95,14 @@ export const getAdmin = async (
   if (result.rows.length === 0) {
     return null;
   }
-  return excludePasswordHash(result.rows[0]);
+  return result.rows[0];
 };
 
 export const getAdminById = async (
   adminId: string,
 ): Promise<Omit<Admin, "password_hash"> | null> => {
   const queryString = `
-    SELECT * FROM admins
+    SELECT ${SAFE_ADMIN_COLUMNS} FROM admins
     WHERE admin_id = $1 AND deleted_at IS NULL;
   `;
 
@@ -102,7 +110,7 @@ export const getAdminById = async (
   if (result.rows.length === 0) {
     return null;
   }
-  return excludePasswordHash(result.rows[0]);
+  return result.rows[0];
 };
 
 export const getAdmins = async (
@@ -110,7 +118,7 @@ export const getAdmins = async (
   pagination: PaginationOptions = {},
 ): Promise<Omit<Admin, "password_hash">[]> => {
   const { text, values } = pagedQuery({
-    select: "SELECT * FROM admins",
+    select: `SELECT ${SAFE_ADMIN_COLUMNS} FROM admins`,
     where: ["deleted_at IS NULL"],
     equals: {
       is_active: filters.is_active,
@@ -122,7 +130,7 @@ export const getAdmins = async (
   });
 
   const result = await db.query(text, values);
-  return result.rows.map(excludePasswordHash);
+  return result.rows;
 };
 
 export const getAdminWithPassword = async (
@@ -177,7 +185,7 @@ export const modifyAdmin = async (
     UPDATE admins
     SET ${[...patch.setClauses(1), "updated_at = NOW()"].join(", ")}
     WHERE admin_id = $${patch.values.length + 1} AND deleted_at IS NULL
-    RETURNING *;
+    RETURNING ${SAFE_ADMIN_COLUMNS};
   `;
 
   try {
@@ -185,7 +193,7 @@ export const modifyAdmin = async (
     if (result.rows.length === 0) {
       throw httpError(404, "Admin not found");
     }
-    return excludePasswordHash(result.rows[0]);
+    return result.rows[0];
   } catch (err: any) {
     if (isUniqueViolation(err)) {
       throw httpError(409, "Email already exists");
@@ -246,11 +254,11 @@ export const deleteAdmin = async (
     UPDATE admins
     SET deleted_at = NOW(), updated_at = NOW()
     WHERE admin_id = $1
-    RETURNING *;
+    RETURNING ${SAFE_ADMIN_COLUMNS};
   `;
 
   const result = await client.query(deleteQuery, [adminId]);
-  return excludePasswordHash(result.rows[0]);
+  return result.rows[0];
 };
 
 export const activateAdmin = async (
@@ -264,14 +272,14 @@ export const activateAdmin = async (
         deactivated_by = NULL,
         updated_at = NOW()
     WHERE admin_id = $1 AND deleted_at IS NULL
-    RETURNING *;
+    RETURNING ${SAFE_ADMIN_COLUMNS};
   `;
 
   const result = await client.query(queryString, [adminId]);
   if (result.rows.length === 0) {
     throw httpError(404, "Admin not found");
   }
-  return excludePasswordHash(result.rows[0]);
+  return result.rows[0];
 };
 
 export const deactivateAdmin = async (
@@ -303,14 +311,14 @@ export const deactivateAdmin = async (
         deactivated_by = $2,
         updated_at = NOW()
     WHERE admin_id = $1 AND deleted_at IS NULL
-    RETURNING *;
+    RETURNING ${SAFE_ADMIN_COLUMNS};
   `;
 
   const result = await client.query(queryString, [adminId, deactivatorId]);
   if (result.rows.length === 0) {
     throw httpError(404, "Admin not found");
   }
-  return excludePasswordHash(result.rows[0]);
+  return result.rows[0];
 };
 
 export const verifyAdminEmail = async (
@@ -321,14 +329,14 @@ export const verifyAdminEmail = async (
     UPDATE admins
     SET email_verified = true, updated_at = NOW()
     WHERE admin_id = $1 AND deleted_at IS NULL
-    RETURNING *;
+    RETURNING ${SAFE_ADMIN_COLUMNS};
   `;
 
   const result = await client.query(queryString, [adminId]);
   if (result.rows.length === 0) {
     throw httpError(404, "Admin not found");
   }
-  return excludePasswordHash(result.rows[0]);
+  return result.rows[0];
 };
 
 export const getAdminStats = async (): Promise<AdminStats> => {
@@ -363,7 +371,7 @@ export const getRootAdmin = async (): Promise<Omit<
   "password_hash"
 > | null> => {
   const queryString = `
-    SELECT * FROM admins
+    SELECT ${SAFE_ADMIN_COLUMNS} FROM admins
     WHERE root = true AND deleted_at IS NULL
     LIMIT 1;
   `;
@@ -372,7 +380,7 @@ export const getRootAdmin = async (): Promise<Omit<
   if (result.rows.length === 0) {
     return null;
   }
-  return excludePasswordHash(result.rows[0]);
+  return result.rows[0];
 };
 
 export const getAdminWithMfaStatus = async (

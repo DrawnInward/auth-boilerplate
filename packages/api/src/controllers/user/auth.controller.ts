@@ -29,6 +29,9 @@ import {
   setMfaChallengeCookie,
   verifyMfaChallengeToken,
   clearMfaChallengeCookie,
+  guardMfaChallenge,
+  failMfaChallenge,
+  consumeMfaChallengeOrThrow,
 } from "../../utils/mfaChallenge";
 import {
   getMfaSecret,
@@ -116,7 +119,10 @@ export const login = async (
     }
 
     if (user.mfa_enabled) {
-      const challengeToken = createMfaChallengeToken(user.user_id!, "user");
+      const challengeToken = await createMfaChallengeToken(
+        user.user_id!,
+        "user",
+      );
       setMfaChallengeCookie(res, challengeToken);
 
       return sendSuccess(
@@ -202,14 +208,19 @@ export const mfaLoginVerify = async (
       throw httpError(401, "Invalid MFA challenge");
     }
 
+    await guardMfaChallenge(payload.jti);
+
     const secret = await getMfaSecret(payload.role_id, "user");
     if (!secret) {
       throw httpError(400, "MFA not configured");
     }
 
     if (!verifyTotpCode(secret, code)) {
+      await failMfaChallenge(payload.jti);
       throw httpError(401, "Invalid verification code");
     }
+
+    await consumeMfaChallengeOrThrow(payload.jti);
 
     clearMfaChallengeCookie(res);
 
@@ -253,22 +264,27 @@ export const mfaLoginBackupVerify = async (
   next: NextFunction,
 ) => {
   try {
-    const { accessToken, refreshToken, payload } = await withTransaction(
+    const { code } = req.body;
+    const cookies = parseCookies(req.headers.cookie);
+    const challengeToken = cookies.mfa_challenge;
+
+    if (!challengeToken) {
+      throw httpError(401, "MFA challenge not found");
+    }
+
+    const payload = verifyMfaChallengeToken(challengeToken);
+    if (payload.role_type !== "user") {
+      throw httpError(401, "Invalid MFA challenge");
+    }
+
+    // On the pool, before the transaction opens (mirrors the admin handler):
+    // the guard is a fail-fast pre-check, the CAS consume below is the
+    // enforcement.
+    await guardMfaChallenge(payload.jti);
+
+    const { accessToken, refreshToken } = await withTransaction(
       db,
       async (client) => {
-        const { code } = req.body;
-        const cookies = parseCookies(req.headers.cookie);
-        const challengeToken = cookies.mfa_challenge;
-
-        if (!challengeToken) {
-          throw httpError(401, "MFA challenge not found");
-        }
-
-        const payload = verifyMfaChallengeToken(challengeToken);
-        if (payload.role_type !== "user") {
-          throw httpError(401, "Invalid MFA challenge");
-        }
-
         const unusedCodes = await getUnusedBackupCodes(
           payload.role_id,
           "user",
@@ -284,10 +300,13 @@ export const mfaLoginBackupVerify = async (
         }
 
         if (!matchedCode) {
+          await failMfaChallenge(payload.jti);
           throw httpError(401, "Invalid backup code");
         }
 
         await markBackupCodeUsed(matchedCode.id, client);
+
+        await consumeMfaChallengeOrThrow(payload.jti, client);
 
         clearMfaChallengeCookie(res);
 
@@ -315,7 +334,7 @@ export const mfaLoginBackupVerify = async (
           client,
         );
 
-        return { accessToken, refreshToken, payload };
+        return { accessToken, refreshToken };
       },
     );
 
@@ -347,7 +366,15 @@ export const register = async (
 
     const existingUser = await getUser(email);
     if (existingUser) {
-      throw httpError(409, "Email already registered");
+      // S5: identical response to the new-account path, so an address's
+      // existence is never observable here — the owner is told by email.
+      await services.email.sendAccountExists(existingUser.email!);
+
+      return sendCreated(
+        res,
+        { email: existingUser.email },
+        "Registration email sent. Please check your inbox.",
+      );
     }
 
     await invalidatePendingInvitations(email, "registration");
@@ -704,7 +731,17 @@ export const requestEmailChange = async (
 
     const existingUser = await getUser(newEmail);
     if (existingUser) {
-      throw httpError(409, "Email already in use");
+      // S5: identical response to the success path — same emails to the same
+      // inboxes, so neither the response nor the requester's own inbox
+      // reveals whether the target address already has an account.
+      await services.email.sendAccountExists(newEmail);
+      await services.email.sendEmailChangeNotification(user.email!, newEmail);
+
+      return sendSuccess(
+        res,
+        { newEmail },
+        "Verification email sent to your new email address",
+      );
     }
 
     const { token } = await createInvitation({

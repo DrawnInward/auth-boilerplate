@@ -8,3 +8,7 @@
 // __tests__/integration/orgCreationModes.test.ts.
 process.env.ACCOUNT_CREATION_MODE = "open";
 process.env.ORG_CREATION_MODE = "open";
+
+// The production default (12) makes every hash ~250ms; the suites hash dozens
+// of passwords. 4 is bcrypt's minimum — fine for throwaway test hashes.
+process.env.BCRYPT_COST = "4";

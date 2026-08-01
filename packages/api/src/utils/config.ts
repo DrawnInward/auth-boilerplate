@@ -7,10 +7,11 @@ import { readPositiveNumberEnv } from "./envNumber";
 
 export const getAppName = (): string => process.env.APP_NAME || "App";
 
+export const getAllowedOrigin = (): string =>
+  process.env.ALLOWED_ORIGIN || "http://localhost:5173";
+
 export const getFrontendUrl = (): string =>
-  process.env.FRONTEND_URL ||
-  process.env.ALLOWED_ORIGIN ||
-  "http://localhost:5173";
+  process.env.FRONTEND_URL || getAllowedOrigin();
 
 export type AccountCreationMode = "open" | "invite_only" | "admin_only";
 export type OrgCreationMode = "open" | "self_registered_only" | "admin_only";
@@ -61,3 +62,11 @@ const REFRESH_REUSE_GRACE_SECONDS_DEFAULT = 30;
 export const getRefreshReuseGraceMs = (): number =>
   (readPositiveNumberEnv("REFRESH_REUSE_GRACE_SECONDS", { integer: true }) ??
     REFRESH_REUSE_GRACE_SECONDS_DEFAULT) * 1000;
+
+// OWASP's current bcrypt minimum. Overridable so a deployment can trade
+// hashing latency against hardware (BCRYPT_COST=4 makes test runs cheap).
+const BCRYPT_COST_DEFAULT = 12;
+
+export const getBcryptCost = (): number =>
+  readPositiveNumberEnv("BCRYPT_COST", { integer: true }) ??
+  BCRYPT_COST_DEFAULT;
