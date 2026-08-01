@@ -206,6 +206,17 @@ error middleware, so the envelope matches everywhere.
 **Tests.** Integration: garbage `access_token` cookie → clean 401, not 500. Assert the error body
 is the standard `{ status, message }` envelope.
 
+**Status (2026-07-31) — DONE.** The access-cookie decode now lives inside a try: a cookie that
+doesn't parse is treated as absent, falling through to the refresh cookie if present, else a clean 401. The three `res.status().send({msg})` sites route through `next(httpError(...))` so every auth
+failure now wears the standard `{ status: "error", message }` envelope. One deliberate nuance in
+the catch: a deliberate 5xx (`Missing environment variable`) is forwarded as-is instead of being
+flattened — previously a misconfigured server masqueraded as `403 Invalid Token` — while all
+verify/rotation failures still flatten to one 403 so the response doesn't reveal which check
+failed (per-cause refresh statuses are a Phase C concern, alongside the dedicated endpoint).
+Three new integration tests (garbage cookie → 401 + envelope; non-JSON payload segment → 401;
+malformed access cookie + valid refresh cookie → falls through and succeeds); the fourteen
+existing `body.msg` assertions updated to the standard envelope.
+
 ### A7 · S9 — MFA challenge replayable in its window (MEDIUM-LOW)
 
 **Issue.** The 5-minute challenge JWT has no `jti` and no server record; clearing only clears the
@@ -217,7 +228,21 @@ the refresh-style store), consume on successful verify and after N failed attemp
 
 **Tests.** Integration: replaying a consumed challenge → 401; challenge invalidated after N fails.
 
-### A8 · S5, S6, S10, S11 — hygiene (LOW-MEDIUM, batch together)
+**Status (2026-07-31) — DONE (dedicated table chosen).** Migration `003_mfa_challenges.sql` adds
+`mfa_challenges` (`jti` PK, role, `expires_at`, `consumed_at`, `failed_attempts`); a dedicated
+table rather than overloading `refresh`, whose rotation/grace logic must never see challenge rows.
+`createMfaChallengeToken` now mints a `jti` and persists the row itself — a challenge that isn't
+recorded can never be verified, at any current or future call site — and opportunistically deletes
+expired rows. All four verify sites (user/admin × TOTP/backup) run the same trio from
+`utils/mfaChallenge.ts`: `guardMfaChallenge` (missing/consumed/exhausted → 401) before the code
+check, `failMfaChallenge` on a wrong code (deliberately on the pool so a transaction rollback
+cannot erase the count), and `consumeMfaChallengeOrThrow` (compare-and-set, so of two concurrent
+verifies exactly one issues a session) before the session. Cap is
+`MFA_CHALLENGE_MAX_ATTEMPTS = 5`. Covered by a new CRUD suite (defaults, single consume,
+exhausted-attempts refusal, expiry cleanup) and three integration tests: replayed consumed
+challenge → 401, correct code refused after 5 failures, and failed backup-code attempts counting
+against the same budget. Row shape lives in `types/MfaChallenge.ts` as a plain interface (not a
+Zod schema — nothing validates it at an edge).
 
 - **S5 enumeration:** register / admin-invite / email-change return 409 for existing emails while
   forgot-password is enumeration-safe. Make register always answer "check your email" and send an
@@ -230,6 +255,39 @@ the refresh-style store), consume on successful verify and after N failed attemp
   listings return `mfa_secret` ciphertext + `google_id`. Switch to explicit column projection.
   _Test:_ admin user response contains no `mfa_secret`/`password_hash`.
 - **S11 bcrypt cost:** 10 → 12, env-configurable (`BCRYPT_COST`, validated). _Test:_ config parse.
+
+**Status (2026-07-31) — DONE, with three scope decisions.**
+
+- **S5:** register and request-email-change now answer identically whether the address is taken or
+  not; the address owner gets a new `accountExists` email (template + `sendAccountExists` on the
+  email service) instead of the requester getting a 409. The email-change taken path also still
+  sends the change-notification to the current address, so the requester's own inbox is no oracle
+  either. _Decision:_ the **admin-invite 409 stays** — it is an authenticated, admin-only surface
+  and admins can already list every user; enumeration protection there would only cost usability.
+  The confirm-time `409 Email is no longer available` also stays: completion against a unique
+  constraint cannot be made silent.
+- **S6:** `helmet()` with defaults, and a new `middleware/originCheck.ts` — a state-changing
+  request carrying an `Origin` other than `ALLOWED_ORIGIN` is rejected 403; requests without an
+  Origin pass (non-browser clients aren't CSRF vectors). _Decision:_ origin-check over
+  double-submit tokens — no client change, no token plumbing, and sameSite already provides the
+  primary defence. `sameSite` needed no change: it is already `strict` in production and `lax`
+  outside, exactly what the item asked to reconsider towards.
+- **S10:** widened beyond the two named functions — every general-purpose read **and write**
+  in `users.models.ts` and `admins.models.ts` now selects/returns an explicit `SAFE_*_COLUMNS`
+  projection (the `RETURNING *` sites had the same leak: an admin update response included
+  `mfa_secret`). Secrets now leave those tables only via the explicitly-named
+  `*WithPassword`/`*WithMfaStatus` lookups, and `excludePasswordHash` is deleted — the projection
+  made it dead code. _Decision:_ `google_id` **stays** in the projection; the profile response
+  derives its "Google linked" boolean from it, and it is an opaque reference, not credential
+  material.
+- **S11:** `BCRYPT_COST` (default 12) via `getBcryptCost()` in config, validated at boot with the
+  other numeric knobs; `jest.env.ts` pins cost 4 so suites don't pay production-grade hashing on
+  throwaway passwords.
+
+Tests: register enumeration (new vs existing → identical shape), email-change taken-address 200,
+a new `securityHeaders` spec (helmet headers, cross-origin 403, allowed/absent origin pass, reads
+exempt), `mfa_secret` absence asserted on admin listings, and `BCRYPT_COST` rows in the
+validateEnv table.
 
 ---
 
@@ -258,6 +316,50 @@ Phase C can prove it changed nothing. All are generic and valuable regardless of
 - **B6 · Web boundary tests.** `AdminRoute` (untested while `ProtectedRoute` has 4), one MFA-flow
   test, one invitation-accept test, and at least one form-error and one async-error path (no MSW
   500→ErrorMessage assertion exists anywhere). Add the MSW handlers these need.
+
+**Status (2026-08-01) — DONE.** Full gate green: 856 API tests (37 suites), 50 web tests
+(9 files), format/typecheck/lint clean.
+
+- **B1** — `integration/roleBoundary.test.ts` (111 tests): every route classified
+  public/user/admin in one table; wrong-role cookie → 403, no cookie → 401 for all protected
+  routes. A completeness sweep walks the real Express router and diffs the multiset of
+  router-local paths against the table, so an unclassified new route fails the suite. (Express 5
+  layers don't retain mount prefixes, hence tails rather than full paths.)
+- **B2** — `integration/adminOrganizations.test.ts` (22 tests, all 10 endpoints) and
+  `integration/adminMfa.test.ts` (25 tests: all 7 management endpoints plus an "Admin MFA Login
+  Flow" describe mirroring `userMfa.test.ts` — TOTP/backup login, replay and attempt-cap S9
+  assertions — so C2's twin-collapse can prove admin login behaviour is preserved; pins the
+  `qrCode`-vs-`qr_code` casing straggler for D6).
+- **B3** — `integration/crossOrgIsolation.test.ts` (13 tests): a non-member 403s on all 12
+  org-scoped endpoints, plus a direct-DB assertion that the target org is untouched; model-layer
+  "org A never sees org B rows" test added to `CRUD/organizationMembersCRUD.test.ts`.
+- **B4** — `integration/selfAccount.test.ts` (9 tests): change-password happy path, wrong
+  current password, validation, refresh-token revocation (the pre-change refresh token can no
+  longer mint a session), and the passwordless-account 400. `PUT /auth/profile` is pinned as the
+  read-only no-op it currently is — the D3 decision (implement or remove) must update that spec.
+- **B5** — eight new unit suites (`mfaChallenge`, `totp`, `encryption`, `backupCodes`,
+  `determinateHash`, `sanitizeUrl`, `parseCookies`, `pgErrors`): GCM round-trip + tamper
+  rejection, TOTP verify against library-minted codes, challenge-JWT type/expiry/signature
+  rejections, SHA-256 vector, XSS-scheme neutralisation, cookie parsing edge cases, and the
+  typed pg-error helpers.
+- **B6** — `AdminRoute.test.tsx` (mirrors ProtectedRoute, bounces to `/admin/login`),
+  `MfaVerifyForm.test.tsx` (TOTP submit, backup-code switch, shared-schema form errors),
+  `AcceptInvitePage.test.tsx` (new-user vs existing-user password field, invalid-invitation
+  state, form error, successful accept + navigation), `OrganizationDetailPage.test.tsx` (MSW
+  500/403 → error component). Invitation MSW handlers added to `test/handlers.ts`, validated
+  with `acceptInviteSchema`.
+- **Not bundled:** A5/S8 (password on MFA disable) remains the one open Phase A item — it
+  changes the shared `mfaDisableSchema` contract and both disable handlers, so it was kept out
+  of a characterisation phase. The B2/roleBoundary disable specs will need updating when it
+  lands.
+- **Post-review fixes (same date, pre-commit):** a self-review pass against the layering/reuse
+  rules produced: the admin MFA login-flow spec above (the one real coverage gap — the S9
+  machinery ran at four call sites with only the user two tested); `backupCodes` now uses
+  `getBcryptCost()` instead of a hardcoded 10; `getAllowedOrigin()` extracted to `utils/config`
+  and consumed by `originCheck` + the CORS options (the default had been inlined three times);
+  the user backup-verify handler now guards on the pool before its transaction, matching the
+  admin twin (the CAS consume remains the enforcement — the guard is a fail-fast pre-check, and
+  the twins must stay identical for C2).
 
 ---
 

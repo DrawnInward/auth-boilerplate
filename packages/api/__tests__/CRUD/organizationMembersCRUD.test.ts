@@ -201,6 +201,24 @@ describe("Organization Members Model CRUD Operations", () => {
       const members = await getOrganizationMembers(org.id!);
       expect(members).toEqual([]);
     });
+
+    it("never returns another organization's rows (B3)", async () => {
+      // The per-model minimum "org A never sees org B rows", asserted at the
+      // model layer: every row carries the queried org's id, and the member
+      // known to belong only to another org never appears.
+      const acmeMembers = await getOrganizationMembers(getOrganizationUuid(1));
+      const bobsTeamMembers = await getOrganizationMembers(
+        getOrganizationUuid(2),
+      );
+
+      acmeMembers.forEach((member) => {
+        expect(member.organization_id).toBe(getOrganizationUuid(1));
+      });
+      bobsTeamMembers.forEach((member) => {
+        expect(member.organization_id).toBe(getOrganizationUuid(2));
+      });
+      expect(bobsTeamMembers.map((m) => m.user_id)).toEqual([getUserUuid(3)]);
+    });
   });
 
   describe("getUserMemberships", () => {

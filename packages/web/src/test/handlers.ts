@@ -11,8 +11,9 @@ import {
   createOrganizationDtoSchema,
   updateMemberRoleDtoSchema,
   inviteMemberSchema,
+  acceptInviteSchema,
 } from "@auth-boilerplate/shared";
-import type { PublicUser } from "@auth-boilerplate/shared";
+import type { PublicUser, PublicInvitation } from "@auth-boilerplate/shared";
 import type { ZodTypeAny } from "zod";
 
 // Matches api/client.ts's default when VITE_API_URL is unset.
@@ -104,8 +105,39 @@ export const testMembers = [
   },
 ];
 
+export const INVITE_TOKEN = "a".repeat(64);
+
+// A new-user org invitation. Tests needing an existing-user or broken
+// invitation override the GET handler via `server.use(invitationIs(...))`.
+export const testInvitation: PublicInvitation = {
+  email: "invitee@example.com",
+  type: "org_invite",
+  is_existing_user: false,
+  organization_id: ORG_ID,
+  organization_name: "Acme Corp",
+  role: "member",
+};
+
+export const invitationIs = (invitation: PublicInvitation | null) =>
+  http.get(url(`/invitations/${INVITE_TOKEN}`), () =>
+    invitation
+      ? success(invitation)
+      : HttpResponse.json(
+          { status: "error", message: "Invalid or expired invitation" },
+          { status: 404 },
+        ),
+  );
+
 export const handlers = [
   signedInAs(testUsers.owner),
+
+  invitationIs(testInvitation),
+
+  http.post(url(`/invitations/${INVITE_TOKEN}/accept`), async ({ request }) => {
+    const body = await parseBody(request, acceptInviteSchema);
+    if (!body.ok) return body.response;
+    return success(null, "Invitation accepted");
+  }),
 
   http.get(url("/organizations"), () => success([testOrganization])),
 
