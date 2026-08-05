@@ -461,6 +461,24 @@ sendOrgInvite, runTransaction })` owns both org-invitation flows. `acceptInvitat
   email had pre-uplift). Wrap it as an injected adapter with a deterministic fake, mirroring the
   email adapter — this is the pattern billing's payment providers will follow, so getting it right
   here is doubly worth it.
+
+  **Status (2026-08-05) — DONE.** `interfaces/googleOAuth.ts` defines `GoogleOAuthProvider`
+  (isConfigured / generateState / getAuthUrl / exchangeCodeForTokens / getUserInfo) and owns the
+  wire types; `utils/googleOAuth.ts` keeps its five functions as the real implementation, and the
+  composition root builds the adapter over them with late-bound wrappers — the exact
+  `emailProvider` construction — so the OAuth integration suite's `jest.mock` of the module path
+  still intercepts and runs **unmodified**. The orchestration moved to
+  `services/oauth.service.ts`: `createOauthService({ google, users, getMfaStatus, startSession,
+issueSession, runTransaction })` with `beginGoogleAuth` / `completeGoogleCallback` (the
+  four-outcome transaction, verbatim) / `linkGoogle` / `unlinkGoogle`. `linkGoogle` takes an
+  `onPasswordVerified` callback (the C2 cookie-timing pattern) so the pending-link cookie is
+  still consumed after the password check but before the transaction — a failure part-way still
+  clears it. `oauth.controller.ts` keeps only query/state validation, cookie handling and
+  response shaping; `config.controller.ts`'s `isGoogleOAuthConfigured` read stays as-is (a config
+  probe, not orchestration). New `unit/oauthService.test.ts` (16 tests) drives all four flows
+  with a fake provider and in-memory models — no `jest.mock`, no network: the C4 defect,
+  demonstrated fixed. Full gate green: 930 API tests (41 suites), 50 web.
+
 - Wrap the four currently-untransactioned multi-step flows (`register`, `forgotPassword`,
   `requestEmailChange`, `inviteMember`) in `withTransaction` as they move into services.
   _(`inviteMember` done with C3; the other three remain, pending their own extractions.)_
@@ -548,7 +566,7 @@ A (security)  ── A1,A2 first (A2 before billing hooks) ── A3,A4 ── A
       │
 B (test net)  ── B1 (wrong-role) is the keystone ── B2..B6           ← before any refactor
       │
-C (services)  ── C1 authService DONE ── C2 mfaService DONE ── C3 invitationService DONE ── C4
+C (services)  ── C1 ── C2 ── C3 ── C4 — ALL DONE (A1 part 1, the refresh endpoint, still open)
       │
 D (rest)      ── D2 org soft-delete + A2 clean == billing unblocked
                  D1 schema single-source ── D3 features ── D4 lint ── D5 docs/CI ── D6
