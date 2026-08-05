@@ -6,11 +6,38 @@ export interface ApiError {
   errors?: Array<{ field: string; message: string; code: string }>;
 }
 
-export async function apiClient<T>(
-  endpoint: string,
-  options: RequestInit = {},
-): Promise<T> {
-  const res = await fetch(`${API_BASE}${endpoint}`, {
+// Single-flight refresh: however many requests hit a 401 together, exactly
+// one exchange of the refresh cookie goes out and every caller awaits it.
+// Firing one per request is what raced rotations of the same cookie
+// server-side (S1).
+let refreshInFlight: Promise<boolean> | null = null;
+
+async function performRefresh(): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/auth/refresh`, {
+      method: "POST",
+      credentials: "include",
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+function refreshSession(): Promise<boolean> {
+  if (!refreshInFlight) {
+    // The slot must clear only after the exchange settles — a still-pending
+    // promise is what concurrent callers share, and a settled one must not
+    // answer a 401 that arrives minutes later.
+    refreshInFlight = performRefresh().finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  return refreshInFlight;
+}
+
+function doFetch(endpoint: string, options: RequestInit): Promise<Response> {
+  return fetch(`${API_BASE}${endpoint}`, {
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
@@ -18,6 +45,29 @@ export async function apiClient<T>(
     },
     ...options,
   });
+}
+
+export async function apiClient<T>(
+  endpoint: string,
+  options: RequestInit = {},
+): Promise<T> {
+  let res = await doFetch(endpoint, options);
+
+  // Only the auth middleware's uniform 401 means "session expired" — it is
+  // sent before any handler runs, so the retry is safe for every verb. A 401
+  // minted inside a handler (wrong login password, wrong MFA code) must
+  // surface untouched: retrying would silently re-submit the attempt and burn
+  // its rate-limit or MFA-attempt budget. A failed refresh falls through to
+  // the original 401.
+  if (res.status === 401 && endpoint !== "/auth/refresh") {
+    const body = await res
+      .clone()
+      .json()
+      .catch(() => null);
+    if (body?.message === "Credentials missing" && (await refreshSession())) {
+      res = await doFetch(endpoint, options);
+    }
+  }
 
   const data = await res.json();
 

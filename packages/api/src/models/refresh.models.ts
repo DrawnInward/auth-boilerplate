@@ -152,9 +152,9 @@ export const removeRefreshById = async (id: string): Promise<void> => {
 };
 
 export const createAccessToken = async (
-  // The JWT-decoded payload is no longer trusted for identity — role and owner
-  // are read from the locked DB row below — but the parameter is kept so the
-  // caller contract (authoriseUser) is unchanged.
+  // The JWT-decoded payload is not trusted for identity — role and owner are
+  // read from the locked DB row below. Verifying the signature is the caller's
+  // job (the refresh endpoint); this only ever sees a token that passed it.
   _decodedRefreshToken: { refresh_id: string; role_type: string },
   originalRefreshToken: string,
 ): Promise<{ accessToken: string; newRefreshToken: string }> => {

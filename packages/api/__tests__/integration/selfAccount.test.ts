@@ -155,13 +155,13 @@ describe("Self-account mutations (B4)", () => {
         .send({ current_password: "Password1", new_password: "NewPassword1" })
         .expect(200);
 
-      // The pre-change refresh token alone can no longer mint a session.
+      // The pre-change refresh token can no longer be exchanged for a session.
       const refreshOnly = cookies.filter((c) => c.startsWith("refresh_token="));
       const response = await request(app)
-        .get("/api/auth/me")
+        .post("/api/auth/refresh")
         .set("Cookie", refreshOnly)
-        .expect(403);
-      expect(response.body.message).toBe("Invalid Token");
+        .expect(401);
+      expect(response.body.message).toBe("Refresh token has been revoked");
 
       // Restore: the access token in the old cookie set is still valid.
       await request(app)

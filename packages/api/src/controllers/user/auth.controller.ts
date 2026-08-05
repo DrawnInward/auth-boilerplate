@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
-import { RequestWithUser } from "../../types";
+import jwt from "jsonwebtoken";
+import { RefreshJwtPayload, RequestWithUser } from "../../types";
 import bcrypt from "bcrypt";
 import db from "../../database/db";
 import {
@@ -12,7 +13,10 @@ import {
   modifyUser,
   setAuthProvider,
 } from "../../models/users.models";
-import { revokeUserTokens } from "../../models/refresh.models";
+import {
+  createAccessToken,
+  revokeUserTokens,
+} from "../../models/refresh.models";
 import {
   createInvitation,
   validateInvitationToken,
@@ -30,7 +34,7 @@ import {
 } from "../../utils/mfaChallenge";
 import { parseCookies } from "../../utils";
 import { getAccountCreationMode, getOrgCreationMode } from "../../utils/config";
-import { httpError } from "../../utils/httpError";
+import { httpError, isHttpError } from "../../utils/httpError";
 import { withTransaction } from "../../utils/withTransaction";
 
 import "../../utils/loadEnv";
@@ -155,6 +159,59 @@ export const logout = async (
     clearAuthCookies(res);
 
     return sendSuccess(res, null, "User logged out successfully");
+  } catch (error) {
+    next(error);
+  }
+};
+
+// The one place a refresh token is exchanged (S1/A1): the middleware only
+// verifies access tokens, and clients call this on a 401. The refresh cookie
+// itself is the credential and names its principal, so one endpoint serves
+// both roles.
+export const refreshSession = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const cookies = parseCookies(req.headers.cookie);
+    const refreshToken = cookies.refresh_token;
+
+    if (!refreshToken) {
+      throw httpError(401, "Credentials missing");
+    }
+
+    const refreshKey = process.env.REFRESH_KEY;
+    if (!refreshKey) {
+      throw httpError(500, "Missing environment variable.");
+    }
+
+    let payload: RefreshJwtPayload;
+    try {
+      payload = jwt.verify(refreshToken, refreshKey) as RefreshJwtPayload;
+    } catch {
+      throw httpError(401, "Invalid refresh token");
+    }
+
+    let accessToken: string;
+    let newRefreshToken: string;
+    try {
+      ({ accessToken, newRefreshToken } = await createAccessToken(
+        payload,
+        refreshToken,
+      ));
+    } catch (error) {
+      // A validly-signed token whose row is gone must read exactly like a
+      // forged one — one 401, not a 404 oracle.
+      if (isHttpError(error) && error.status === 404) {
+        throw httpError(401, "Invalid refresh token");
+      }
+      throw error;
+    }
+
+    setAuthCookies(res, accessToken, newRefreshToken);
+
+    return sendSuccess(res, null, "Token refreshed");
   } catch (error) {
     next(error);
   }

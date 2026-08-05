@@ -231,7 +231,7 @@ describe("User Authentication Integration Tests", () => {
       expect(decodedAccess.exp).toBeGreaterThanOrEqual(beforeLogin + 15 * 60);
       expect(decodedAccess.exp).toBeLessThanOrEqual(afterLogin + 15 * 60 + 5);
 
-      // Check refresh token expiration (200 days as per refresh model)
+      // Refresh expiry tracks REFRESH_TOKEN_DAYS (default 7, env-overridable)
       const refreshTokenCookie = cookieArray.find((c: string) =>
         c.includes("refresh_token"),
       );
@@ -341,46 +341,45 @@ describe("User Authentication Integration Tests", () => {
       // Logout (this should revoke all refresh tokens)
       await request(app).post("/api/auth/logout").set("Cookie", cookies);
 
-      // Try to use refresh token after logout - should fail
-      // Use only refresh token to force middleware to check it
-      const logoutResponse = await request(app)
-        .post("/api/auth/logout")
+      // The revoked refresh token can no longer be exchanged.
+      const refreshResponse = await request(app)
+        .post("/api/auth/refresh")
         .set("Cookie", [refreshTokenCookie!])
-        .expect(403);
+        .expect(401);
 
-      expect(logoutResponse.body.message).toBe("Invalid Token");
+      expect(refreshResponse.body.message).toBe(
+        "Refresh token has been revoked",
+      );
     });
   });
 
-  describe("Automatic Token Refresh via Middleware", () => {
-    it("should automatically refresh tokens when access token expires", async () => {
-      // Login to get tokens
+  describe("Session refresh via POST /api/auth/refresh", () => {
+    const loginRefreshCookie = async (email = "test@example.com") => {
       const loginResponse = await request(app)
         .post("/api/auth/login")
-        .send({
-          email: "test@example.com",
-          password: "Password1",
-        })
+        .send({ email, password: "Password1" })
         .expect(200);
-
-      const cookies = loginResponse.headers["set-cookie"];
+      const cookies = loginResponse.headers["set-cookie"] as unknown;
       const cookieArray = Array.isArray(cookies) ? cookies : [cookies];
-
-      // Extract refresh token (access token will be expired/removed)
       const refreshTokenCookie = cookieArray.find((c: string) =>
         c.includes("refresh_token"),
       );
       expect(refreshTokenCookie).toBeDefined();
+      return refreshTokenCookie as string;
+    };
 
-      // Make a request with only refresh token (simulating expired access token)
-      // The middleware should automatically refresh
-      const protectedResponse = await request(app)
-        .post("/api/auth/logout")
-        .set("Cookie", [refreshTokenCookie!])
+    it("exchanges the refresh cookie for a fresh session", async () => {
+      const refreshTokenCookie = await loginRefreshCookie();
+
+      const refreshResponse = await request(app)
+        .post("/api/auth/refresh")
+        .set("Cookie", [refreshTokenCookie])
         .expect(200);
 
-      // Should receive new tokens in cookies
-      const newCookies = protectedResponse.headers["set-cookie"];
+      expect(refreshResponse.body.status).toBe("success");
+      expect(refreshResponse.body.message).toBe("Token refreshed");
+
+      const newCookies = refreshResponse.headers["set-cookie"];
       expect(newCookies).toBeDefined();
       const newCookieArray = Array.isArray(newCookies)
         ? newCookies
@@ -391,37 +390,68 @@ describe("User Authentication Integration Tests", () => {
       expect(
         newCookieArray.some((c: string) => c.includes("refresh_token")),
       ).toBe(true);
+
+      // The fresh cookies authenticate.
+      await request(app)
+        .get("/api/auth/me")
+        .set("Cookie", newCookieArray)
+        .expect(200);
     });
 
-    it("should invalidate old refresh token after middleware rotation", async () => {
-      // Login
-      const loginResponse = await request(app)
-        .post("/api/auth/login")
-        .send({
-          email: "alice@example.com",
-          password: "Password1",
-        })
-        .expect(200);
+    it("no longer rotates in the middleware: a refresh-only request is a plain 401", async () => {
+      const refreshTokenCookie = await loginRefreshCookie();
 
-      const cookies = loginResponse.headers["set-cookie"];
-      const cookieArray = Array.isArray(cookies) ? cookies : [cookies];
-      const refreshTokenCookie = cookieArray.find((c: string) =>
-        c.includes("refresh_token"),
+      const response = await request(app)
+        .get("/api/auth/me")
+        .set("Cookie", [refreshTokenCookie])
+        .expect(401);
+
+      expect(response.body.message).toBe("Credentials missing");
+      // And no rotation happened as a side effect: the middleware set nothing.
+      expect(response.headers["set-cookie"]).toBeUndefined();
+    });
+
+    it("rejects an outside-grace replay and revokes the whole session lineage", async () => {
+      const { determinateHash } = await import("../../src/utils");
+      const refreshTokenCookie = await loginRefreshCookie("alice@example.com");
+      const refreshToken = refreshTokenCookie.match(
+        /refresh_token=([^;]+)/,
+      )![1];
+
+      // Rotate once at the endpoint; keep the successor cookies.
+      const first = await request(app)
+        .post("/api/auth/refresh")
+        .set("Cookie", [refreshTokenCookie])
+        .expect(200);
+      const successorCookies = first.headers[
+        "set-cookie"
+      ] as unknown as string[];
+
+      // Age the rotation past the reuse-interval, then replay the old token —
+      // this is the theft signature, not a client race.
+      await db.query(
+        "UPDATE refresh SET used_at = NOW() - INTERVAL '10 minutes' WHERE token_hash = $1",
+        [determinateHash(refreshToken)],
       );
 
-      // First request with refresh token - should succeed and rotate
-      await request(app)
-        .post("/api/auth/logout")
-        .set("Cookie", [refreshTokenCookie!])
-        .expect(200);
+      const replay = await request(app)
+        .post("/api/auth/refresh")
+        .set("Cookie", [refreshTokenCookie])
+        .expect(401);
+      expect(replay.body.message).toBe(
+        "Refresh token has already been used - possible security breach",
+      );
 
-      // Try to use old refresh token again - should fail
-      const secondResponse = await request(app)
-        .post("/api/auth/logout")
-        .set("Cookie", [refreshTokenCookie!])
-        .expect(403);
-
-      expect(secondResponse.body.message).toBe("Invalid Token");
+      // Breach detection revoked every token in the lineage: the legitimate
+      // successor is dead too.
+      const successorRefresh = successorCookies.find((c) =>
+        c.startsWith("refresh_token="),
+      )!;
+      const afterBreach = await request(app)
+        .post("/api/auth/refresh")
+        .set("Cookie", [successorRefresh])
+        .expect(401);
+      expect(afterBreach.body.message).toBe("Refresh token has been revoked");
     });
 
     it("should reject request without any tokens", async () => {
@@ -430,13 +460,38 @@ describe("User Authentication Integration Tests", () => {
       expect(response.body.message).toBe("Credentials missing");
     });
 
-    it("should reject request with invalid refresh token", async () => {
-      const response = await request(app)
-        .post("/api/auth/logout")
-        .set("Cookie", ["refresh_token=invalid_token"])
-        .expect(403);
+    it("rejects a refresh call without a refresh cookie", async () => {
+      const response = await request(app).post("/api/auth/refresh").expect(401);
 
-      expect(response.body.message).toBe("Invalid Token");
+      expect(response.body.message).toBe("Credentials missing");
+    });
+
+    it("rejects a forged refresh token", async () => {
+      const response = await request(app)
+        .post("/api/auth/refresh")
+        .set("Cookie", ["refresh_token=invalid_token"])
+        .expect(401);
+
+      expect(response.body.message).toBe("Invalid refresh token");
+    });
+
+    it("answers a signed token with no row exactly like a forged one", async () => {
+      const { determinateHash } = await import("../../src/utils");
+      const refreshTokenCookie = await loginRefreshCookie("alice@example.com");
+      const refreshToken = refreshTokenCookie.match(
+        /refresh_token=([^;]+)/,
+      )![1];
+
+      await db.query("DELETE FROM refresh WHERE token_hash = $1", [
+        determinateHash(refreshToken),
+      ]);
+
+      const response = await request(app)
+        .post("/api/auth/refresh")
+        .set("Cookie", [refreshTokenCookie])
+        .expect(401);
+
+      expect(response.body.message).toBe("Invalid refresh token");
     });
 
     it("treats a malformed access_token cookie as absent, not a 500 (S7)", async () => {
@@ -463,83 +518,56 @@ describe("User Authentication Integration Tests", () => {
         .expect(401);
     });
 
-    it("falls through to a valid refresh token when the access cookie is malformed (S7)", async () => {
-      const loginResponse = await request(app)
-        .post("/api/auth/login")
-        .send({
-          email: "alice@example.com",
-          password: "Password1",
-        })
-        .expect(200);
-
-      const cookies = loginResponse.headers["set-cookie"];
-      const cookieArray = Array.isArray(cookies) ? cookies : [cookies];
-      const refreshTokenCookie = cookieArray.find((c: string) =>
-        c.includes("refresh_token"),
-      );
+    it("ignores a malformed access cookie at the refresh endpoint (S7)", async () => {
+      const refreshTokenCookie = await loginRefreshCookie("alice@example.com");
 
       await request(app)
-        .post("/api/auth/logout")
-        .set("Cookie", ["access_token=garbage-not-a-jwt", refreshTokenCookie!])
+        .post("/api/auth/refresh")
+        .set("Cookie", ["access_token=garbage-not-a-jwt", refreshTokenCookie])
         .expect(200);
     });
 
-    it("should detect and prevent token replay attacks via middleware", async () => {
-      // Login
-      const loginResponse = await request(app)
-        .post("/api/auth/login")
-        .send({
-          email: "alice@example.com",
-          password: "Password1",
-        })
+    it("never resurrects a rotated-then-logged-out lineage, even inside grace", async () => {
+      const refreshTokenCookie = await loginRefreshCookie("alice@example.com");
+
+      // Rotate, then end the session with the successor.
+      const first = await request(app)
+        .post("/api/auth/refresh")
+        .set("Cookie", [refreshTokenCookie])
         .expect(200);
-
-      const cookies = loginResponse.headers["set-cookie"];
-      const cookieArray = Array.isArray(cookies) ? cookies : [cookies];
-      const refreshTokenCookie = cookieArray.find((c: string) =>
-        c.includes("refresh_token"),
-      );
-
-      // Use refresh token first time (valid) - this triggers rotation
+      const successorCookies = first.headers[
+        "set-cookie"
+      ] as unknown as string[];
       await request(app)
         .post("/api/auth/logout")
-        .set("Cookie", [refreshTokenCookie!])
+        .set("Cookie", successorCookies)
         .expect(200);
 
-      // Try to reuse the same refresh token (replay attack) - should fail
-      const replayResponse = await request(app)
-        .post("/api/auth/logout")
-        .set("Cookie", [refreshTokenCookie!])
-        .expect(403);
-
-      expect(replayResponse.body.message).toBe("Invalid Token");
+      // Replaying the parent is within the reuse-interval, but its successor
+      // is revoked — the grace window must not bring the session back.
+      const replay = await request(app)
+        .post("/api/auth/refresh")
+        .set("Cookie", [refreshTokenCookie])
+        .expect(401);
+      expect(replay.body.message).toBe("Refresh token has been revoked");
     });
 
     it("keeps the session alive when concurrent requests race to refresh (S1)", async () => {
       // The bug this guards: after the access token expires, an SPA fires
-      // several requests at once, all carrying the same refresh cookie. Before
-      // the reuse-interval, the first rotated and the rest were treated as a
-      // replay, revoking every session on every device. Now both must succeed.
-      const loginResponse = await request(app)
-        .post("/api/auth/login")
-        .send({ email: "alice@example.com", password: "Password1" })
-        .expect(200);
+      // several refresh exchanges at once, all carrying the same cookie.
+      // Before the reuse-interval, the first rotated and the rest were treated
+      // as a replay, revoking every session on every device.
+      const refreshTokenCookie = await loginRefreshCookie("alice@example.com");
+      // A separate device, logged in before the race.
+      const otherDeviceCookie = await loginRefreshCookie("alice@example.com");
 
-      const cookies = loginResponse.headers["set-cookie"];
-      const cookieArray = Array.isArray(cookies) ? cookies : [cookies];
-      const refreshTokenCookie = cookieArray.find((c: string) =>
-        c.includes("refresh_token"),
-      );
-
-      // Sending only the refresh cookie forces the rotation path immediately,
-      // standing in for an expired access token.
       const [a, b] = await Promise.all([
         request(app)
-          .get("/api/organizations")
-          .set("Cookie", [refreshTokenCookie!]),
+          .post("/api/auth/refresh")
+          .set("Cookie", [refreshTokenCookie]),
         request(app)
-          .get("/api/organizations")
-          .set("Cookie", [refreshTokenCookie!]),
+          .post("/api/auth/refresh")
+          .set("Cookie", [refreshTokenCookie]),
       ]);
 
       expect([a.status, b.status].sort()).toEqual([200, 200]);
@@ -547,11 +575,13 @@ describe("User Authentication Integration Tests", () => {
       // The session survives: the freshly issued cookies still authenticate.
       const rotated = (b.headers["set-cookie"] ??
         a.headers["set-cookie"]) as unknown as string[];
-      const follow = await request(app)
-        .get("/api/organizations")
-        .set("Cookie", rotated)
+      await request(app).get("/api/auth/me").set("Cookie", rotated).expect(200);
+
+      // And the race on one device never touched the other device's session.
+      await request(app)
+        .post("/api/auth/refresh")
+        .set("Cookie", [otherDeviceCookie])
         .expect(200);
-      expect(follow.body.status).toBe("success");
     });
   });
 

@@ -20,6 +20,15 @@ const RATE_LIMITS = {
     max: 10, // 10 attempts per 15 minutes
     message: "Too many authentication attempts, please try again later",
   },
+  // Session refresh is steady-state traffic, not an attack surface for
+  // guessing (a token is an unforgeable signed JWT) — it must never share
+  // login's 10-hit budget, or routine refreshes lock the whole IP out of
+  // logging in.
+  refresh: {
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 120,
+    message: "Too many requests, please try again later",
+  },
   strict: {
     windowMs: 60 * 60 * 1000, // 1 hour
     max: 5, // 5 attempts per hour
@@ -52,6 +61,7 @@ function createLimiter(
 
 export const globalLimiter = createLimiter(RATE_LIMITS.global);
 export const authLimiter = createLimiter(RATE_LIMITS.auth);
+export const refreshLimiter = createLimiter(RATE_LIMITS.refresh);
 export const strictLimiter = createLimiter(RATE_LIMITS.strict);
 export const apiLimiter = createLimiter(RATE_LIMITS.api);
 

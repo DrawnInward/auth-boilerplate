@@ -43,6 +43,7 @@ const ROUTES: ClassifiedRoute[] = [
   route("post", "/api/auth", "/forgot-password", "public"),
   route("post", "/api/auth", "/reset-password", "public"),
   route("post", "/api/auth", "/login", "public"),
+  route("post", "/api/auth", "/refresh", "public"),
   route("post", "/api/auth", "/logout", "user"),
   route("post", "/api/auth", "/mfa/login-verify", "public"),
   route("post", "/api/auth", "/mfa/login-backup", "public"),

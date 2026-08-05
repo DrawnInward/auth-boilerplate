@@ -1,7 +1,7 @@
 import express from "express";
 import { authoriseUser } from "../../middleware/authoriseUser";
 import { validateBody, validateParams } from "../../middleware/validate";
-import { authLimiter } from "../../middleware/rateLimiter";
+import { authLimiter, refreshLimiter } from "../../middleware/rateLimiter";
 import {
   loginUserSchema,
   registerSchema,
@@ -21,6 +21,7 @@ import {
 import {
   login,
   logout,
+  refreshSession,
   register,
   verifyToken,
   completeRegistration,
@@ -68,6 +69,9 @@ router.post(
 // Standard auth routes
 router.post("/login", authLimiter, validateBody(loginUserSchema), login);
 router.post("/logout", authoriseUser(["user"]), logout);
+// POST /refresh — public; the refresh cookie is the credential and names its
+// principal, so this one endpoint rotates user and admin sessions alike.
+router.post("/refresh", refreshLimiter, refreshSession);
 
 // MFA login verification routes
 router.post(

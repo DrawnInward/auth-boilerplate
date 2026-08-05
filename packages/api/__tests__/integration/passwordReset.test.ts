@@ -276,12 +276,14 @@ describe("Password Reset Integration Tests", () => {
         c.includes("refresh_token"),
       );
 
-      const logoutResponse = await request(app)
-        .post("/api/auth/logout")
+      const refreshResponse = await request(app)
+        .post("/api/auth/refresh")
         .set("Cookie", [refreshTokenCookie!])
-        .expect(403);
+        .expect(401);
 
-      expect(logoutResponse.body.message).toBe("Invalid Token");
+      expect(refreshResponse.body.message).toBe(
+        "Refresh token has been revoked",
+      );
     });
   });
 

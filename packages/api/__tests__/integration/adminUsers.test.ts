@@ -65,8 +65,6 @@ describe("Admin User Management Integration Tests", () => {
         is_active: true,
         created_through: "self_registered",
       });
-      // Only the refresh cookie is sent, forcing the rotation path (an expired
-      // access token would behave the same).
       const refreshCookie = await loginRefreshCookie("s4.deactivate@test.com");
 
       await request(app)
@@ -75,10 +73,13 @@ describe("Admin User Management Integration Tests", () => {
         .send({ is_active: false })
         .expect(200);
 
-      await request(app)
-        .get("/api/organizations")
+      // Deactivation revoked the tokens inside its transaction (A4), so the
+      // exchange dies at the revoked-token check.
+      const response = await request(app)
+        .post("/api/auth/refresh")
         .set("Cookie", [refreshCookie])
-        .expect(403);
+        .expect(401);
+      expect(response.body.message).toBe("Refresh token has been revoked");
     });
 
     it("kills a deleted user's sessions so they cannot refresh", async () => {
@@ -98,9 +99,9 @@ describe("Admin User Management Integration Tests", () => {
         .expect(200);
 
       await request(app)
-        .get("/api/organizations")
+        .post("/api/auth/refresh")
         .set("Cookie", [refreshCookie])
-        .expect(403);
+        .expect(401);
     });
   });
 

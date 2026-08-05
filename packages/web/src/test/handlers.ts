@@ -131,6 +131,16 @@ export const invitationIs = (invitation: PublicInvitation | null) =>
 export const handlers = [
   signedInAs(testUsers.owner),
 
+  // The api client retries a 401 after one refresh attempt; refusing here by
+  // default keeps signed-out scenarios deterministic instead of tripping the
+  // unhandled-request error.
+  http.post(url("/auth/refresh"), () =>
+    HttpResponse.json(
+      { status: "error", message: "Credentials missing" },
+      { status: 401 },
+    ),
+  ),
+
   invitationIs(testInvitation),
 
   http.post(url(`/invitations/${INVITE_TOKEN}/accept`), async ({ request }) => {

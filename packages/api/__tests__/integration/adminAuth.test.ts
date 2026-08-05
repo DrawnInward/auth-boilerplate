@@ -309,6 +309,35 @@ describe("Admin Authentication Integration Tests", () => {
     });
   });
 
+  describe("Session refresh", () => {
+    // The refresh endpoint is shared: the cookie names its principal, so an
+    // admin session rotates at the same POST /api/auth/refresh as a user's.
+    it("rotates an admin session at the shared refresh endpoint", async () => {
+      const login = await request(app)
+        .post("/api/admin/auth/login")
+        .send({ email: "root.admin@test.com", password: "Password1" })
+        .expect(200);
+
+      const cookies = login.headers["set-cookie"] as unknown as string[];
+      const refreshOnly = cookies.filter((c) => c.startsWith("refresh_token="));
+
+      const refreshResponse = await request(app)
+        .post("/api/auth/refresh")
+        .set("Cookie", refreshOnly)
+        .expect(200);
+
+      // The rotated cookies still authenticate as an admin.
+      const rotated = refreshResponse.headers[
+        "set-cookie"
+      ] as unknown as string[];
+      const me = await request(app)
+        .get("/api/admin/auth/me")
+        .set("Cookie", rotated)
+        .expect(200);
+      expect(me.body.data.email).toBe("root.admin@test.com");
+    });
+  });
+
   describe("Error Handling", () => {
     it("should handle malformed request body", async () => {
       const response = await request(app)

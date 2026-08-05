@@ -1,17 +1,19 @@
 import jwt from "jsonwebtoken";
 import { Response, NextFunction } from "express";
-import { AccessJwtPayload, RefreshJwtPayload, RequestWithUser } from "../types";
-import { parseCookies, setAuthCookies } from "../utils";
-import { createAccessToken } from "../models/refresh.models";
+import { AccessJwtPayload, RequestWithUser } from "../types";
+import { parseCookies } from "../utils";
 import { httpError, isHttpError } from "../utils/httpError";
 
 import "../utils/loadEnv";
 
+// Verification only — an expired access token is a clean 401, and the client
+// exchanges its refresh cookie at POST /auth/refresh. Rotating here meant N
+// parallel requests raced N rotations of one cookie (S1); the middleware no
+// longer touches the refresh token at all.
 export const authoriseUser =
   (allowedRoles: string[]) =>
   async (req: RequestWithUser, res: Response, next: NextFunction) => {
     let token: null | string = null;
-    let isRefresh = false;
     let isAdminToken = false;
 
     const parsedCookies = parseCookies(req.headers.cookie);
@@ -31,13 +33,8 @@ export const authoriseUser =
           token = parsedCookies.access_token;
         }
       } catch {
-        // fall through to the refresh token, if present
+        // treated as absent
       }
-    }
-
-    if (!token && parsedCookies.refresh_token) {
-      token = parsedCookies.refresh_token;
-      isRefresh = true;
     }
 
     if (!token) {
@@ -45,46 +42,23 @@ export const authoriseUser =
     }
 
     try {
-      const secretKey = isRefresh
-        ? process.env.REFRESH_KEY
-        : isAdminToken
-          ? process.env.ADMIN_ACCESS_KEY
-          : process.env.USER_ACCESS_KEY;
+      const secretKey = isAdminToken
+        ? process.env.ADMIN_ACCESS_KEY
+        : process.env.USER_ACCESS_KEY;
 
       if (!secretKey) {
         throw httpError(500, `Missing environment variable.`);
       }
 
-      const userDetails = jwt.verify(token, secretKey);
-
-      if (isRefresh) {
-        const refreshPayload = userDetails as RefreshJwtPayload;
-        const { accessToken, newRefreshToken } = await createAccessToken(
-          refreshPayload,
-          token,
-        );
-
-        setAuthCookies(res, accessToken, newRefreshToken);
-
-        const accessKey =
-          refreshPayload.role_type === "admin"
-            ? process.env.ADMIN_ACCESS_KEY!
-            : process.env.USER_ACCESS_KEY!;
-
-        req.user = jwt.verify(accessToken, accessKey) as AccessJwtPayload;
-      } else {
-        req.user = userDetails as AccessJwtPayload;
-      }
+      req.user = jwt.verify(token, secretKey) as AccessJwtPayload;
 
       if (!allowedRoles.includes(req.user.role_type)) {
         return next(httpError(403, "Insufficient permissions"));
       }
       next();
     } catch (error) {
-      // Config errors surface as the 500s they are. Every auth failure —
-      // bad signature, expired/revoked/replayed refresh lineage — flattens
-      // to one 403 so the response doesn't reveal which check failed;
-      // per-cause refresh statuses are a Phase C (dedicated endpoint) concern.
+      // Config errors surface as the 500s they are. Every verify failure
+      // flattens to one 403 so the response doesn't reveal which check failed.
       if (isHttpError(error) && error.status >= 500) {
         return next(error);
       }
