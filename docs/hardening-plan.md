@@ -385,6 +385,33 @@ Extract in this order (each is behaviour-preserving under the Phase B suite):
   A single `issueSession(principal)` that always runs the MFA / `is_active` branch makes the S2/S4
   class of bug **structurally impossible** rather than remembered per-call-site. This is why the
   refactor is security-relevant, not just tidiness. Fold the Phase-A session paths through it.
+
+  **Status (2026-08-05) — DONE.** `services/auth.service.ts`:
+  `createAuthService({ getAccessKey, addRefresh, createMfaChallengeToken })` exposes
+  `issueSession(principal, client?)` (15-minute access token + rotating refresh pair; refuses a
+  deactivated principal) and `startSession` (adds the MFA branch: challenge instead of session).
+  All eleven controller `jwt.sign` sites — login/MFA-verify/backup-verify ×2 roles, OAuth
+  callback/link, invitation accept, complete-registration — now route through it; controllers
+  keep credential checks and response shaping. `getAccessKey` joined `utils/config`. Full gate
+  green with the inherited suites untouched; new unit suite `unit/authService.test.ts` drives the
+  branching with injected fakes.
+  - **Deliberately hardened where no test pinned the old behaviour:** OAuth login/link and every
+    MFA verify path previously minted sessions without an `is_active` check (and admin MFA verify
+    minted for a _deleted_ admin, `root` defaulted false). All now refuse: 403 deactivated, 404
+    missing principal, before any token exists. Each hardened path ships with its integration
+    spec: deactivated Google login → 403 + no refresh row; deactivated Google link → 403 + link
+    rolled back; deactivated mid-challenge TOTP verify → 403; deleted admin backup-code verify →
+    404 (the backup route is the live wiring for the ghost check — TOTP 400s at the secret
+    lookup, which filters `deleted_at`).
+  - **One pinned nuance honoured:** `userOAuth.test.ts` pins that a deactivated MFA account still
+    receives a challenge, so `startSession` branches on MFA _before_ deactivation; the gate lives
+    in `issueSession`, which every verify path routes through — the challenge can start, a
+    session can never come of it.
+  - **Not folded in:** the refresh-rotation path (`refresh.models.ts#createAccessToken`) — its
+    export is pinned by `refreshCRUD.test.ts`, and the A1 deferrals (lineage walk, dedicated
+    refresh endpoint) remain open. The MFA controller twins are now symmetrical (principal
+    fetched before issuance on both sides), ready for C2's collapse.
+
 - **C2 · `mfaService({ roleType })`** — collapses the ~280-line near-identical user/admin MFA
   controller twins into one parameterised service.
 - **C3 · `invitationService`** — extract `acceptInvitation` (the largest un-extracted orchestration:
@@ -435,6 +462,28 @@ Extract in this order (each is behaviour-preserving under the Phase B suite):
   `validateBody` (500 / unvalidated body); `refresh.models.ts:64-72` hand-rolls a patch with no
   column allow-list (route through `buildPatch`); `MFA_ENCRYPTION_KEY` format-check at boot; MFA
   setup response casing differs between user (`qr_code`) and admin (`qrCode`).
+- **D7 · Supply chain.** Adopted 2026-08-05, the day after the 4 Aug npm worm (2,234 poisoned
+  versions across 444 packages, including `flat-cache`/`file-entry-cache` — inside ESLint, and
+  therefore inside this tree). Two facts drive the design: install scripts were the execution
+  vector, but a poisoned package that ships _runtime_ code executes whenever it is `require`d —
+  so script-blocking alone is not enough; never letting a poisoned version onto disk is the real
+  control, and that is the lockfile.
+  - **Local (DONE 2026-08-05):** `.npmrc` sets `ignore-scripts=true` — no third-party code runs
+    at install time, ever. The five packages in the tree that declare install scripts (`bcrypt`,
+    `esbuild`, `fsevents`, `msw`, `unrs-resolver`) all work without them on Linux — verified by
+    running the full gate on a scriptless `npm ci` — because modern native modules ship binaries
+    as ordinary platform packages. `npm run rebuild:native` is the explicit, reviewed allowlist
+    for platforms where a prebuild is missing. Consequence of the `.npmrc`: root `prepare` no
+    longer fires, so a fresh clone runs `npm run build:shared` by hand.
+  - **Practice:** `npm ci` is the only routine install command; `npm install` happens only when
+    deliberately changing dependencies, and the lockfile diff is reviewed as code — it is the
+    security boundary. New releases get a ~7-day cooldown before adoption (every npm
+    supply-chain attack to date was unpublished within days); when Renovate/Dependabot arrives it
+    enforces this (`minimumReleaseAge` / cooldown), and its PRs are never auto-merged.
+  - **CI (binds D5's workflow):** `npm ci --ignore-scripts`; third-party actions pinned by commit
+    SHA, never tag; workflow-level `permissions: {}` with per-job escalation; deploy credentials
+    via OIDC, no long-lived secrets in runner memory; provenance badges and `npm audit` are not
+    defences against a fresh compromise and must not be treated as such.
 
 ---
 
@@ -445,10 +494,11 @@ A (security)  ── A1,A2 first (A2 before billing hooks) ── A3,A4 ── A
       │
 B (test net)  ── B1 (wrong-role) is the keystone ── B2..B6           ← before any refactor
       │
-C (services)  ── C1 authService (carries A2/A4 through) ── C2 ── C3 ── C4
+C (services)  ── C1 authService DONE ── C2 ── C3 ── C4
       │
 D (rest)      ── D2 org soft-delete + A2 clean == billing unblocked
                  D1 schema single-source ── D3 features ── D4 lint ── D5 docs/CI ── D6
+                 D7 supply chain: local half DONE, CI half binds D5
 ```
 
 **Billing is unblocked once A2 (hook file clean) and D2 (org soft-delete) are done** — those two
