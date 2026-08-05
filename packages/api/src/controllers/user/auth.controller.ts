@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { RequestWithUser } from "../../types";
 import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
 import db from "../../database/db";
 import {
   createUser,
@@ -12,7 +11,7 @@ import {
   getUserById,
   setAuthProvider,
 } from "../../models/users.models";
-import { addRefresh, revokeUserTokens } from "../../models/refresh.models";
+import { revokeUserTokens } from "../../models/refresh.models";
 import {
   createInvitation,
   validateInvitationToken,
@@ -25,7 +24,6 @@ import { setAuthCookies, hashPassword } from "../../utils";
 import { clearAuthCookies } from "../../utils/clearAuthCookies";
 import { services } from "../../services";
 import {
-  createMfaChallengeToken,
   setMfaChallengeCookie,
   verifyMfaChallengeToken,
   clearMfaChallengeCookie,
@@ -118,12 +116,16 @@ export const login = async (
       throw httpError(401, "Invalid credentials");
     }
 
-    if (user.mfa_enabled) {
-      const challengeToken = await createMfaChallengeToken(
-        user.user_id!,
-        "user",
-      );
-      setMfaChallengeCookie(res, challengeToken);
+    const start = await services.auth.startSession({
+      role_type: "user",
+      role_id: user.user_id!,
+      is_active: user.is_active === true,
+      mfa_enabled: user.mfa_enabled === true,
+      email_verified: user.email_verified === true,
+    });
+
+    if (start.kind === "mfa_required") {
+      setMfaChallengeCookie(res, start.challengeToken);
 
       return sendSuccess(
         res,
@@ -132,29 +134,7 @@ export const login = async (
       );
     }
 
-    const accessKey = process.env.USER_ACCESS_KEY;
-    const refreshKey = process.env.REFRESH_KEY;
-
-    if (!accessKey || !refreshKey) {
-      throw httpError(500, "Server configuration error");
-    }
-
-    const accessToken = jwt.sign(
-      {
-        role_id: user.user_id,
-        role_type: "user",
-        email_verified: user.email_verified,
-      },
-      accessKey,
-      { expiresIn: "15m" },
-    );
-
-    const { token: refreshToken } = await addRefresh({
-      role_id: user.user_id!,
-      role_type: "user",
-    });
-
-    setAuthCookies(res, accessToken, refreshToken);
+    setAuthCookies(res, start.accessToken, start.refreshToken);
 
     return sendSuccess(
       res,
@@ -224,33 +204,19 @@ export const mfaLoginVerify = async (
 
     clearMfaChallengeCookie(res);
 
-    const accessKey = process.env.USER_ACCESS_KEY;
-
-    if (!accessKey) {
-      throw httpError(500, "Server configuration error");
-    }
-
-    const accessToken = jwt.sign(
-      {
-        role_id: payload.role_id,
-        role_type: "user",
-        email_verified: true,
-      },
-      accessKey,
-      { expiresIn: "15m" },
-    );
-
-    const { token: refreshToken } = await addRefresh({
-      role_id: payload.role_id,
-      role_type: "user",
-    });
-
-    setAuthCookies(res, accessToken, refreshToken);
-
     const user = await getUserById(payload.role_id);
     if (!user) {
       throw httpError(404, "User not found");
     }
+
+    const { accessToken, refreshToken } = await services.auth.issueSession({
+      role_type: "user",
+      role_id: payload.role_id,
+      is_active: user.is_active === true,
+      email_verified: true,
+    });
+
+    setAuthCookies(res, accessToken, refreshToken);
 
     return sendSuccess(res, buildUserResponse(user), "Login successful");
   } catch (error) {
@@ -282,7 +248,7 @@ export const mfaLoginBackupVerify = async (
     // enforcement.
     await guardMfaChallenge(payload.jti);
 
-    const { accessToken, refreshToken } = await withTransaction(
+    const { user, accessToken, refreshToken } = await withTransaction(
       db,
       async (client) => {
         const unusedCodes = await getUnusedBackupCodes(
@@ -310,40 +276,26 @@ export const mfaLoginBackupVerify = async (
 
         clearMfaChallengeCookie(res);
 
-        const accessKey = process.env.USER_ACCESS_KEY;
-
-        if (!accessKey) {
-          throw httpError(500, "Server configuration error");
+        const user = await getUserById(payload.role_id);
+        if (!user) {
+          throw httpError(404, "User not found");
         }
 
-        const accessToken = jwt.sign(
+        const tokens = await services.auth.issueSession(
           {
-            role_id: payload.role_id,
             role_type: "user",
+            role_id: payload.role_id,
+            is_active: user.is_active === true,
             email_verified: true,
-          },
-          accessKey,
-          { expiresIn: "15m" },
-        );
-
-        const { token: refreshToken } = await addRefresh(
-          {
-            role_id: payload.role_id,
-            role_type: "user",
           },
           client,
         );
 
-        return { accessToken, refreshToken };
+        return { user, ...tokens };
       },
     );
 
     setAuthCookies(res, accessToken, refreshToken);
-
-    const user = await getUserById(payload.role_id);
-    if (!user) {
-      throw httpError(404, "User not found");
-    }
 
     return sendSuccess(res, buildUserResponse(user), "Login successful");
   } catch (error) {
@@ -465,30 +417,17 @@ export const completeRegistration = async (
 
         await markInvitationUsed(invitation.id!, client);
 
-        const accessKey = process.env.USER_ACCESS_KEY;
-        if (!accessKey) {
-          throw httpError(500, "Server configuration error");
-        }
-
-        const accessToken = jwt.sign(
+        const tokens = await services.auth.issueSession(
           {
-            role_id: user.user_id,
             role_type: "user",
-            email_verified: user.email_verified,
-          },
-          accessKey,
-          { expiresIn: "15m" },
-        );
-
-        const { token: refreshToken } = await addRefresh(
-          {
             role_id: user.user_id!,
-            role_type: "user",
+            is_active: user.is_active === true,
+            email_verified: user.email_verified === true,
           },
           client,
         );
 
-        return { accessToken, refreshToken, user };
+        return { ...tokens, user };
       },
     );
 

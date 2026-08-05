@@ -13,6 +13,7 @@ import {
 import { hashBackupCodes } from "../../src/utils/backupCodes";
 import { MFA_CHALLENGE_MAX_ATTEMPTS } from "../../src/utils/mfaChallenge";
 import { getAdminUuid } from "../../src/database/test-data/testUuids";
+import { hashPassword } from "../../src/utils";
 
 require("dotenv").config({ quiet: true });
 
@@ -477,6 +478,62 @@ describe("Admin MFA Integration Tests", () => {
         .expect(401);
 
       expect(exhausted.body.message).toBe("Invalid MFA challenge token");
+    });
+  });
+
+  // An admin deleted between challenge and verify must not be issued a session
+  // — this path previously minted one, with root defaulted to false, for an
+  // admin that no longer existed (authService C1). The backup-code route is
+  // the live wiring for this guard: backup codes are keyed by role_id and
+  // survive the admin row, whereas the TOTP route already 400s at the secret
+  // lookup.
+  describe("MFA login for a deleted admin", () => {
+    const ghostEmail = "ghost.admin@test.com";
+    let ghostAdminId: string;
+
+    beforeEach(async () => {
+      const result = await db.query(
+        `INSERT INTO admins (email, password_hash, root, email_verified, is_active)
+         VALUES ($1, $2, false, true, true)
+         RETURNING admin_id`,
+        [ghostEmail, await hashPassword("Password1")],
+      );
+      ghostAdminId = result.rows[0].admin_id;
+      await setMfaSecret(ghostAdminId, "admin", testSecret);
+      await enableMfa(ghostAdminId, "admin");
+      const hashedCodes = await hashBackupCodes(testBackupCodes);
+      await createBackupCodes(ghostAdminId, "admin", hashedCodes);
+    });
+
+    afterEach(async () => {
+      await deleteAllBackupCodes(ghostAdminId, "admin");
+      await db.query("DELETE FROM mfa_challenges WHERE role_id = $1", [
+        ghostAdminId,
+      ]);
+      await db.query("DELETE FROM admins WHERE admin_id = $1", [ghostAdminId]);
+    });
+
+    it("refuses backup-code verification when the admin no longer exists", async () => {
+      const login = await request(app)
+        .post("/api/admin/auth/login")
+        .send({ email: ghostEmail, password: "Password1" })
+        .expect(200);
+      expect(login.body.data.mfa_required).toBe(true);
+
+      await db.query("DELETE FROM admins WHERE admin_id = $1", [ghostAdminId]);
+
+      const response = await request(app)
+        .post("/api/admin/auth/mfa/login-backup")
+        .set("Cookie", login.headers["set-cookie"])
+        .send({ code: testBackupCodes[0] })
+        .expect(404);
+
+      expect(response.body.message).toBe("Admin not found");
+
+      const cookies = (response.headers["set-cookie"] ??
+        []) as unknown as string[];
+      expect(cookies.some((c) => c.startsWith("access_token="))).toBe(false);
+      expect(cookies.some((c) => c.startsWith("refresh_token="))).toBe(false);
     });
   });
 });

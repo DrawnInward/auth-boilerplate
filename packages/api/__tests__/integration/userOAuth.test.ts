@@ -451,4 +451,100 @@ describe("User OAuth Integration Tests", () => {
       );
     });
   });
+
+  // Session issuance refuses a deactivated principal (authService C1). BOB is
+  // seeded deactivated, which is exactly what these paths need.
+  describe("OAuth + deactivated account", () => {
+    const deactivatedUserId = getUserUuid(3);
+
+    afterEach(async () => {
+      await db.query(
+        "UPDATE users SET google_id = NULL, auth_provider = 'local' WHERE user_id = $1",
+        [deactivatedUserId],
+      );
+    });
+
+    it("refuses Google login for a deactivated account", async () => {
+      await db.query(
+        "UPDATE users SET google_id = $1, auth_provider = 'both' WHERE user_id = $2",
+        ["deactivated-google-id", deactivatedUserId],
+      );
+      getGoogleUserInfo.mockResolvedValueOnce({
+        id: "deactivated-google-id",
+        email: "bob@example.com",
+        verified_email: true,
+        name: "Bob",
+      });
+
+      const before = await db.query(
+        "SELECT COUNT(*)::int AS n FROM refresh WHERE role_id = $1",
+        [deactivatedUserId],
+      );
+
+      const initResponse = await request(app).get("/api/oauth/google");
+      const stateCookie = initResponse.headers["set-cookie"];
+
+      const response = await request(app)
+        .get("/api/oauth/google/callback")
+        .query({ code: "valid-auth-code", state: "test-oauth-state-12345" })
+        .set("Cookie", stateCookie)
+        .expect(403);
+
+      expect(response.body.message).toBe("Account is deactivated");
+
+      const cookies = (response.headers["set-cookie"] ??
+        []) as unknown as string[];
+      expect(cookies.some((c) => c.startsWith("access_token="))).toBe(false);
+      expect(cookies.some((c) => c.startsWith("refresh_token="))).toBe(false);
+
+      const after = await db.query(
+        "SELECT COUNT(*)::int AS n FROM refresh WHERE role_id = $1",
+        [deactivatedUserId],
+      );
+      expect(after.rows[0].n).toBe(before.rows[0].n);
+    });
+
+    it("refuses Google linking for a deactivated account, and rolls the link back", async () => {
+      getGoogleUserInfo.mockResolvedValueOnce({
+        id: "bob-link-google-id",
+        email: "bob@example.com",
+        verified_email: true,
+        name: "Bob",
+      });
+
+      const initResponse = await request(app).get("/api/oauth/google");
+      const stateCookie = initResponse.headers["set-cookie"];
+
+      const callbackResponse = await request(app)
+        .get("/api/oauth/google/callback")
+        .query({ code: "valid-auth-code", state: "test-oauth-state-12345" })
+        .set("Cookie", stateCookie)
+        .expect(200);
+
+      expect(callbackResponse.body.data.needs_linking).toBe(true);
+
+      const pendingCookie = callbackResponse.headers["set-cookie"];
+
+      const response = await request(app)
+        .post("/api/oauth/google/link")
+        .set("Cookie", pendingCookie)
+        .send({ password: "Password1" })
+        .expect(403);
+
+      expect(response.body.message).toBe("Account is deactivated");
+
+      // The password was correct, but the refusal rolled the transaction
+      // back: no half-linked state may survive.
+      const row = await db.query(
+        "SELECT google_id, auth_provider FROM users WHERE user_id = $1",
+        [deactivatedUserId],
+      );
+      expect(row.rows[0].google_id).toBeNull();
+      expect(row.rows[0].auth_provider).toBe("local");
+
+      const cookies = (response.headers["set-cookie"] ??
+        []) as unknown as string[];
+      expect(cookies.some((c) => c.startsWith("access_token="))).toBe(false);
+    });
+  });
 });

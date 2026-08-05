@@ -1,5 +1,4 @@
 import { Request, Response, NextFunction } from "express";
-import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import db from "../../database/db";
 import { RequestWithUser } from "../../types";
@@ -23,7 +22,6 @@ import {
   getUserById,
   getUserWithPassword,
 } from "../../models/users.models";
-import { addRefresh } from "../../models/refresh.models";
 import { sendSuccess, sendCreated } from "../../utils/responseUtils";
 import { getValidatedQuery } from "../../middleware/validate";
 import type {
@@ -34,10 +32,7 @@ import type {
 } from "@auth-boilerplate/shared";
 import { services } from "../../services";
 import { setAuthCookies, hashPassword } from "../../utils";
-import {
-  createMfaChallengeToken,
-  setMfaChallengeCookie,
-} from "../../utils/mfaChallenge";
+import { setMfaChallengeCookie } from "../../utils/mfaChallenge";
 import { httpError } from "../../utils/httpError";
 import { withTransaction } from "../../utils/withTransaction";
 
@@ -293,71 +288,50 @@ export const acceptInvitation = async (
       // The user has proven password + invite-token possession, so the org-join
       // is committed — but an MFA-enabled account must clear its second factor
       // before it gets a session, exactly as login requires. Issuing auth
-      // cookies here would let a known password skip MFA entirely. (S2)
-      if (mfaRequired) {
-        return { kind: "mfa_required" as const, invitation, userId };
-      }
-
-      const accessKey = process.env.USER_ACCESS_KEY;
-      if (!accessKey) {
-        throw httpError(500, "Server configuration error");
-      }
-
-      const accessToken = jwt.sign(
+      // cookies here would let a known password skip MFA entirely; startSession
+      // makes that branch unskippable. (S2)
+      const start = await services.auth.startSession(
         {
-          role_id: userId,
           role_type: "user",
+          role_id: userId,
+          // Both branches above establish an active account: the existing user
+          // mirrored login's deactivation check, the new one was created active.
+          is_active: true,
+          mfa_enabled: mfaRequired,
           email_verified: true,
-        },
-        accessKey,
-        { expiresIn: "15m" },
-      );
-
-      const { token: refreshToken } = await addRefresh(
-        {
-          role_id: userId,
-          role_type: "user",
         },
         client,
       );
 
-      return {
-        kind: "logged_in" as const,
-        invitation,
-        userId,
-        accessToken,
-        refreshToken,
-      };
+      return { start, invitation, userId };
     });
 
-    if (outcome.kind === "mfa_required") {
-      const challengeToken = await createMfaChallengeToken(
-        outcome.userId,
-        "user",
-      );
-      setMfaChallengeCookie(res, challengeToken);
+    const { start, invitation, userId } = outcome;
+
+    if (start.kind === "mfa_required") {
+      setMfaChallengeCookie(res, start.challengeToken);
 
       return sendSuccess(
         res,
         {
           mfa_required: true,
-          organization_id: outcome.invitation.organization_id,
-          role: outcome.invitation.role,
+          organization_id: invitation.organization_id,
+          role: invitation.role,
         },
         "MFA verification required",
       );
     }
 
-    setAuthCookies(res, outcome.accessToken, outcome.refreshToken);
+    setAuthCookies(res, start.accessToken, start.refreshToken);
 
     return sendSuccess(
       res,
       {
-        user_id: outcome.userId,
-        organization_id: outcome.invitation.organization_id,
-        role: outcome.invitation.role,
+        user_id: userId,
+        organization_id: invitation.organization_id,
+        role: invitation.role,
       },
-      outcome.invitation.is_existing_user
+      invitation.is_existing_user
         ? "You have joined the organization"
         : "Account created and joined the organization",
     );

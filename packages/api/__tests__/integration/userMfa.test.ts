@@ -496,4 +496,59 @@ describe("User MFA Integration Tests", () => {
       expect(response.body.message).toBe("Invalid verification code");
     });
   });
+
+  // A challenge can be started, but session issuance refuses a principal
+  // deactivated before the second factor completes (authService C1).
+  describe("MFA Login for a deactivated account", () => {
+    const mfaUserId = getUserUuid(2);
+
+    beforeEach(async () => {
+      await setMfaSecret(mfaUserId, "user", testSecret);
+      await enableMfa(mfaUserId, "user");
+    });
+
+    afterEach(async () => {
+      await db.query(
+        "UPDATE users SET mfa_enabled = false, mfa_secret = NULL, is_active = true WHERE user_id = $1",
+        [mfaUserId],
+      );
+    });
+
+    it("refuses TOTP verification for an account deactivated mid-challenge", async () => {
+      const loginResponse = await request(app)
+        .post("/api/auth/login")
+        .send({ email: "alice@example.com", password: "Password1" })
+        .expect(200);
+      expect(loginResponse.body.data.mfa_required).toBe(true);
+      const mfaCookies = loginResponse.headers["set-cookie"];
+
+      const before = await db.query(
+        "SELECT COUNT(*)::int AS n FROM refresh WHERE role_id = $1 AND is_active = TRUE",
+        [mfaUserId],
+      );
+
+      await db.query("UPDATE users SET is_active = false WHERE user_id = $1", [
+        mfaUserId,
+      ]);
+
+      const response = await request(app)
+        .post("/api/auth/mfa/login-verify")
+        .set("Cookie", mfaCookies)
+        .send({ code: generateTotpCode(testSecret) })
+        .expect(403);
+
+      expect(response.body.message).toBe("Account is deactivated");
+
+      const cookies = (response.headers["set-cookie"] ??
+        []) as unknown as string[];
+      expect(cookies.some((c) => c.startsWith("access_token="))).toBe(false);
+      expect(cookies.some((c) => c.startsWith("refresh_token="))).toBe(false);
+
+      const after = await db.query(
+        "SELECT COUNT(*)::int AS n FROM refresh WHERE role_id = $1 AND is_active = TRUE",
+        [mfaUserId],
+      );
+      expect(after.rows[0].n).toBe(before.rows[0].n);
+    });
+  });
 });

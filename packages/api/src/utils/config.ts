@@ -4,8 +4,23 @@
  */
 
 import { readPositiveNumberEnv } from "./envNumber";
+import { httpError } from "./httpError";
 
 export const getAppName = (): string => process.env.APP_NAME || "App";
+
+// Both keys are checked at boot by validateEnv, so a miss here means the
+// environment changed under a running process; callers surface it as the
+// opaque 500 it has always been.
+export const getAccessKey = (roleType: "user" | "admin"): string => {
+  const key =
+    roleType === "admin"
+      ? process.env.ADMIN_ACCESS_KEY
+      : process.env.USER_ACCESS_KEY;
+  if (!key) {
+    throw httpError(500, "Server configuration error");
+  }
+  return key;
+};
 
 export const getAllowedOrigin = (): string =>
   process.env.ALLOWED_ORIGIN || "http://localhost:5173";

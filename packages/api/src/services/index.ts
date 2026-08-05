@@ -7,12 +7,16 @@
 // order the rest of the application happens to import things in.
 import "../utils/loadEnv";
 
-import { getAppName, getFrontendUrl } from "../utils/config";
+import { getAccessKey, getAppName, getFrontendUrl } from "../utils/config";
 import { getEmailProvider } from "../utils/email";
 import { EmailProvider } from "../interfaces/email";
+import { addRefresh } from "../models/refresh.models";
+import { createMfaChallengeToken } from "../utils/mfaChallenge";
+import { createAuthService, AuthService } from "./auth.service";
 import { createEmailService, EmailService } from "./email.service";
 
 export type Services = {
+  auth: AuthService;
   email: EmailService;
 };
 
@@ -24,6 +28,11 @@ const emailProvider: EmailProvider = {
 };
 
 export const services: Services = {
+  auth: createAuthService({
+    getAccessKey,
+    addRefresh,
+    createMfaChallengeToken,
+  }),
   email: createEmailService({
     provider: emailProvider,
     appName: getAppName(),
@@ -31,5 +40,14 @@ export const services: Services = {
   }),
 };
 
+export { createAuthService } from "./auth.service";
+export type {
+  AuthService,
+  AuthServiceDeps,
+  MfaCheckedPrincipal,
+  SessionPrincipal,
+  SessionStart,
+  SessionTokens,
+} from "./auth.service";
 export { createEmailService } from "./email.service";
 export type { EmailService, EmailServiceDeps } from "./email.service";

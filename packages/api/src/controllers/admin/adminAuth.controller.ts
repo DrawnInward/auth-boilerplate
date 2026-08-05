@@ -1,17 +1,16 @@
 import { Request, Response, NextFunction } from "express";
 import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
 import db from "../../database/db";
 import {
   getAdminWithMfaStatus,
   getAdminById,
 } from "../../models/admins.models";
-import { addRefresh, revokeUserTokens } from "../../models/refresh.models";
+import { revokeUserTokens } from "../../models/refresh.models";
 import { sendSuccess } from "../../utils/responseUtils";
 import { setAuthCookies, parseCookies } from "../../utils";
 import { clearAuthCookies } from "../../utils/clearAuthCookies";
+import { services } from "../../services";
 import {
-  createMfaChallengeToken,
   setMfaChallengeCookie,
   verifyMfaChallengeToken,
   clearMfaChallengeCookie,
@@ -55,12 +54,16 @@ export const login = async (
       throw httpError(401, "Invalid credentials");
     }
 
-    if (admin.mfa_enabled) {
-      const challengeToken = await createMfaChallengeToken(
-        admin.admin_id!,
-        "admin",
-      );
-      setMfaChallengeCookie(res, challengeToken);
+    const start = await services.auth.startSession({
+      role_type: "admin",
+      role_id: admin.admin_id!,
+      is_active: admin.is_active === true,
+      mfa_enabled: admin.mfa_enabled === true,
+      root: admin.root === true,
+    });
+
+    if (start.kind === "mfa_required") {
+      setMfaChallengeCookie(res, start.challengeToken);
 
       return sendSuccess(
         res,
@@ -69,29 +72,7 @@ export const login = async (
       );
     }
 
-    const accessKey = process.env.ADMIN_ACCESS_KEY;
-    const refreshKey = process.env.REFRESH_KEY;
-
-    if (!accessKey || !refreshKey) {
-      throw httpError(500, "Server configuration error");
-    }
-
-    const accessToken = jwt.sign(
-      {
-        role_id: admin.admin_id,
-        role_type: "admin",
-        root: admin.root,
-      },
-      accessKey,
-      { expiresIn: "15m" },
-    );
-
-    const { token: refreshToken } = await addRefresh({
-      role_id: admin.admin_id!,
-      role_type: "admin",
-    });
-
-    setAuthCookies(res, accessToken, refreshToken);
+    setAuthCookies(res, start.accessToken, start.refreshToken);
 
     return sendSuccess(
       res,
@@ -145,25 +126,15 @@ export const mfaLoginVerify = async (
     clearMfaChallengeCookie(res);
 
     const admin = await getAdminById(payload.role_id);
-    const accessKey = process.env.ADMIN_ACCESS_KEY;
-
-    if (!accessKey) {
-      throw httpError(500, "Server configuration error");
+    if (!admin) {
+      throw httpError(404, "Admin not found");
     }
 
-    const accessToken = jwt.sign(
-      {
-        role_id: payload.role_id,
-        role_type: "admin",
-        root: admin?.root || false,
-      },
-      accessKey,
-      { expiresIn: "15m" },
-    );
-
-    const { token: refreshToken } = await addRefresh({
-      role_id: payload.role_id,
+    const { accessToken, refreshToken } = await services.auth.issueSession({
       role_type: "admin",
+      role_id: payload.role_id,
+      is_active: admin.is_active === true,
+      root: admin.root === true,
     });
 
     setAuthCookies(res, accessToken, refreshToken);
@@ -227,31 +198,19 @@ export const mfaLoginBackupVerify = async (
         clearMfaChallengeCookie(res);
 
         const admin = await getAdminById(payload.role_id);
-        const accessKey = process.env.ADMIN_ACCESS_KEY;
-
-        if (!accessKey) {
-          throw httpError(500, "Server configuration error");
+        if (!admin) {
+          throw httpError(404, "Admin not found");
         }
 
-        const accessToken = jwt.sign(
+        return services.auth.issueSession(
           {
-            role_id: payload.role_id,
             role_type: "admin",
-            root: admin?.root || false,
-          },
-          accessKey,
-          { expiresIn: "15m" },
-        );
-
-        const { token: refreshToken } = await addRefresh(
-          {
             role_id: payload.role_id,
-            role_type: "admin",
+            is_active: admin.is_active === true,
+            root: admin.root === true,
           },
           client,
         );
-
-        return { accessToken, refreshToken };
       },
     );
 

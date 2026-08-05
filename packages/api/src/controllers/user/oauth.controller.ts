@@ -1,5 +1,4 @@
 import { Request, Response, NextFunction } from "express";
-import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import db from "../../database/db";
 import { RequestWithUser } from "../../types";
@@ -24,12 +23,9 @@ import {
   setAuthProvider,
   unlinkGoogleAccount,
 } from "../../models/users.models";
-import { addRefresh } from "../../models/refresh.models";
 import { getMfaStatus } from "../../models/mfa.models";
-import {
-  createMfaChallengeToken,
-  setMfaChallengeCookie,
-} from "../../utils/mfaChallenge";
+import { services } from "../../services";
+import { setMfaChallengeCookie } from "../../utils/mfaChallenge";
 import { httpError } from "../../utils/httpError";
 import { withTransaction } from "../../utils/withTransaction";
 
@@ -105,35 +101,29 @@ export const handleGoogleCallback = async (
           client,
         );
 
-        if (mfaStatus?.mfa_enabled) {
-          return { kind: "mfa_required" as const, user: googleLinkedUser };
-        }
-
-        const accessKey = process.env.USER_ACCESS_KEY;
-        if (!accessKey) {
-          throw httpError(500, "Server configuration error");
-        }
-
-        const accessToken = jwt.sign(
+        const start = await services.auth.startSession(
           {
-            role_id: googleLinkedUser.user_id,
             role_type: "user",
-            email_verified: googleLinkedUser.email_verified,
+            role_id: googleLinkedUser.user_id!,
+            is_active: googleLinkedUser.is_active === true,
+            mfa_enabled: mfaStatus?.mfa_enabled === true,
+            email_verified: googleLinkedUser.email_verified === true,
           },
-          accessKey,
-          { expiresIn: "15m" },
-        );
-
-        const { token: refreshToken } = await addRefresh(
-          { role_id: googleLinkedUser.user_id!, role_type: "user" },
           client,
         );
+
+        if (start.kind === "mfa_required") {
+          return {
+            kind: "mfa_required" as const,
+            challengeToken: start.challengeToken,
+          };
+        }
 
         return {
           kind: "logged_in" as const,
           user: googleLinkedUser,
-          accessToken,
-          refreshToken,
+          accessToken: start.accessToken,
+          refreshToken: start.refreshToken,
         };
       }
 
@@ -149,40 +139,25 @@ export const handleGoogleCallback = async (
         client,
       );
 
-      const accessKey = process.env.USER_ACCESS_KEY;
-      if (!accessKey) {
-        throw httpError(500, "Server configuration error");
-      }
-
-      const accessToken = jwt.sign(
+      const tokens = await services.auth.issueSession(
         {
-          role_id: createdUser.user_id,
           role_type: "user",
+          role_id: createdUser.user_id!,
+          is_active: createdUser.is_active === true,
           email_verified: true,
         },
-        accessKey,
-        { expiresIn: "15m" },
-      );
-
-      const { token: refreshToken } = await addRefresh(
-        { role_id: createdUser.user_id!, role_type: "user" },
         client,
       );
 
       return {
         kind: "created" as const,
         user: createdUser,
-        accessToken,
-        refreshToken,
+        ...tokens,
       };
     });
 
     if (outcome.kind === "mfa_required") {
-      const challengeToken = await createMfaChallengeToken(
-        outcome.user.user_id!,
-        "user",
-      );
-      setMfaChallengeCookie(res, challengeToken);
+      setMfaChallengeCookie(res, outcome.challengeToken);
 
       return sendSuccess(
         res,
@@ -270,45 +245,26 @@ export const linkGoogleAccount = async (
       }),
     );
 
-    const outcome = await withTransaction(db, async (client) => {
+    const start = await withTransaction(db, async (client) => {
       await setGoogleId(user.user_id!, google_id, client);
       await setAuthProvider(user.user_id!, "both", client);
 
       const mfaStatus = await getMfaStatus(user.user_id!, "user", client);
 
-      if (mfaStatus?.mfa_enabled) {
-        return { kind: "mfa_required" as const };
-      }
-
-      const accessKey = process.env.USER_ACCESS_KEY;
-      if (!accessKey) {
-        throw httpError(500, "Server configuration error");
-      }
-
-      const accessToken = jwt.sign(
+      return services.auth.startSession(
         {
-          role_id: user.user_id,
           role_type: "user",
-          email_verified: user.email_verified,
+          role_id: user.user_id!,
+          is_active: user.is_active === true,
+          mfa_enabled: mfaStatus?.mfa_enabled === true,
+          email_verified: user.email_verified === true,
         },
-        accessKey,
-        { expiresIn: "15m" },
-      );
-
-      const { token: refreshToken } = await addRefresh(
-        { role_id: user.user_id!, role_type: "user" },
         client,
       );
-
-      return { kind: "linked" as const, accessToken, refreshToken };
     });
 
-    if (outcome.kind === "mfa_required") {
-      const challengeToken = await createMfaChallengeToken(
-        user.user_id!,
-        "user",
-      );
-      setMfaChallengeCookie(res, challengeToken);
+    if (start.kind === "mfa_required") {
+      setMfaChallengeCookie(res, start.challengeToken);
 
       return sendSuccess(
         res,
@@ -317,7 +273,7 @@ export const linkGoogleAccount = async (
       );
     }
 
-    setAuthCookies(res, outcome.accessToken, outcome.refreshToken);
+    setAuthCookies(res, start.accessToken, start.refreshToken);
 
     return sendSuccess(
       res,
