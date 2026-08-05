@@ -133,19 +133,23 @@ export const getInvitation = async (
       ? await getOrganizationById(invitation.organization_id)
       : null;
 
+    // A token whose organization was soft-deleted (D2) reads exactly like a
+    // token that never existed — accept refuses it for the same reason.
+    if (!organization) {
+      throw httpError(404, "Invalid or expired invitation");
+    }
+
     return sendSuccess(
       res,
       {
         email: invitation.email,
         role: invitation.role,
         is_existing_user: invitation.is_existing_user,
-        organization: organization
-          ? {
-              id: organization.id,
-              name: organization.name,
-              slug: organization.slug,
-            }
-          : null,
+        organization: {
+          id: organization.id,
+          name: organization.name,
+          slug: organization.slug,
+        },
       },
       "Invitation is valid",
     );

@@ -310,6 +310,106 @@ describe("Organization Model CRUD Operations", () => {
         msg: "Organization not found",
       });
     });
+
+    it("soft-deletes: the row and its memberships persist", async () => {
+      const org = await createOrganization({
+        name: "Soft Delete Persistence Org",
+        owner_id: getUserUuid(1),
+      });
+      await db.query(
+        "INSERT INTO organization_members (organization_id, user_id, role) VALUES ($1, $2, 'owner')",
+        [org.id, getUserUuid(1)],
+      );
+
+      await deleteOrganization(org.id!);
+
+      const row = await db.query("SELECT * FROM organizations WHERE id = $1", [
+        org.id,
+      ]);
+      expect(row.rows).toHaveLength(1);
+      expect(row.rows[0].deleted_at).not.toBeNull();
+
+      const members = await db.query(
+        "SELECT * FROM organization_members WHERE organization_id = $1",
+        [org.id],
+      );
+      expect(members.rows).toHaveLength(1);
+    });
+
+    it("every lookup respects deleted_at", async () => {
+      const org = await createOrganization({
+        name: "Deleted Lookup Org",
+        slug: "deleted-lookup-org",
+        owner_id: getUserUuid(1),
+      });
+      await db.query(
+        "INSERT INTO organization_members (organization_id, user_id, role) VALUES ($1, $2, 'owner')",
+        [org.id, getUserUuid(1)],
+      );
+      await deleteOrganization(org.id!);
+
+      expect(await getOrganizationById(org.id!)).toBeNull();
+      expect(await getOrganizationBySlug("deleted-lookup-org")).toBeNull();
+      expect(await getOrganizationWithMemberCount(org.id!)).toBeNull();
+
+      const listed = await getOrganizations();
+      expect(listed.some((o) => o.id === org.id)).toBe(false);
+
+      const byUser = await getOrganizationsByUserId(getUserUuid(1));
+      expect(byUser.some((o) => o.id === org.id)).toBe(false);
+
+      await expect(
+        modifyOrganization(org.id!, { name: "Rename Attempt" }),
+      ).rejects.toMatchObject({ status: 404 });
+
+      // A second delete is a 404, not a silent no-op.
+      await expect(deleteOrganization(org.id!)).rejects.toMatchObject({
+        status: 404,
+      });
+    });
+
+    it("frees the slug for reuse while a live duplicate still conflicts", async () => {
+      const first = await createOrganization({
+        name: "Slug Reuse Org",
+        slug: "slug-reuse-org",
+        owner_id: getUserUuid(1),
+      });
+      await deleteOrganization(first.id!);
+
+      // The partial unique index only guards live rows.
+      const second = await createOrganization({
+        name: "Slug Reuse Org Again",
+        slug: "slug-reuse-org",
+        owner_id: getUserUuid(1),
+      });
+      expect(second.id).not.toBe(first.id);
+
+      await expect(
+        createOrganization({
+          name: "Slug Reuse Org Third",
+          slug: "slug-reuse-org",
+          owner_id: getUserUuid(1),
+        }),
+      ).rejects.toMatchObject({
+        status: 409,
+        msg: "Organization slug already exists",
+      });
+    });
+
+    it("excludes soft-deleted organizations from the stats", async () => {
+      const before = await getOrganizationStats();
+
+      const org = await createOrganization({
+        name: "Stats Exclusion Org",
+        owner_id: getUserUuid(1),
+      });
+      const during = await getOrganizationStats();
+      expect(during.total).toBe(before.total + 1);
+
+      await deleteOrganization(org.id!);
+      const after = await getOrganizationStats();
+      expect(after.total).toBe(before.total);
+    });
   });
 
   describe("getOrganizationStats", () => {

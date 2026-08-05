@@ -35,6 +35,9 @@ export const organizationSchema = z.object({
   owner_id: z.string().uuid(),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
+  // Null on everything the API returns except the delete response itself —
+  // every read filters soft-deleted organizations out at the model layer.
+  deleted_at: z.date().nullable().optional(),
 });
 
 export type Organization = z.infer<typeof organizationSchema>;

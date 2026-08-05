@@ -252,6 +252,62 @@ describe("Organization Integration Tests", () => {
         .set("Cookie", adminCookies)
         .expect(403);
     });
+
+    it("locks every org-scoped route after deletion, even for ex-members (D2)", async () => {
+      const createResponse = await request(app)
+        .post("/api/organizations")
+        .set("Cookie", ownerCookies)
+        .send({ name: "Soft Delete Lockout Org" });
+      const orgId = createResponse.body.data.id;
+
+      await request(app)
+        .delete(`/api/organizations/${orgId}`)
+        .set("Cookie", ownerCookies)
+        .expect(200);
+
+      // Membership rows survive the soft delete, but the middleware's
+      // organization lookup filters deleted orgs — so the owner's intact
+      // membership no longer opens any door.
+      const membership = await db.query(
+        "SELECT * FROM organization_members WHERE organization_id = $1",
+        [orgId],
+      );
+      expect(membership.rows.length).toBeGreaterThan(0);
+
+      await request(app)
+        .get(`/api/organizations/${orgId}/members`)
+        .set("Cookie", ownerCookies)
+        .expect(404);
+
+      // And it no longer appears in the owner's organization list.
+      const list = await request(app)
+        .get("/api/organizations")
+        .set("Cookie", ownerCookies)
+        .expect(200);
+      expect(list.body.data.some((o: { id: string }) => o.id === orgId)).toBe(
+        false,
+      );
+    });
+
+    it("frees the slug for a new organization after deletion (D2)", async () => {
+      const first = await request(app)
+        .post("/api/organizations")
+        .set("Cookie", ownerCookies)
+        .send({ name: "Recreated Org", slug: "recreated-org" })
+        .expect(201);
+
+      await request(app)
+        .delete(`/api/organizations/${first.body.data.id}`)
+        .set("Cookie", ownerCookies)
+        .expect(200);
+
+      const second = await request(app)
+        .post("/api/organizations")
+        .set("Cookie", ownerCookies)
+        .send({ name: "Recreated Org", slug: "recreated-org" })
+        .expect(201);
+      expect(second.body.data.id).not.toBe(first.body.data.id);
+    });
   });
 
   describe("GET /api/organizations/:organizationId/members", () => {

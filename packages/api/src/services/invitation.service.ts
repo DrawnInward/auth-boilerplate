@@ -133,6 +133,16 @@ export const createInvitationService = ({
         throw httpError(400, "Invalid organization invitation");
       }
 
+      // Organizations soft-delete (D2): the invitation row outlives its
+      // organization, so a token must not mint accounts or memberships into a
+      // dead tenant. Reads exactly like a token that never existed.
+      const organization = await organizations.getOrganizationById(
+        invitation.organization_id,
+      );
+      if (!organization) {
+        throw httpError(404, "Invalid or expired invitation");
+      }
+
       let userId: string;
       // An existing account can carry MFA and a deactivated flag; a freshly
       // created one never does.

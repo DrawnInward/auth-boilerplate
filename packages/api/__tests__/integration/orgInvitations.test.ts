@@ -350,6 +350,31 @@ describe("Organization Invitation Integration Tests", () => {
 
       expect(response.body.status).toBe("error");
     });
+
+    it("reads like an invalid token once the organization is soft-deleted (D2)", async () => {
+      const { createInvitation } =
+        await import("../../src/models/invitations.models");
+      const { createOrganization, deleteOrganization } =
+        await import("../../src/models/organization.models");
+
+      const org = await createOrganization({
+        name: "Dead Org Get",
+        owner_id: getUserUuid(1),
+      });
+      const result = await createInvitation({
+        email: "deadorgget@example.com",
+        type: "org_invite",
+        organization_id: org.id,
+        role: "member",
+        invited_by: getUserUuid(1),
+      });
+      await deleteOrganization(org.id);
+
+      const response = await request(app)
+        .get(`/api/invitations/${result.token}`)
+        .expect(404);
+      expect(response.body.message).toBe("Invalid or expired invitation");
+    });
   });
 
   describe("POST /api/invitations/:token/accept", () => {
@@ -389,6 +414,43 @@ describe("Organization Invitation Integration Tests", () => {
       });
 
       expect(loginResponse.status).toBe(200);
+    });
+
+    it("refuses to accept into a soft-deleted organization (D2)", async () => {
+      const { createInvitation } =
+        await import("../../src/models/invitations.models");
+      const { createOrganization, deleteOrganization } =
+        await import("../../src/models/organization.models");
+
+      const org = await createOrganization({
+        name: "Dead Org Accept",
+        owner_id: getUserUuid(1),
+      });
+      const result = await createInvitation({
+        email: "deadorgaccept@example.com",
+        type: "org_invite",
+        organization_id: org.id,
+        role: "member",
+        invited_by: getUserUuid(1),
+      });
+      await deleteOrganization(org.id);
+
+      const response = await request(app)
+        .post(`/api/invitations/${result.token}/accept`)
+        .send({ password: "SecurePassword123" })
+        .expect(404);
+      expect(response.body.message).toBe("Invalid or expired invitation");
+
+      // Nothing was written into the dead tenant: no account, no membership.
+      const user = await db.query("SELECT * FROM users WHERE email = $1", [
+        "deadorgaccept@example.com",
+      ]);
+      expect(user.rows).toHaveLength(0);
+      const members = await db.query(
+        "SELECT * FROM organization_members WHERE organization_id = $1",
+        [org.id],
+      );
+      expect(members.rows).toHaveLength(0);
     });
 
     it("should accept invitation for existing user with correct password", async () => {

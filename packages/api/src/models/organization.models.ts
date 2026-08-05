@@ -62,7 +62,7 @@ export const getOrganizationBySlug = async (
 ): Promise<Organization | null> => {
   const queryString = `
     SELECT * FROM organizations
-    WHERE slug = $1;
+    WHERE slug = $1 AND deleted_at IS NULL;
   `;
 
   const result = await db.query(queryString, [slug]);
@@ -77,7 +77,7 @@ export const getOrganizationById = async (
 ): Promise<Organization | null> => {
   const queryString = `
     SELECT * FROM organizations
-    WHERE id = $1;
+    WHERE id = $1 AND deleted_at IS NULL;
   `;
 
   const result = await db.query(queryString, [id]);
@@ -100,6 +100,7 @@ export const getOrganizations = async (
 
   const { text, values } = pagedQuery({
     select,
+    where: ["o.deleted_at IS NULL"],
     equals: {
       "o.owner_id": filters.owner_id,
       "om.user_id": filters.user_id,
@@ -120,6 +121,7 @@ export const getOrganizationsByUserId = async (
     select: `SELECT o.*, om.role
              FROM organizations o
              JOIN organization_members om ON o.id = om.organization_id`,
+    where: ["o.deleted_at IS NULL"],
     equals: { "om.user_id": userId },
     orderBy: "o.created_at DESC",
     pagination,
@@ -139,7 +141,7 @@ export const modifyOrganization = async (
   const queryString = `
     UPDATE organizations
     SET ${[...patch.setClauses(1), "updated_at = NOW()"].join(", ")}
-    WHERE id = $${patch.values.length + 1}
+    WHERE id = $${patch.values.length + 1} AND deleted_at IS NULL
     RETURNING *;
   `;
 
@@ -157,13 +159,17 @@ export const modifyOrganization = async (
   }
 };
 
+// Soft delete: the row persists (downstream consumers reference organizations
+// forever); membership rows persist too, but every org read filters
+// deleted_at, so the org-scoped middleware 404s from here on.
 export const deleteOrganization = async (
   id: string,
   client: PoolClient | Pool = db,
 ): Promise<Organization> => {
   const queryString = `
-    DELETE FROM organizations
-    WHERE id = $1
+    UPDATE organizations
+    SET deleted_at = NOW(), updated_at = NOW()
+    WHERE id = $1 AND deleted_at IS NULL
     RETURNING *;
   `;
 
@@ -181,7 +187,8 @@ export const getOrganizationStats = async (): Promise<OrganizationStats> => {
       COUNT(om.id) as total_members,
       COUNT(DISTINCT o.id) FILTER (WHERE o.created_at >= NOW() - INTERVAL '30 days') as created_last_30_days
     FROM organizations o
-    LEFT JOIN organization_members om ON o.id = om.organization_id;
+    LEFT JOIN organization_members om ON o.id = om.organization_id
+    WHERE o.deleted_at IS NULL;
   `;
 
   const result = await db.query(queryString);
@@ -203,7 +210,7 @@ export const getOrganizationWithMemberCount = async (
       COUNT(om.id) as member_count
     FROM organizations o
     LEFT JOIN organization_members om ON o.id = om.organization_id
-    WHERE o.id = $1
+    WHERE o.id = $1 AND o.deleted_at IS NULL
     GROUP BY o.id;
   `;
 

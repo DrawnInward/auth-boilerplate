@@ -240,6 +240,22 @@ describe("invitationService", () => {
       });
     });
 
+    it("refuses an invitation whose organization was soft-deleted, writing nothing", async () => {
+      invitationByToken.set("token", baseInvitation);
+      orgExists = false;
+
+      await expect(
+        invitation.acceptInvitation("token", "Password1"),
+      ).rejects.toMatchObject({
+        status: 404,
+        message: "Invalid or expired invitation",
+      });
+      expect(createdUsers).toEqual([]);
+      expect(addedMembers).toEqual([]);
+      expect(usedInvitationIds).toEqual([]);
+      expect(startSessionCalls).toEqual([]);
+    });
+
     describe("for an existing account", () => {
       beforeEach(() => {
         invitationByToken.set("token", {
