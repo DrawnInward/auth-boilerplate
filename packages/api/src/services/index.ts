@@ -20,6 +20,8 @@ import {
   failMfaChallenge,
   consumeMfaChallengeOrThrow,
 } from "../utils/mfaChallenge";
+import * as googleOAuth from "../utils/googleOAuth";
+import { GoogleOAuthProvider } from "../interfaces/googleOAuth";
 import * as mfaStore from "../models/mfa.models";
 import * as invitationModels from "../models/invitations.models";
 import * as userModels from "../models/users.models";
@@ -38,6 +40,7 @@ import {
   createInvitationService,
   InvitationService,
 } from "./invitation.service";
+import { createOauthService, OauthService } from "./oauth.service";
 
 export type SafeUser = Omit<User, "password_hash">;
 export type SafeAdmin = Omit<Admin, "password_hash">;
@@ -48,6 +51,7 @@ export type Services = {
   userMfa: MfaService<SafeUser>;
   adminMfa: MfaService<SafeAdmin>;
   invitation: InvitationService;
+  oauth: OauthService;
 };
 
 // The provider is resolved per send, as the old sendEmail helper did, so
@@ -55,6 +59,16 @@ export type Services = {
 // sensitive.
 const emailProvider: EmailProvider = {
   send: (options) => getEmailProvider().send(options),
+};
+
+// Late-bound like the email provider: the adapter resolves the underlying
+// functions per call, so env changes and test doubles on the module hold.
+const googleOAuthProvider: GoogleOAuthProvider = {
+  isConfigured: () => googleOAuth.isGoogleOAuthConfigured(),
+  generateState: () => googleOAuth.generateOAuthState(),
+  getAuthUrl: (state) => googleOAuth.getGoogleAuthUrl(state),
+  exchangeCodeForTokens: (code) => googleOAuth.exchangeCodeForTokens(code),
+  getUserInfo: (accessToken) => googleOAuth.getGoogleUserInfo(accessToken),
 };
 
 const auth = createAuthService({
@@ -130,6 +144,14 @@ export const services: Services = {
     sendOrgInvite: email.sendOrgInvite,
     runTransaction,
   }),
+  oauth: createOauthService({
+    google: googleOAuthProvider,
+    users: userModels,
+    getMfaStatus: mfaStore.getMfaStatus,
+    startSession: auth.startSession,
+    issueSession: auth.issueSession,
+    runTransaction,
+  }),
 };
 
 export { createAuthService } from "./auth.service";
@@ -160,3 +182,9 @@ export type {
   InviteMemberParams,
   AcceptedInvitation,
 } from "./invitation.service";
+export { createOauthService } from "./oauth.service";
+export type {
+  OauthService,
+  OauthServiceDeps,
+  GoogleCallbackOutcome,
+} from "./oauth.service";
