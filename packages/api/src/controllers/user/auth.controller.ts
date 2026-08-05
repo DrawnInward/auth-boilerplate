@@ -9,6 +9,7 @@ import {
   updatePassword,
   getUserWithMfaStatus,
   getUserById,
+  modifyUser,
   setAuthProvider,
 } from "../../models/users.models";
 import { revokeUserTokens } from "../../models/refresh.models";
@@ -632,9 +633,10 @@ export const confirmEmailChange = async (
         throw httpError(409, "Email is no longer available");
       }
 
-      await client.query(
-        "UPDATE users SET email = $1, updated_at = NOW() WHERE user_id = $2",
-        [invitation.new_email.toLowerCase(), invitation.user_id],
+      await modifyUser(
+        invitation.user_id,
+        { email: invitation.new_email.toLowerCase() },
+        client,
       );
       await markInvitationUsed(invitation.id!, client);
 

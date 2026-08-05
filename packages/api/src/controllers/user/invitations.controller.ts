@@ -1,27 +1,12 @@
 import { Request, Response, NextFunction } from "express";
-import bcrypt from "bcrypt";
-import db from "../../database/db";
 import { RequestWithUser } from "../../types";
 import {
-  createInvitation,
   validateInvitationToken,
-  markInvitationUsed,
   listInvitationsByOrganization,
   deleteInvitation,
   getInvitationById,
-  invalidatePendingInvitations,
 } from "../../models/invitations.models";
 import { getOrganizationById } from "../../models/organization.models";
-import {
-  addOrganizationMember,
-  isUserMemberOfOrg,
-} from "../../models/organizationMembers.models";
-import {
-  createUser,
-  getUser,
-  getUserById,
-  getUserWithPassword,
-} from "../../models/users.models";
 import { sendSuccess, sendCreated } from "../../utils/responseUtils";
 import { getValidatedQuery } from "../../middleware/validate";
 import type {
@@ -31,10 +16,9 @@ import type {
   TokenParams,
 } from "@auth-boilerplate/shared";
 import { services } from "../../services";
-import { setAuthCookies, hashPassword } from "../../utils";
+import { setAuthCookies } from "../../utils";
 import { setMfaChallengeCookie } from "../../utils/mfaChallenge";
 import { httpError } from "../../utils/httpError";
-import { withTransaction } from "../../utils/withTransaction";
 
 import "../../utils/loadEnv";
 
@@ -46,42 +30,12 @@ export const inviteMember = async (
   try {
     const organizationId = req.params.organizationId;
     const { email, role } = req.body;
-    const invitedBy = req.user!.role_id;
 
-    const organization = await getOrganizationById(organizationId);
-    if (!organization) {
-      throw httpError(404, "Organization not found");
-    }
-
-    const existingUser = await getUser(email);
-    if (existingUser) {
-      const isMember = await isUserMemberOfOrg(
-        organizationId,
-        existingUser.user_id!,
-      );
-      if (isMember) {
-        throw httpError(409, "User is already a member of this organization");
-      }
-    }
-
-    await invalidatePendingInvitations(email, "org_invite");
-
-    const { invitation, token } = await createInvitation({
+    const invitation = await services.invitation.inviteMember({
+      organizationId,
       email,
-      type: "org_invite",
-      organization_id: organizationId,
       role,
-      invited_by: invitedBy,
-    });
-
-    const inviter = await getUserById(req.user!.role_id);
-
-    await services.email.sendOrgInvite({
-      to: email,
-      token,
-      organizationName: organization.name,
-      role,
-      inviterEmail: inviter?.email,
+      invitedBy: req.user!.role_id,
     });
 
     return sendCreated(
@@ -209,104 +163,8 @@ export const acceptInvitation = async (
     const token = req.params.token;
     const { password } = req.body;
 
-    const outcome = await withTransaction(db, async (client) => {
-      const invitation = await validateInvitationToken(
-        token,
-        "org_invite",
-        client,
-      );
-
-      if (!invitation.organization_id || !invitation.role) {
-        throw httpError(400, "Invalid organization invitation");
-      }
-
-      let userId: string;
-      // An existing account can carry MFA and a deactivated flag; a freshly
-      // created one never does.
-      let mfaRequired = false;
-
-      if (invitation.is_existing_user) {
-        // Existing user - verify password
-        if (!password) {
-          throw httpError(400, "Password is required to verify your identity");
-        }
-
-        const user = await getUserWithPassword(invitation.email);
-        if (!user) {
-          throw httpError(404, "User not found");
-        }
-
-        // Mirror login exactly: a deactivated account cannot authenticate
-        // through this path either.
-        if (!user.is_active) {
-          throw httpError(403, "Account is deactivated");
-        }
-
-        const passwordMatch = await bcrypt.compare(
-          password,
-          user.password_hash!,
-        );
-        if (!passwordMatch) {
-          throw httpError(401, "Invalid password");
-        }
-
-        userId = user.user_id!;
-        mfaRequired = !!user.mfa_enabled;
-      } else {
-        // New user - create account
-        if (!password) {
-          throw httpError(400, "Password is required to create your account");
-        }
-
-        const passwordHash = await hashPassword(password);
-        const user = await createUser(
-          {
-            email: invitation.email,
-            password_hash: passwordHash,
-            email_verified: true,
-            is_active: true,
-            created_through: "org_invited",
-          },
-          client,
-        );
-
-        userId = user.user_id!;
-      }
-
-      await addOrganizationMember(
-        invitation.organization_id,
-        {
-          user_id: userId,
-          role: invitation.role as "admin" | "member" | "viewer",
-        },
-        invitation.invited_by || null,
-        client,
-      );
-
-      await markInvitationUsed(invitation.id!, client);
-
-      // The user has proven password + invite-token possession, so the org-join
-      // is committed — but an MFA-enabled account must clear its second factor
-      // before it gets a session, exactly as login requires. Issuing auth
-      // cookies here would let a known password skip MFA entirely; startSession
-      // makes that branch unskippable. (S2)
-      const start = await services.auth.startSession(
-        {
-          role_type: "user",
-          role_id: userId,
-          // Both branches above establish an active account: the existing user
-          // mirrored login's deactivation check, the new one was created active.
-          is_active: true,
-          mfa_enabled: mfaRequired,
-          email_verified: true,
-        },
-        client,
-      );
-
-      return { start, invitation, userId };
-    });
-
-    const { start, invitation, userId } = outcome;
+    const { start, invitation, userId } =
+      await services.invitation.acceptInvitation(token, password);
 
     if (start.kind === "mfa_required") {
       setMfaChallengeCookie(res, start.challengeToken);

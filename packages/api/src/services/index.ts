@@ -21,7 +21,10 @@ import {
   consumeMfaChallengeOrThrow,
 } from "../utils/mfaChallenge";
 import * as mfaStore from "../models/mfa.models";
+import * as invitationModels from "../models/invitations.models";
 import * as userModels from "../models/users.models";
+import * as organizationModels from "../models/organization.models";
+import * as memberModels from "../models/organizationMembers.models";
 import {
   getAdminById,
   getAdminWithPasswordById,
@@ -31,6 +34,10 @@ import { Admin, User } from "../types";
 import { createAuthService, AuthService } from "./auth.service";
 import { createEmailService, EmailService } from "./email.service";
 import { createMfaService, MfaService } from "./mfa.service";
+import {
+  createInvitationService,
+  InvitationService,
+} from "./invitation.service";
 
 export type SafeUser = Omit<User, "password_hash">;
 export type SafeAdmin = Omit<Admin, "password_hash">;
@@ -40,6 +47,7 @@ export type Services = {
   email: EmailService;
   userMfa: MfaService<SafeUser>;
   adminMfa: MfaService<SafeAdmin>;
+  invitation: InvitationService;
 };
 
 // The provider is resolved per send, as the old sendEmail helper did, so
@@ -113,6 +121,15 @@ export const services: Services = {
     },
     ...mfaCommonDeps,
   }),
+  invitation: createInvitationService({
+    invitations: invitationModels,
+    users: userModels,
+    organizations: organizationModels,
+    members: memberModels,
+    startSession: auth.startSession,
+    sendOrgInvite: email.sendOrgInvite,
+    runTransaction,
+  }),
 };
 
 export { createAuthService } from "./auth.service";
@@ -136,3 +153,10 @@ export type {
   MfaLoginResult,
   MfaStatusSummary,
 } from "./mfa.service";
+export { createInvitationService } from "./invitation.service";
+export type {
+  InvitationService,
+  InvitationServiceDeps,
+  InviteMemberParams,
+  AcceptedInvitation,
+} from "./invitation.service";
