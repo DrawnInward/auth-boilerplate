@@ -1,29 +1,7 @@
 import { Response, NextFunction } from "express";
-import bcrypt from "bcrypt";
-import db from "../../database/db";
 import { RequestWithUser } from "../../types";
 import { sendSuccess } from "../../utils/responseUtils";
-import { generateTotpSecret, verifyTotpCode } from "../../utils/totp";
-import { generateBackupCodes, hashBackupCodes } from "../../utils/backupCodes";
-import {
-  getMfaStatus,
-  getMfaSecret,
-  setMfaSecret,
-  enableMfa,
-  disableMfa,
-  createBackupCodes,
-  getUnusedBackupCodes,
-  getBackupCodeCount,
-  markBackupCodeUsed,
-  deleteAllBackupCodes,
-} from "../../models/mfa.models";
-import {
-  getUserById,
-  getUserWithPasswordById,
-} from "../../models/users.models";
 import { services } from "../../services";
-import { httpError } from "../../utils/httpError";
-import { withTransaction } from "../../utils/withTransaction";
 
 export const setup = async (
   req: RequestWithUser,
@@ -33,19 +11,7 @@ export const setup = async (
   try {
     const { role_id } = req.user!;
 
-    const user = await getUserById(role_id);
-    if (!user) {
-      throw httpError(404, "User not found");
-    }
-
-    const mfaStatus = await getMfaStatus(role_id, "user");
-    if (mfaStatus?.mfa_enabled) {
-      throw httpError(400, "MFA is already enabled");
-    }
-
-    const { secret, qrCodeDataUrl } = await generateTotpSecret(user.email!);
-
-    await setMfaSecret(role_id, "user", secret);
+    const { qrCodeDataUrl } = await services.userMfa.beginTotpSetup(role_id);
 
     return sendSuccess(res, { qr_code: qrCodeDataUrl }, "MFA setup initiated");
   } catch (error) {
@@ -62,37 +28,7 @@ export const verifySetup = async (
     const { role_id } = req.user!;
     const { code } = req.body;
 
-    const user = await getUserById(role_id);
-    if (!user) {
-      throw httpError(404, "User not found");
-    }
-
-    const backupCodes = await withTransaction(db, async (client) => {
-      const mfaStatus = await getMfaStatus(role_id, "user", client);
-      if (mfaStatus?.mfa_enabled) {
-        throw httpError(400, "MFA is already enabled");
-      }
-
-      const secret = await getMfaSecret(role_id, "user", client);
-      if (!secret) {
-        throw httpError(400, "MFA setup not initiated");
-      }
-
-      if (!verifyTotpCode(secret, code)) {
-        throw httpError(401, "Invalid verification code");
-      }
-
-      await enableMfa(role_id, "user", client);
-
-      await deleteAllBackupCodes(role_id, "user", client);
-      const codes = generateBackupCodes();
-      const hashedCodes = await hashBackupCodes(codes);
-      await createBackupCodes(role_id, "user", hashedCodes, client);
-
-      return codes;
-    });
-
-    await services.email.sendMfaEnabled(user.email!);
+    const backupCodes = await services.userMfa.confirmTotpSetup(role_id, code);
 
     return sendSuccess(
       res,
@@ -113,14 +49,7 @@ export const verify = async (
     const { role_id } = req.user!;
     const { code } = req.body;
 
-    const secret = await getMfaSecret(role_id, "user");
-    if (!secret) {
-      throw httpError(400, "MFA not enabled");
-    }
-
-    if (!verifyTotpCode(secret, code)) {
-      throw httpError(401, "Invalid verification code");
-    }
+    await services.userMfa.verifyTotp(role_id, code);
 
     return sendSuccess(res, null, "MFA verification successful");
   } catch (error) {
@@ -137,57 +66,7 @@ export const disable = async (
     const { role_id } = req.user!;
     const { code, password } = req.body;
 
-    const user = await getUserWithPasswordById(role_id);
-    if (!user) {
-      throw httpError(404, "User not found");
-    }
-
-    // S8: disabling a second factor is a step-up operation — the account
-    // password is required alongside a current code, so a stolen session
-    // plus one leaked backup code cannot silently remove MFA.
-    if (!user.password_hash) {
-      throw httpError(
-        400,
-        "No password set. Use set-password endpoint instead.",
-      );
-    }
-    if (!(await bcrypt.compare(password, user.password_hash))) {
-      throw httpError(401, "Invalid password");
-    }
-
-    await withTransaction(db, async (client) => {
-      const mfaStatus = await getMfaStatus(role_id, "user", client);
-      if (!mfaStatus?.mfa_enabled) {
-        throw httpError(400, "MFA is not enabled");
-      }
-
-      const secret = await getMfaSecret(role_id, "user", client);
-      let verified = false;
-
-      if (secret && verifyTotpCode(secret, code)) {
-        verified = true;
-      }
-
-      if (!verified) {
-        const unusedCodes = await getUnusedBackupCodes(role_id, "user", client);
-        for (const backupCode of unusedCodes) {
-          if (await bcrypt.compare(code, backupCode.code_hash)) {
-            verified = true;
-            await markBackupCodeUsed(backupCode.id, client);
-            break;
-          }
-        }
-      }
-
-      if (!verified) {
-        throw httpError(401, "Invalid code");
-      }
-
-      await disableMfa(role_id, "user", client);
-      await deleteAllBackupCodes(role_id, "user", client);
-    });
-
-    await services.email.sendMfaDisabled(user.email!);
+    await services.userMfa.disable(role_id, code, password);
 
     return sendSuccess(res, null, "MFA disabled successfully");
   } catch (error) {
@@ -204,28 +83,7 @@ export const verifyBackup = async (
     const { role_id } = req.user!;
     const { code } = req.body;
 
-    await withTransaction(db, async (client) => {
-      const mfaStatus = await getMfaStatus(role_id, "user", client);
-      if (!mfaStatus?.mfa_enabled) {
-        throw httpError(400, "MFA is not enabled");
-      }
-
-      const unusedCodes = await getUnusedBackupCodes(role_id, "user", client);
-      let matchedCode = null;
-
-      for (const backupCode of unusedCodes) {
-        if (await bcrypt.compare(code, backupCode.code_hash)) {
-          matchedCode = backupCode;
-          break;
-        }
-      }
-
-      if (!matchedCode) {
-        throw httpError(401, "Invalid backup code");
-      }
-
-      await markBackupCodeUsed(matchedCode.id, client);
-    });
+    await services.userMfa.verifyBackupCode(role_id, code);
 
     return sendSuccess(res, null, "Backup code verified successfully");
   } catch (error) {
@@ -242,24 +100,10 @@ export const regenerateBackupCodes = async (
     const { role_id } = req.user!;
     const { code } = req.body;
 
-    const backupCodes = await withTransaction(db, async (client) => {
-      const mfaStatus = await getMfaStatus(role_id, "user", client);
-      if (!mfaStatus?.mfa_enabled) {
-        throw httpError(400, "MFA is not enabled");
-      }
-
-      const secret = await getMfaSecret(role_id, "user", client);
-      if (!secret || !verifyTotpCode(secret, code)) {
-        throw httpError(401, "Invalid verification code");
-      }
-
-      await deleteAllBackupCodes(role_id, "user", client);
-      const codes = generateBackupCodes();
-      const hashedCodes = await hashBackupCodes(codes);
-      await createBackupCodes(role_id, "user", hashedCodes, client);
-
-      return codes;
-    });
+    const backupCodes = await services.userMfa.regenerateBackupCodes(
+      role_id,
+      code,
+    );
 
     return sendSuccess(
       res,
@@ -279,15 +123,7 @@ export const getStatus = async (
   try {
     const { role_id } = req.user!;
 
-    const mfaStatus = await getMfaStatus(role_id, "user");
-    const backupCodeCount = mfaStatus?.mfa_enabled
-      ? await getBackupCodeCount(role_id, "user")
-      : 0;
-
-    return sendSuccess(res, {
-      mfa_enabled: mfaStatus?.mfa_enabled || false,
-      backup_codes_remaining: backupCodeCount,
-    });
+    return sendSuccess(res, await services.userMfa.getStatus(role_id));
   } catch (error) {
     next(error);
   }

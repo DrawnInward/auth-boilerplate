@@ -25,18 +25,8 @@ import { clearAuthCookies } from "../../utils/clearAuthCookies";
 import { services } from "../../services";
 import {
   setMfaChallengeCookie,
-  verifyMfaChallengeToken,
   clearMfaChallengeCookie,
-  guardMfaChallenge,
-  failMfaChallenge,
-  consumeMfaChallengeOrThrow,
 } from "../../utils/mfaChallenge";
-import {
-  getMfaSecret,
-  getUnusedBackupCodes,
-  markBackupCodeUsed,
-} from "../../models/mfa.models";
-import { verifyTotpCode } from "../../utils/totp";
 import { parseCookies } from "../../utils";
 import { getAccountCreationMode, getOrgCreationMode } from "../../utils/config";
 import { httpError } from "../../utils/httpError";
@@ -177,46 +167,15 @@ export const mfaLoginVerify = async (
   try {
     const { code } = req.body;
     const cookies = parseCookies(req.headers.cookie);
-    const challengeToken = cookies.mfa_challenge;
 
-    if (!challengeToken) {
-      throw httpError(401, "MFA challenge not found");
-    }
+    const { principal: user, tokens } =
+      await services.userMfa.completeLoginWithTotp(
+        cookies.mfa_challenge,
+        code,
+        () => clearMfaChallengeCookie(res),
+      );
 
-    const payload = verifyMfaChallengeToken(challengeToken);
-    if (payload.role_type !== "user") {
-      throw httpError(401, "Invalid MFA challenge");
-    }
-
-    await guardMfaChallenge(payload.jti);
-
-    const secret = await getMfaSecret(payload.role_id, "user");
-    if (!secret) {
-      throw httpError(400, "MFA not configured");
-    }
-
-    if (!verifyTotpCode(secret, code)) {
-      await failMfaChallenge(payload.jti);
-      throw httpError(401, "Invalid verification code");
-    }
-
-    await consumeMfaChallengeOrThrow(payload.jti);
-
-    clearMfaChallengeCookie(res);
-
-    const user = await getUserById(payload.role_id);
-    if (!user) {
-      throw httpError(404, "User not found");
-    }
-
-    const { accessToken, refreshToken } = await services.auth.issueSession({
-      role_type: "user",
-      role_id: payload.role_id,
-      is_active: user.is_active === true,
-      email_verified: true,
-    });
-
-    setAuthCookies(res, accessToken, refreshToken);
+    setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
 
     return sendSuccess(res, buildUserResponse(user), "Login successful");
   } catch (error) {
@@ -232,70 +191,15 @@ export const mfaLoginBackupVerify = async (
   try {
     const { code } = req.body;
     const cookies = parseCookies(req.headers.cookie);
-    const challengeToken = cookies.mfa_challenge;
 
-    if (!challengeToken) {
-      throw httpError(401, "MFA challenge not found");
-    }
+    const { principal: user, tokens } =
+      await services.userMfa.completeLoginWithBackupCode(
+        cookies.mfa_challenge,
+        code,
+        () => clearMfaChallengeCookie(res),
+      );
 
-    const payload = verifyMfaChallengeToken(challengeToken);
-    if (payload.role_type !== "user") {
-      throw httpError(401, "Invalid MFA challenge");
-    }
-
-    // On the pool, before the transaction opens (mirrors the admin handler):
-    // the guard is a fail-fast pre-check, the CAS consume below is the
-    // enforcement.
-    await guardMfaChallenge(payload.jti);
-
-    const { user, accessToken, refreshToken } = await withTransaction(
-      db,
-      async (client) => {
-        const unusedCodes = await getUnusedBackupCodes(
-          payload.role_id,
-          "user",
-          client,
-        );
-        let matchedCode = null;
-
-        for (const backupCode of unusedCodes) {
-          if (await bcrypt.compare(code, backupCode.code_hash)) {
-            matchedCode = backupCode;
-            break;
-          }
-        }
-
-        if (!matchedCode) {
-          await failMfaChallenge(payload.jti);
-          throw httpError(401, "Invalid backup code");
-        }
-
-        await markBackupCodeUsed(matchedCode.id, client);
-
-        await consumeMfaChallengeOrThrow(payload.jti, client);
-
-        clearMfaChallengeCookie(res);
-
-        const user = await getUserById(payload.role_id);
-        if (!user) {
-          throw httpError(404, "User not found");
-        }
-
-        const tokens = await services.auth.issueSession(
-          {
-            role_type: "user",
-            role_id: payload.role_id,
-            is_active: user.is_active === true,
-            email_verified: true,
-          },
-          client,
-        );
-
-        return { user, ...tokens };
-      },
-    );
-
-    setAuthCookies(res, accessToken, refreshToken);
+    setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
 
     return sendSuccess(res, buildUserResponse(user), "Login successful");
   } catch (error) {

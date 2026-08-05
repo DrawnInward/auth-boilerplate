@@ -1,6 +1,5 @@
 import { Request, Response, NextFunction } from "express";
 import bcrypt from "bcrypt";
-import db from "../../database/db";
 import {
   getAdminWithMfaStatus,
   getAdminById,
@@ -12,21 +11,10 @@ import { clearAuthCookies } from "../../utils/clearAuthCookies";
 import { services } from "../../services";
 import {
   setMfaChallengeCookie,
-  verifyMfaChallengeToken,
   clearMfaChallengeCookie,
-  guardMfaChallenge,
-  failMfaChallenge,
-  consumeMfaChallengeOrThrow,
 } from "../../utils/mfaChallenge";
-import {
-  getMfaSecret,
-  getUnusedBackupCodes,
-  markBackupCodeUsed,
-} from "../../models/mfa.models";
-import { verifyTotpCode } from "../../utils/totp";
 import { RequestWithUser } from "../../types";
 import { httpError } from "../../utils/httpError";
-import { withTransaction } from "../../utils/withTransaction";
 
 import "../../utils/loadEnv";
 
@@ -98,48 +86,17 @@ export const mfaLoginVerify = async (
   try {
     const { code } = req.body;
     const cookies = parseCookies(req.headers.cookie);
-    const challengeToken = cookies.mfa_challenge;
 
-    if (!challengeToken) {
-      throw httpError(401, "MFA challenge not found");
-    }
+    const { principal: admin, tokens } =
+      await services.adminMfa.completeLoginWithTotp(
+        cookies.mfa_challenge,
+        code,
+        () => clearMfaChallengeCookie(res),
+      );
 
-    const payload = verifyMfaChallengeToken(challengeToken);
-    if (payload.role_type !== "admin") {
-      throw httpError(401, "Invalid MFA challenge");
-    }
+    setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
 
-    await guardMfaChallenge(payload.jti);
-
-    const secret = await getMfaSecret(payload.role_id, "admin");
-    if (!secret) {
-      throw httpError(400, "MFA not configured");
-    }
-
-    if (!verifyTotpCode(secret, code)) {
-      await failMfaChallenge(payload.jti);
-      throw httpError(401, "Invalid verification code");
-    }
-
-    await consumeMfaChallengeOrThrow(payload.jti);
-
-    clearMfaChallengeCookie(res);
-
-    const admin = await getAdminById(payload.role_id);
-    if (!admin) {
-      throw httpError(404, "Admin not found");
-    }
-
-    const { accessToken, refreshToken } = await services.auth.issueSession({
-      role_type: "admin",
-      role_id: payload.role_id,
-      is_active: admin.is_active === true,
-      root: admin.root === true,
-    });
-
-    setAuthCookies(res, accessToken, refreshToken);
-
-    return sendSuccess(res, { admin_id: payload.role_id }, "Login successful");
+    return sendSuccess(res, { admin_id: admin.admin_id }, "Login successful");
   } catch (error) {
     next(error);
   }
@@ -153,70 +110,17 @@ export const mfaLoginBackupVerify = async (
   try {
     const { code } = req.body;
     const cookies = parseCookies(req.headers.cookie);
-    const challengeToken = cookies.mfa_challenge;
 
-    if (!challengeToken) {
-      throw httpError(401, "MFA challenge not found");
-    }
+    const { principal: admin, tokens } =
+      await services.adminMfa.completeLoginWithBackupCode(
+        cookies.mfa_challenge,
+        code,
+        () => clearMfaChallengeCookie(res),
+      );
 
-    const payload = verifyMfaChallengeToken(challengeToken);
-    if (payload.role_type !== "admin") {
-      throw httpError(401, "Invalid MFA challenge");
-    }
+    setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
 
-    // On the pool, before the transaction opens (mirrored by the user
-    // handler): the guard is a fail-fast pre-check, the CAS consume below is
-    // the enforcement.
-    await guardMfaChallenge(payload.jti);
-
-    const { accessToken, refreshToken } = await withTransaction(
-      db,
-      async (client) => {
-        const unusedCodes = await getUnusedBackupCodes(
-          payload.role_id,
-          "admin",
-          client,
-        );
-        let matchedCode = null;
-
-        for (const backupCode of unusedCodes) {
-          if (await bcrypt.compare(code, backupCode.code_hash)) {
-            matchedCode = backupCode;
-            break;
-          }
-        }
-
-        if (!matchedCode) {
-          await failMfaChallenge(payload.jti);
-          throw httpError(401, "Invalid backup code");
-        }
-
-        await markBackupCodeUsed(matchedCode.id, client);
-
-        await consumeMfaChallengeOrThrow(payload.jti, client);
-
-        clearMfaChallengeCookie(res);
-
-        const admin = await getAdminById(payload.role_id);
-        if (!admin) {
-          throw httpError(404, "Admin not found");
-        }
-
-        return services.auth.issueSession(
-          {
-            role_type: "admin",
-            role_id: payload.role_id,
-            is_active: admin.is_active === true,
-            root: admin.root === true,
-          },
-          client,
-        );
-      },
-    );
-
-    setAuthCookies(res, accessToken, refreshToken);
-
-    return sendSuccess(res, { admin_id: payload.role_id }, "Login successful");
+    return sendSuccess(res, { admin_id: admin.admin_id }, "Login successful");
   } catch (error) {
     next(error);
   }
