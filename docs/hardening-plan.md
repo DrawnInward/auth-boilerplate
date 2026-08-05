@@ -84,6 +84,40 @@ client single-flight) is deliberately **deferred to Phase C (authService)**: it 
 reworks — so doing it now then again in C is duplicated blast radius. The grace window alone
 closes the security/UX bug; single-flight is efficiency and is best paired with the extraction.
 
+**Status (2026-08-05) — part 1 DONE; A1 fully closed.** `POST /api/auth/refresh` now exists:
+public, rate-limited, and shared by both roles — the refresh cookie is the credential and names
+its principal, so admin sessions rotate at the same endpoint (covered in `adminAuth.test.ts`).
+`authoriseUser` no longer touches refresh tokens at all: a missing/expired/malformed access token
+is a clean 401 `Credentials missing` with no rotation side effects, and the per-cause refresh
+statuses the A6 note deferred now surface at the endpoint (revoked / breach-replay / expired /
+inactive-account 401s, forged token 401). The web `api/client` gained the single-flight exchange:
+any number of concurrent 401s produce exactly one refresh call which every caller awaits, then
+retries once — safe for all verbs because the 401 came from the middleware, before any handler
+ran. The plan's three tests all exist: concurrent refresh → both 200 and a separate device's
+session untouched; outside-grace replay (via a backdated `used_at`) → 401 breach **and** the
+successor lineage revoked; web single-flight (three concurrent callers, one refresh request, all
+three retry) plus refresh-failure fallthrough and non-401 passthrough. A fourth pins the grace
+nuance: a rotated-then-logged-out lineage is refused even inside the reuse window. Specs that
+drove rotation through the middleware (`userAuth`, `adminUsers` S4, `selfAccount`,
+`passwordReset`) now exercise the endpoint; `roleBoundary` classifies `/refresh` public. The
+`api-reference.md` drift (documented-but-nonexistent endpoint) is closed by existence; the doc
+itself still regenerates under D5. Gate: 934 API tests (41 suites), 55 web.
+
+**Reviewed (2026-08-05) — clean after three fixes from the pass.** A security and a correctness
+review over the working tree found no vulnerability but three items, all fixed and tested:
+(1) `/refresh` initially shared `authLimiter`'s 10-hit budget — steady-state refresh traffic
+would have starved login; it now has its own `refreshLimiter` (120/15 min). (2) The client
+retried **any** 401, including handler-minted ones — a wrong login password would silently
+re-submit, and a wrong MFA code would double-count against the 5-attempt budget when a live
+refresh cookie coexisted; the retry now fires only on the middleware's uniform
+`Credentials missing` 401, pinned by a web test. (3) A validly-signed token whose row was gone
+surfaced the model's 404 — normalised to the same 401 as a forged token, pinned by an
+integration test. Deferred to D6: the `trust proxy` posture (unset, so reverse-proxy deployments
+key every rate limit to the proxy IP), and the claims drift where rotation mints 10-minute
+`{role_id, role_type}` access tokens while `issueSession` mints 15-minute tokens carrying
+`root`/`email_verified` — nothing reads those claims server-side today, but the refresh path is
+now the dominant minting path and belongs in the authService fold-in.
+
 ### A2 · S2 — MFA bypass via invitation accept (HIGH, touches a hook site)
 
 **Issue.** `POST /invitations/:token/accept` for an existing user verifies the invite token and
@@ -520,6 +554,24 @@ issueSession, runTransaction })` with `beginGoogleAuth` / `completeGoogleCallbac
   `validateBody` (500 / unvalidated body); `refresh.models.ts:64-72` hand-rolls a patch with no
   column allow-list (route through `buildPatch`); `MFA_ENCRYPTION_KEY` format-check at boot; MFA
   setup response casing differs between user (`qr_code`) and admin (`qrCode`).
+  - **`trust proxy` is never set** (A1-part-1 review, 2026-08-05): behind any reverse proxy,
+    express-rate-limit keys every client to the proxy's IP (the limiter's
+    `xForwardedForHeader: false` validation silence hides the warning). The intended production
+    topology is a Hetzner box behind Cloudflare, so the posture is: `trust proxy` = the hop
+    count (1 if Cloudflare talks straight to Node, 2 with a local nginx/Caddy in between),
+    **and** the origin firewalled to Cloudflare's IP ranges — without that, anyone hitting the
+    origin directly can forge `X-Forwarded-For` and dodge every per-IP limit. Make it an env
+    knob (`TRUST_PROXY_HOPS`, validated at boot) rather than a hardcode.
+  - **Refreshed access tokens drop claims** (same review): `createAccessToken` mints 10-minute
+    `{role_id, role_type}` tokens while `issueSession` mints 15-minute tokens carrying
+    `root`/`email_verified`. Nothing reads those claims server-side today; fold the rotation
+    mint into authService before anything does. Relatedly, the refresh JWT's own
+    `refresh_id`/`role_id`/`role_type` claims are vestigial — identity comes from the hashed
+    row since the A1 hardening, and only the signature and `exp` are consumed — so the fold-in
+    should either strip them or keep them as a deliberate debugging affordance, not by inertia.
+  - **`validateEnv` doesn't assert key distinctness** (REFRESH_KEY vs the access keys) — equal
+    keys would let a refresh token verify in the access slot. `setup.ts` generates them
+    randomly; a boot-time distinctness check is cheap defence in depth.
   - **Invitation redemption has no designed concurrency guard** (surfaced by the C3 review,
     2026-08-05; pre-existing, moved verbatim into `invitation.service.ts`). Two concurrent
     accepts of the same token both read the invitation unlocked (`validateInvitationToken` has
@@ -566,7 +618,7 @@ A (security)  ── A1,A2 first (A2 before billing hooks) ── A3,A4 ── A
       │
 B (test net)  ── B1 (wrong-role) is the keystone ── B2..B6           ← before any refactor
       │
-C (services)  ── C1 ── C2 ── C3 ── C4 — ALL DONE (A1 part 1, the refresh endpoint, still open)
+C (services)  ── C1 ── C2 ── C3 ── C4 — ALL DONE ── A1 part 1 (refresh endpoint) DONE
       │
 D (rest)      ── D2 org soft-delete + A2 clean == billing unblocked
                  D1 schema single-source ── D3 features ── D4 lint ── D5 docs/CI ── D6
