@@ -17,6 +17,7 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "rebuild:native": "npm rebuild bcrypt esbuild",
     "seed": "npm run seed -w @auth-boilerplate/api",
     "migrate": "npm run migrate -w @auth-boilerplate/api",
     "setup": "npm run setup -w @auth-boilerplate/api"
