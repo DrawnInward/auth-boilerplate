@@ -534,6 +534,45 @@ issueSession, runTransaction })` with `beginGoogleAuth` / `completeGoogleCallbac
   FK financial history to organizations, so a hard cascade would either be blocked by the FK (500) or
   destroy money history. Do this before billing schema lands. Aligns with the fork's stated
   "organizations are never hard-deleted" invariant.
+
+  **Status (2026-08-05) — DONE.** Migration `004_organizations_soft_delete.sql` adds nullable
+  `deleted_at` and swaps the slug UNIQUE constraint for a partial unique index
+  (`WHERE deleted_at IS NULL`, same name) — a deleted organization no longer reserves its slug
+  forever, while live duplicates still 409. `deleteOrganization` is now
+  `UPDATE … SET deleted_at = NOW()` (second delete → 404, not a no-op); every read in
+  `organization.models.ts` filters `deleted_at IS NULL` (by-id, by-slug, both listings, stats,
+  member-count, and `modifyOrganization`'s WHERE). All org SQL lives in that one model file, and
+  the org-scoped middleware already resolves the organization through `getOrganizationById` —
+  so every org-scoped route 404s after deletion with **zero middleware or controller changes**,
+  even though membership rows deliberately persist (an integration test pins exactly that:
+  membership intact in the DB, route 404 for the ex-owner). Shared `organizationSchema` gains an
+  optional `deleted_at` (always null in responses — reads filter it). Two design notes: member
+  rows are kept, not cascaded — the fork's seat ledger and any audit trail keep their history,
+  and the middleware gate makes them inert; the admin delete endpoint shares the same model
+  function, so both paths soft-delete. Tests: five new CRUD cases (row+membership persistence,
+  every-lookup-respects-deleted_at, slug reuse + live-duplicate 409, stats exclusion, double
+  delete 404) and two integration cases (ex-member lockout across org-scoped routes + absence
+  from listings; slug freed through the API). The org-suite pre-existing specs run unmodified —
+  the old delete specs asserted through the model layer, which behaves identically from the
+  outside. Full gate: 943 API tests (41 suites), 55 web. **With A2 long done, billing in the
+  fork is now unblocked.**
+
+  **Reviewed (2026-08-05) — one real find, fixed.** The security pass verified the middleware
+  seal across all 24 org-scoped routes and the whole admin surface, and confirmed the partial
+  index swap (constraint name proven empirically; 23505 fires for index violations, so the 409
+  survives). The find: `ON DELETE CASCADE` used to destroy an org's **pending invitations**;
+  with soft delete they outlived it, and the public accept endpoint would mint a verified
+  account plus a membership row inside the dead tenant (inert behind the middleware today, a
+  privilege bug the day an undelete lands). Fixed: `acceptInvitation` resolves the organization
+  in-transaction and `getInvitation` checks it too — a dead-org token now answers 404
+  `Invalid or expired invitation` at both endpoints, indistinguishable from a token that never
+  existed. Three tests pin it (unit: refusal writes nothing; integration: both endpoints 404
+  with DB-level assertions that no user/membership was created). Deliberately left:
+  `transferOwnership`'s org UPDATE is unfiltered but unreachable (behind `requireOrgOwner`,
+  which 404s), and adding the filter would create a silent no-op since that statement's row
+  count goes unchecked; the deps-injected `getOrganizationById` reads via the pool inside the
+  accept transaction, consistent with that flow's other reads.
+
 - **D3 · Finish or cut the broken features** the audit found — decide per feature, don't ship
   half-wired: wire `/admin/users/stats` (model exists, unrouted → dashboard tiles stuck at 0);
   fix or remove admin set-user-password (always 403s today) and the no-op `PUT /auth/profile`; fix
@@ -572,6 +611,11 @@ issueSession, runTransaction })` with `beginGoogleAuth` / `completeGoogleCallbac
   - **`validateEnv` doesn't assert key distinctness** (REFRESH_KEY vs the access keys) — equal
     keys would let a refresh token verify in the access slot. `setup.ts` generates them
     randomly; a boot-time distinctness check is cheap defence in depth.
+  - **`GET /invitations/:token` returns a nested `organization` object while the shared
+    `publicInvitationSchema` and `AcceptInvitePage` expect flat
+    `organization_id`/`organization_name`** (surfaced by the D2 review; pre-existing) — the FE
+    falls back to "an organization" instead of showing the name. Align the shape under D1's
+    schema single-sourcing.
   - **Invitation redemption has no designed concurrency guard** (surfaced by the C3 review,
     2026-08-05; pre-existing, moved verbatim into `invitation.service.ts`). Two concurrent
     accepts of the same token both read the invitation unlocked (`validateInvitationToken` has
@@ -620,7 +664,7 @@ B (test net)  ── B1 (wrong-role) is the keystone ── B2..B6           ←
       │
 C (services)  ── C1 ── C2 ── C3 ── C4 — ALL DONE ── A1 part 1 (refresh endpoint) DONE
       │
-D (rest)      ── D2 org soft-delete + A2 clean == billing unblocked
+D (rest)      ── D2 org soft-delete DONE + A2 clean == BILLING UNBLOCKED
                  D1 schema single-source ── D3 features ── D4 lint ── D5 docs/CI ── D6
                  D7 supply chain: local half DONE, CI half binds D5
 ```
