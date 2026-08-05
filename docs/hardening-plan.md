@@ -414,9 +414,48 @@ Extract in this order (each is behaviour-preserving under the Phase B suite):
 
 - **C2 · `mfaService({ roleType })`** — collapses the ~280-line near-identical user/admin MFA
   controller twins into one parameterised service.
+
+  **Status (2026-08-05) — DONE.** `services/mfa.service.ts`:
+  `createMfaService({ roleType, principals, store, challenges, runTransaction, issueSession,
+email })` — one generic factory, instantiated twice in the composition root
+  (`services.userMfa` / `services.adminMfa`). The role-specific principal lookups and the
+  session-claim mapping arrive as deps, so the roles differ by wiring, not code. Covers the seven
+  management flows (setup, verify-setup, verify, disable, backup verify, regenerate, status)
+  **and** the login-challenge completion pair that lived in the auth controllers
+  (`completeLoginWithTotp` / `completeLoginWithBackupCode`) — the four A7/S9 verify sites now run
+  one implementation. Both `mfa.controller.ts` twins are pure response shaping, with the
+  `qr_code`/`qrCode` casing divergence now visibly their only difference (commented for D6); the
+  four `mfaLogin*` handlers are cookie-in/cookie-out shims. One mechanism note: the completion
+  methods take an `onChallengeConsumed` callback fired the moment the challenge is spent, so the
+  controller drops the challenge cookie at exactly the pre-extraction point — including on the
+  deactivated-403 path, where the cookie clears but no session is minted — rather than only on
+  success. Behaviour-preserving under the Phase B net (900 API + 50 web tests green, no spec
+  edits); new `unit/mfaService.test.ts` (27 tests) drives every flow with in-memory
+  store/challenge/principal fakes.
+
 - **C3 · `invitationService`** — extract `acceptInvitation` (the largest un-extracted orchestration:
   validate, branch, bcrypt, create user, add member, mark used, issue session). Also removes the raw
   SQL currently sitting in `auth.controller.ts:755` by routing it through the model.
+
+  **Status (2026-08-05) — DONE.** `services/invitation.service.ts`:
+  `createInvitationService({ invitations, users, organizations, members, startSession,
+sendOrgInvite, runTransaction })` owns both org-invitation flows. `acceptInvitation` moved
+  verbatim — same transaction boundary, same error messages and ordering, S2's
+  membership-≠-authentication decision and its comments intact — which also relocates the fork's
+  seat-policy hook site into the service. `inviteMember` moved with it (it is invitation-domain
+  and one of the four untransactioned flows): its invalidate-pending + create-invitation pair now
+  runs inside one transaction, closing the partial-failure window where an address's previous
+  invitations were already invalidated but the new one failed to insert; the reads stay
+  pool-side and the email still sends after commit, as before. The raw
+  `UPDATE users SET email` in `confirmEmailChange` now routes through `modifyUser` — two
+  deliberate hardenings where nothing pinned the old behaviour: a vanished/deleted user is now a
+  404 instead of a silent success, and a unique-violation race is a 409 instead of a 500 (the
+  pre-check's `Email is no longer available` 409 is unchanged). `listInvitations` /
+  `cancelInvitation` / `getInvitation` stay in the controller — single model call plus shaping,
+  thin already. Full gate green (914 API + 50 web, no spec edits); new
+  `unit/invitationService.test.ts` (14 tests) drives both flows with in-memory fakes, including
+  the S2 challenge-with-committed-org-join outcome and the invalidate+create atomicity.
+
 - **C4 · OAuth adapter seam** — `utils/googleOAuth.ts` reads env internally and is imported straight
   into controllers, so `googleCallback` can't be unit-tested without network stubs (the exact defect
   email had pre-uplift). Wrap it as an injected adapter with a deterministic fake, mirroring the
@@ -424,6 +463,7 @@ Extract in this order (each is behaviour-preserving under the Phase B suite):
   here is doubly worth it.
 - Wrap the four currently-untransactioned multi-step flows (`register`, `forgotPassword`,
   `requestEmailChange`, `inviteMember`) in `withTransaction` as they move into services.
+  _(`inviteMember` done with C3; the other three remain, pending their own extractions.)_
 
 ---
 
@@ -462,6 +502,20 @@ Extract in this order (each is behaviour-preserving under the Phase B suite):
   `validateBody` (500 / unvalidated body); `refresh.models.ts:64-72` hand-rolls a patch with no
   column allow-list (route through `buildPatch`); `MFA_ENCRYPTION_KEY` format-check at boot; MFA
   setup response casing differs between user (`qr_code`) and admin (`qrCode`).
+  - **Invitation redemption has no designed concurrency guard** (surfaced by the C3 review,
+    2026-08-05; pre-existing, moved verbatim into `invitation.service.ts`). Two concurrent
+    accepts of the same token both read the invitation unlocked (`validateInvitationToken` has
+    no `FOR UPDATE`) and `markInvitationUsed` has no `used_at IS NULL` predicate, so neither
+    detects the other. Today exactly one wins — but only because the loser's transaction dies on
+    the `organization_members` (or `users.email`) unique constraint, i.e. the constraint is the
+    mechanism, not the backstop, and the loser's 409 talks about membership rather than the
+    invitation. The incidental guard evaporates the day someone makes `addOrganizationMember`
+    duplicate-tolerant — and in the fork this transaction carries the seat-policy hook, so a
+    double-commit would double-fire billing. Fix: `validateInvitationToken` takes the invitation
+    row `FOR UPDATE` (rule 6), and `markInvitationUsed` becomes a compare-and-set
+    (`… AND used_at IS NULL RETURNING id`, throw on no row — rule 1's pre-check shape, matching
+    the MFA-challenge consume). Ship with a two-concurrent-accepts integration test asserting
+    one session, one membership row, and an invitation-shaped error for the loser.
 - **D7 · Supply chain.** Adopted 2026-08-05, the day after the 4 Aug npm worm (2,234 poisoned
   versions across 444 packages, including `flat-cache`/`file-entry-cache` — inside ESLint, and
   therefore inside this tree). Two facts drive the design: install scripts were the execution
@@ -494,7 +548,7 @@ A (security)  ── A1,A2 first (A2 before billing hooks) ── A3,A4 ── A
       │
 B (test net)  ── B1 (wrong-role) is the keystone ── B2..B6           ← before any refactor
       │
-C (services)  ── C1 authService DONE ── C2 ── C3 ── C4
+C (services)  ── C1 authService DONE ── C2 mfaService DONE ── C3 invitationService DONE ── C4
       │
 D (rest)      ── D2 org soft-delete + A2 clean == billing unblocked
                  D1 schema single-source ── D3 features ── D4 lint ── D5 docs/CI ── D6
