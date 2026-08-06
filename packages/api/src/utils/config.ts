@@ -78,6 +78,16 @@ export const getRefreshReuseGraceMs = (): number =>
   (readPositiveNumberEnv("REFRESH_REUSE_GRACE_SECONDS", { integer: true }) ??
     REFRESH_REUSE_GRACE_SECONDS_DEFAULT) * 1000;
 
+const ACCESS_TOKEN_LIFETIME_SECONDS_DEFAULT = 15 * 60;
+
+// How long a minted access token (and its cookie) lives. Because authoriseUser
+// is deliberately stateless, this is also the upper bound on how long a
+// disabled or logged-out session keeps working — a deployment wanting a
+// tighter revocation window shrinks this knob and pays with refresh traffic.
+export const getAccessTokenLifetimeSeconds = (): number =>
+  readPositiveNumberEnv("ACCESS_TOKEN_LIFETIME_SECONDS", { integer: true }) ??
+  ACCESS_TOKEN_LIFETIME_SECONDS_DEFAULT;
+
 // OWASP's current bcrypt minimum. Overridable so a deployment can trade
 // hashing latency against hardware (BCRYPT_COST=4 makes test runs cheap).
 const BCRYPT_COST_DEFAULT = 12;

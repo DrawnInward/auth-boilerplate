@@ -1,5 +1,5 @@
 import { createCookieOptions } from "./createCookieOptions";
-import { getRefreshTokenDays } from "./config";
+import { getAccessTokenLifetimeSeconds, getRefreshTokenDays } from "./config";
 import { Response } from "express";
 
 import "./loadEnv";
@@ -7,7 +7,7 @@ import "./loadEnv";
 export const setAccessTokenCookie = (
   res: Response,
   token: string,
-  maxAge: number = 15 * 60 * 1000, // 15 minutes default
+  maxAge: number = getAccessTokenLifetimeSeconds() * 1000,
 ): void => {
   const cookieOptions = createCookieOptions(maxAge, {
     allowedOrigin: process.env.ALLOWED_ORIGIN,

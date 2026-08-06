@@ -64,6 +64,18 @@ describe("authService", () => {
       });
     });
 
+    it("honours ACCESS_TOKEN_LIFETIME_SECONDS for the token lifetime", async () => {
+      process.env.ACCESS_TOKEN_LIFETIME_SECONDS = "60";
+      try {
+        const { accessToken } = await auth.issueSession(activeUser);
+
+        const claims = jwt.verify(accessToken, USER_KEY) as jwt.JwtPayload;
+        expect(claims.exp! - claims.iat!).toBe(60);
+      } finally {
+        delete process.env.ACCESS_TOKEN_LIFETIME_SECONDS;
+      }
+    });
+
     it("mints an admin access token with the admin key and root claim", async () => {
       const { accessToken } = await auth.issueSession(activeAdmin);
 

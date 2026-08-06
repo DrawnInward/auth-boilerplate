@@ -775,13 +775,28 @@ RETURNING`, rule 1's pre-check shape). And OAuthTab's "Link" reuses the login fl
     **and** the origin firewalled to Cloudflare's IP ranges — without that, anyone hitting the
     origin directly can forge `X-Forwarded-For` and dodge every per-IP limit. Make it an env
     knob (`TRUST_PROXY_HOPS`, validated at boot) rather than a hardcode.
-  - **Refreshed access tokens drop claims** (same review): `createAccessToken` mints 10-minute
-    `{role_id, role_type}` tokens while `issueSession` mints 15-minute tokens carrying
+  - **Refreshed access tokens drop claims** (same review): `createAccessToken` mints
+    `{role_id, role_type}` tokens while `issueSession` mints tokens carrying
     `root`/`email_verified`. Nothing reads those claims server-side today; fold the rotation
-    mint into authService before anything does. Relatedly, the refresh JWT's own
+    mint into authService before anything does. _(The lifetime half of this drift — 10m at
+    rotation vs 15m at issue — was closed 2026-08-06: both sites now share
+    `ACCESS_TOKEN_LIFETIME_SECONDS`; the claims half remains.)_ Relatedly, the refresh JWT's own
     `refresh_id`/`role_id`/`role_type` claims are vestigial — identity comes from the hashed
     row since the A1 hardening, and only the signature and `exp` are consumed — so the fold-in
     should either strip them or keep them as a deliberate debugging affordance, not by inertia.
+  - **Session-revocation posture (D3 follow-up, 2026-08-06; knob DONE, switch recorded).**
+    Access tokens are stateless by design, so disable/logout bind at the next refresh, not
+    instantly — the accepted trade-off (A4), bounded by the access-token lifetime. That bound
+    is now an explicit env knob: `ACCESS_TOKEN_LIFETIME_SECONDS` (default 900, validated at
+    boot with the other numeric knobs), shared by both mint sites and the access cookie's
+    maxAge, so a cautious deployment shrinks the window by config alone. If a deployment ever
+    needs _instant_ revocation, the designed answer is an `AUTH_REVALIDATE_PRINCIPAL=true`
+    env switch making `authoriseUser` re-load the principal per request — exactly what
+    `requireRootAdmin` already does, promoted to a global option: one branch over one code
+    path, per-request DB cost paid knowingly. A dual session architecture (stateful sessions
+    alongside JWTs, selected by env) was considered and rejected — it forks the entire
+    session machinery and doubles the auth test matrix for a property the switch delivers
+    alone. Build the switch only when a real consumer asks.
   - **`validateEnv` doesn't assert key distinctness** (REFRESH_KEY vs the access keys) — equal
     keys would let a refresh token verify in the access slot. `setup.ts` generates them
     randomly; a boot-time distinctness check is cheap defence in depth.

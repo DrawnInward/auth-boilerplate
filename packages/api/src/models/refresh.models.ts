@@ -7,7 +7,11 @@ import {
   UpdateRefreshTokenDto,
 } from "../types";
 import { determinateHash } from "../utils";
-import { getRefreshTokenDays, getRefreshReuseGraceMs } from "../utils/config";
+import {
+  getAccessTokenLifetimeSeconds,
+  getRefreshTokenDays,
+  getRefreshReuseGraceMs,
+} from "../utils/config";
 import { getUserById } from "./users.models";
 import { getAdminById } from "./admins.models";
 import { Pool, PoolClient } from "pg";
@@ -280,7 +284,7 @@ export const createAccessToken = async (
     const accessToken = jwt.sign(
       { role_id: presented.role_id, role_type },
       accessKey,
-      { expiresIn: "10m" },
+      { expiresIn: getAccessTokenLifetimeSeconds() },
     );
 
     return {

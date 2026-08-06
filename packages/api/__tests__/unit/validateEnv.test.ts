@@ -13,6 +13,7 @@ const OPTIONAL_VARS = [
   "PGDATABASE",
   "PORT",
   "REFRESH_TOKEN_DAYS",
+  "ACCESS_TOKEN_LIFETIME_SECONDS",
   "GOOGLE_CLIENT_ID",
   "GOOGLE_CLIENT_SECRET",
   "GOOGLE_CALLBACK_URL",
@@ -91,6 +92,8 @@ describe("validateEnv", () => {
       ["PORT", "3000.5"],
       ["REFRESH_TOKEN_DAYS", "0"],
       ["REFRESH_TOKEN_DAYS", "not-a-number"],
+      ["ACCESS_TOKEN_LIFETIME_SECONDS", "0"],
+      ["ACCESS_TOKEN_LIFETIME_SECONDS", "fifteen"],
       ["BCRYPT_COST", "0"],
       ["BCRYPT_COST", "twelve"],
     ])("rejects %s=%s", (name, value) => {
@@ -104,6 +107,7 @@ describe("validateEnv", () => {
     it.each([
       ["PORT", "3000"],
       ["REFRESH_TOKEN_DAYS", "30"],
+      ["ACCESS_TOKEN_LIFETIME_SECONDS", "900"],
       ["BCRYPT_COST", "12"],
     ])("accepts %s=%s", (name, value) => {
       process.env[name] = value;

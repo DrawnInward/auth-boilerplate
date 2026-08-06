@@ -12,9 +12,8 @@ import jwt from "jsonwebtoken";
 import { Pool, PoolClient } from "pg";
 import db from "../database/db";
 import { CreateRefreshTokenDto } from "../types";
+import { getAccessTokenLifetimeSeconds } from "../utils/config";
 import { httpError } from "../utils/httpError";
-
-const ACCESS_TOKEN_EXPIRY = "15m";
 
 // The principal carries exactly what its access token claims, plus is_active —
 // callers state where each claim came from (a row, or a fact the flow itself
@@ -98,7 +97,7 @@ export const createAuthService = ({
     const accessToken = jwt.sign(
       accessClaims(principal),
       getAccessKey(principal.role_type),
-      { expiresIn: ACCESS_TOKEN_EXPIRY },
+      { expiresIn: getAccessTokenLifetimeSeconds() },
     );
 
     const { token: refreshToken } = await addRefresh(
