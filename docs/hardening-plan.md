@@ -626,6 +626,39 @@ issueSession, runTransaction })` with `beginGoogleAuth` / `completeGoogleCallbac
   POST route) or gate OAuth off by default until it has a working UI; decide the admin-management
   slice (listing/create/disable + last-admin protection) since "B2B multi-tenant" implies it and the
   `admins` model is 391 lines of which two functions are routed.
+
+  **Decided (2026-08-06) — all five settled; implementation next.**
+
+  1. **`/admin/users/stats`: wire it.** Not a decision — the web already ships
+     `useAdminUserStats` calling exactly that path and the dashboard tiles read 0 only because
+     the route is missing; `getUserStats` exists and is CRUD-tested. Route + integration tests
+     to the house minimum.
+  2. **Admin set-user-password: removed.** Drop `password` from the shared `updateUserSchema`
+     and the controller's hash-and-pass path (which today only ever reaches the model's 403).
+     Admins keep the existing, working send-password-reset email flow — password custody stays
+     with the user. This also settles the D1-review note about the untested 403 path: the field
+     leaves the contract instead (a password-bearing body then strips to its other fields, or
+     400s "No valid fields to update" if password was all it carried — pin that). The model's
+     `password_hash` guard stays as the backstop.
+  3. **`PUT /auth/profile`: removed.** Profile's only field is email and email changes go
+     through the verified request-email-change flow; there is nothing for it to update. Delete
+     route, controller, shared `updateProfileSchema`, and rewrite the B4 spec that currently
+     pins the no-op into one asserting the route is gone (404). Check the web for any caller
+     first.
+  4. **OAuth UI: fix end-to-end.** The backend is solid, tested, and behind the C4 adapter —
+     this is the last mile. Button becomes a real redirect to the auth URL, add the SPA
+     callback route, Unlink becomes a POST. FE tests per the B6 pattern (MSW at the HTTP
+     boundary).
+  5. **Admin-management slice: build it.** B2B multi-tenant implies multiple platform admins
+     and the model layer (incl. root-admin protections) already exists and is CRUD-tested.
+     Routes + controllers for list/create(invite)/disable + last-admin protection, integration
+     tests to the house minimum, wrong-role rows added to the `roleBoundary` table, and a
+     minimal admin UI page. Follow the existing admin-users area pattern; root-only where the
+     action affects another admin.
+
+  Sequencing within D3: 1–3 are small and land first (2 and 3 shrink surface before 4 and 5
+  grow it); 4 and 5 are independent slices in either order.
+
 - **D4 · Enforce the layering that's currently discipline-only.** Add `no-restricted-imports`/
   boundaries lint for the FE three-tier rule and a rule catching raw `client.query` in controllers —
   both currently hold by convention and the next violation ships silently.
