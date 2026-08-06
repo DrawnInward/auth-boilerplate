@@ -269,6 +269,38 @@ describe("Admin User Management Integration Tests", () => {
     });
   });
 
+  describe("GET /api/admin/users/stats", () => {
+    it("should return user statistics matching the database (D3)", async () => {
+      const response = await request(app)
+        .get("/api/admin/users/stats")
+        .set("Cookie", adminCookies)
+        .expect(200);
+
+      expect(response.body.status).toBe("success");
+      expect(response.body.message).toBe("User stats retrieved successfully");
+
+      const counts = await db.query(`
+        SELECT
+          COUNT(*)::int AS total,
+          COUNT(*) FILTER (WHERE is_active AND deleted_at IS NULL)::int AS active,
+          COUNT(*) FILTER (WHERE NOT is_active AND deleted_at IS NULL)::int AS inactive,
+          COUNT(*) FILTER (WHERE email_verified AND deleted_at IS NULL)::int AS verified,
+          COUNT(*) FILTER (WHERE NOT email_verified AND deleted_at IS NULL)::int AS unverified,
+          COUNT(*) FILTER (WHERE deleted_at IS NOT NULL)::int AS deleted
+        FROM users;
+      `);
+      expect(response.body.data).toEqual(counts.rows[0]);
+    });
+
+    it("should reject request without authentication", async () => {
+      const response = await request(app)
+        .get("/api/admin/users/stats")
+        .expect(401);
+
+      expect(response.body.message).toBe("Credentials missing");
+    });
+  });
+
   describe("GET /api/admin/users/:userId", () => {
     it("should retrieve a specific user by ID", async () => {
       // Get all users first to get a valid ID
@@ -512,6 +544,48 @@ describe("Admin User Management Integration Tests", () => {
         [userId],
       );
       expect(check.rows[0].deleted_at).toBeNull();
+    });
+
+    it("rejects a password-only body now the field has left the contract (D3)", async () => {
+      const userId = testUsers[0].user_id;
+
+      // Admin set-user-password was removed: password custody stays with the
+      // user via the send-password-reset flow. The schema strips the field,
+      // so a body carrying nothing else is a 400 and the password is intact.
+      const response = await request(app)
+        .put(`/api/admin/users/${userId}`)
+        .set("Cookie", adminCookies)
+        .send({ password: "AdminChosen1" })
+        .expect(400);
+
+      expect(response.body.message).toBe("No valid fields to update");
+
+      await request(app)
+        .post("/api/auth/login")
+        .send({ email: testUsers[0].email, password: "Password1" })
+        .expect(200);
+    });
+
+    it("ignores a password sent alongside legal fields (D3)", async () => {
+      const userId = testUsers[0].user_id;
+
+      const response = await request(app)
+        .put(`/api/admin/users/${userId}`)
+        .set("Cookie", adminCookies)
+        .send({ email_verified: true, password: "AdminChosen1" })
+        .expect(200);
+
+      expect(response.body.data.email_verified).toBe(true);
+
+      // The old password still works; the smuggled one never landed.
+      await request(app)
+        .post("/api/auth/login")
+        .send({ email: testUsers[0].email, password: "Password1" })
+        .expect(200);
+      await request(app)
+        .post("/api/auth/login")
+        .send({ email: testUsers[0].email, password: "AdminChosen1" })
+        .expect(401);
     });
 
     it("should reject request without authentication", async () => {

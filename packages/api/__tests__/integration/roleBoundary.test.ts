@@ -49,7 +49,6 @@ const ROUTES: ClassifiedRoute[] = [
   route("post", "/api/auth", "/mfa/login-backup", "public"),
   route("get", "/api/auth", "/me", "user"),
   route("put", "/api/auth", "/change-password", "user"),
-  route("put", "/api/auth", "/profile", "user"),
   route("post", "/api/auth", "/request-email-change", "user"),
   route("post", "/api/auth", "/confirm-email-change/:token", "public"),
   route("post", "/api/auth", "/set-password", "user"),
@@ -111,6 +110,7 @@ const ROUTES: ClassifiedRoute[] = [
 
   // admin auth
   route("post", "/api/admin/auth", "/login", "public"),
+  route("post", "/api/admin/auth", "/complete-registration", "public"),
   route("post", "/api/admin/auth", "/mfa/login-verify", "public"),
   route("post", "/api/admin/auth", "/mfa/login-backup", "public"),
   route("get", "/api/admin/auth", "/me", "admin"),
@@ -128,12 +128,19 @@ const ROUTES: ClassifiedRoute[] = [
   // admin users
   route("post", "/api/admin/users", "/", "admin"),
   route("get", "/api/admin/users", "/", "admin"),
+  route("get", "/api/admin/users", "/stats", "admin"),
   route("post", "/api/admin/users", "/reset-password/:userId", "admin"),
   route("get", "/api/admin/users", "/:userId", "admin"),
   route("put", "/api/admin/users", "/:userId", "admin"),
   route("delete", "/api/admin/users", "/:userId", "admin"),
   route("patch", "/api/admin/users", "/:userId/org-permission", "admin"),
   route("post", "/api/admin/users", "/:userId/disable-mfa", "admin"),
+
+  // admin admins (root-only gating is asserted in adminAdmins.test.ts — this
+  // matrix only knows public/user/admin)
+  route("get", "/api/admin/admins", "/", "admin"),
+  route("post", "/api/admin/admins", "/", "admin"),
+  route("post", "/api/admin/admins", "/:adminId/disable", "admin"),
 
   // admin organizations
   route("post", "/api/admin/organizations", "/", "admin"),

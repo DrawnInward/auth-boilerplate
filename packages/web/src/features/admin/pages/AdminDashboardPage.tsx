@@ -61,7 +61,7 @@ export function AdminDashboardPage() {
         )}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader>
             <CardTitle>Users</CardTitle>
@@ -70,6 +70,18 @@ export function AdminDashboardPage() {
           <CardContent>
             <Button asChild>
               <Link to="/admin/users">View all users</Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Admins</CardTitle>
+            <CardDescription>Manage platform admins</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild>
+              <Link to="/admin/admins">View all admins</Link>
             </Button>
           </CardContent>
         </Card>

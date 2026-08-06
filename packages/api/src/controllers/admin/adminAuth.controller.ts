@@ -3,10 +3,17 @@ import bcrypt from "bcrypt";
 import {
   getAdminWithMfaStatus,
   getAdminById,
+  createAdmin,
 } from "../../models/admins.models";
 import { revokeUserTokens } from "../../models/refresh.models";
-import { sendSuccess } from "../../utils/responseUtils";
-import { setAuthCookies, parseCookies } from "../../utils";
+import {
+  validateInvitationToken,
+  markInvitationUsed,
+} from "../../models/invitations.models";
+import db from "../../database/db";
+import { sendSuccess, sendCreated } from "../../utils/responseUtils";
+import { setAuthCookies, parseCookies, hashPassword } from "../../utils";
+import { withTransaction } from "../../utils/withTransaction";
 import { clearAuthCookies } from "../../utils/clearAuthCookies";
 import { services } from "../../services";
 import {
@@ -121,6 +128,71 @@ export const mfaLoginBackupVerify = async (
     setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
 
     return sendSuccess(res, { admin_id: admin.admin_id }, "Login successful");
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /api/admin/auth/complete-registration
+// Redeem an admin_registration invitation: create the admin account and log
+// it in, mirroring the user complete-registration flow.
+export const completeRegistration = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { accessToken, refreshToken, admin } = await withTransaction(
+      db,
+      async (client) => {
+        const { token, password } = req.body;
+
+        const invitation = await validateInvitationToken(
+          token,
+          "admin_registration",
+          client,
+        );
+
+        const passwordHash = await hashPassword(password);
+        const admin = await createAdmin(
+          {
+            email: invitation.email,
+            password_hash: passwordHash,
+            email_verified: true,
+            is_active: true,
+          },
+          client,
+        );
+
+        await markInvitationUsed(invitation.id!, client);
+
+        const tokens = await services.auth.issueSession(
+          {
+            role_type: "admin",
+            role_id: admin.admin_id!,
+            is_active: admin.is_active === true,
+            root: admin.root === true,
+          },
+          client,
+        );
+
+        return { ...tokens, admin };
+      },
+    );
+
+    setAuthCookies(res, accessToken, refreshToken);
+
+    return sendCreated(
+      res,
+      {
+        admin_id: admin.admin_id,
+        email: admin.email,
+        root: admin.root,
+        email_verified: admin.email_verified,
+        is_active: admin.is_active,
+      },
+      "Registration completed successfully",
+    );
   } catch (error) {
     next(error);
   }

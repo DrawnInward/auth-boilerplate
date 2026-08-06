@@ -12,8 +12,13 @@ import {
   updateMemberRoleDtoSchema,
   inviteMemberSchema,
   acceptInviteSchema,
+  googleLinkSchema,
 } from "@auth-boilerplate/shared";
-import type { PublicUser, PublicInvitation } from "@auth-boilerplate/shared";
+import type {
+  PublicUser,
+  PublicAdmin,
+  PublicInvitation,
+} from "@auth-boilerplate/shared";
 import type { ZodTypeAny } from "zod";
 
 // Matches api/client.ts's default when VITE_API_URL is unset.
@@ -118,6 +123,60 @@ export const testInvitation: PublicInvitation = {
   role: "member",
 };
 
+export const ROOT_ADMIN_ID = "44444444-4444-4444-8444-444444444444";
+export const REGULAR_ADMIN_ID = "55555555-5555-4555-8555-555555555555";
+
+const asPublicAdmin = (
+  admin_id: string,
+  email: string,
+  root: boolean,
+): PublicAdmin => ({
+  admin_id,
+  email,
+  root,
+  email_verified: true,
+  is_active: true,
+  mfa_enabled: false,
+});
+
+export const testAdmins = {
+  root: asPublicAdmin(ROOT_ADMIN_ID, "root@example.com", true),
+  regular: asPublicAdmin(REGULAR_ADMIN_ID, "admin@example.com", false),
+};
+
+// Who /admin/auth/me reports; override per test via
+// `server.use(adminSignedInAs(...))`.
+export const adminSignedInAs = (admin: PublicAdmin | null) =>
+  http.get(url("/admin/auth/me"), () =>
+    admin
+      ? success(admin)
+      : HttpResponse.json(
+          { status: "error", message: "Unauthorized" },
+          { status: 401 },
+        ),
+  );
+
+export const OAUTH_CODE = "test-oauth-code";
+
+// What the one-shot code exchange answers. Tests drive the other outcomes —
+// or a rejection (null → 401, e.g. a state mismatch) — via
+// `server.use(googleCallbackIs(...))`.
+export const googleCallbackIs = (
+  data:
+    | { mfa_required: true }
+    | { needs_linking: true; email: string }
+    | { user_id: string; email: string; is_active: boolean }
+    | null,
+) =>
+  http.get(url("/oauth/google/callback"), () =>
+    data
+      ? success(data)
+      : HttpResponse.json(
+          { status: "error", message: "Invalid state parameter" },
+          { status: 401 },
+        ),
+  );
+
 export const invitationIs = (invitation: PublicInvitation | null) =>
   http.get(url(`/invitations/${INVITE_TOKEN}`), () =>
     invitation
@@ -139,6 +198,36 @@ export const handlers = [
       { status: "error", message: "Credentials missing" },
       { status: 401 },
     ),
+  ),
+
+  adminSignedInAs(testAdmins.root),
+
+  http.get(url("/admin/admins"), () =>
+    success([testAdmins.root, testAdmins.regular]),
+  ),
+
+  http.get(url("/config"), () =>
+    success({ oauth: { google: true }, registration: { enabled: true } }),
+  ),
+
+  http.get(url("/oauth/google"), () =>
+    success({ url: "https://accounts.google.com/o/oauth2/auth?mock" }),
+  ),
+
+  googleCallbackIs({
+    user_id: OWNER_ID,
+    email: "owner@example.com",
+    is_active: true,
+  }),
+
+  http.post(url("/oauth/google/link"), async ({ request }) => {
+    const body = await parseBody(request, googleLinkSchema);
+    if (!body.ok) return body.response;
+    return success({ user_id: OWNER_ID }, "Google account linked");
+  }),
+
+  http.post(url("/oauth/google/unlink"), () =>
+    success(null, "Google account unlinked"),
   ),
 
   invitationIs(testInvitation),

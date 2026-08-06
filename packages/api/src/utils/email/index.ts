@@ -10,5 +10,6 @@ export {
   buildEmailChangeVerificationEmail,
   buildEmailChangeNotificationEmail,
   buildAdminInviteEmail,
+  buildAdminRegistrationInviteEmail,
 } from "./templates";
 export { EmailOptions, ClickableLink } from "../../interfaces/email";

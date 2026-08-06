@@ -20,6 +20,12 @@ export const adminStatsSchema = z.object({
 
 export type AdminStats = z.infer<typeof adminStatsSchema>;
 
+export const inviteAdminSchema = z.object({
+  email: z.string().email("Invalid email address"),
+});
+
+export type InviteAdminDto = z.infer<typeof inviteAdminSchema>;
+
 export const publicAdminSchema = z.object({
   admin_id: z.string().uuid(),
   email: z.string().email(),

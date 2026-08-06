@@ -659,6 +659,81 @@ issueSession, runTransaction })` with `beginGoogleAuth` / `completeGoogleCallbac
   Sequencing within D3: 1–3 are small and land first (2 and 3 shrink surface before 4 and 5
   grow it); 4 and 5 are independent slices in either order.
 
+  **Status (2026-08-06) — DONE, all five landed.**
+
+  1. **Stats wired.** `GET /api/admin/users/stats` routed (registered before the `/:userId`
+     param routes so "stats" is never captured as a userId), handler mirrors the org-stats
+     shape; the dashboard tiles work with zero FE change. Tests: a live-DB cross-check of all
+     six counts, 401, roleBoundary row.
+  2. **Set-user-password removed.** `password` left the shared `updateUserSchema` (with the
+     schema comment updated to say why); the controller's hash-and-pass path and its
+     `hashPassword` import are gone; the model's `password_hash` 403 guard stays as the
+     backstop. Pinned exactly as planned: a password-only body → 400 "No valid fields to
+     update" with the old password still working, and a mixed body applies the legal fields
+     while the smuggled password never lands (asserted by a failed login with it).
+  3. **`PUT /auth/profile` removed.** Route, `updateProfile` controller, shared
+     `updateProfileSchema`, and the web's `useUpdateProfile` (which had zero call sites)
+     all deleted; the B4 spec block now pins the 404, and the roleBoundary row is gone. The
+     web's ProfileTab was already on the request-email-change flow and needed nothing.
+  4. **OAuth UI fixed end-to-end, backend untouched.** The design keeps the tested JSON
+     contract: `GOOGLE_CALLBACK_URL` now points at the SPA's new `/oauth/callback` route
+     (setup.ts template + README updated), whose page performs the one-shot code exchange
+     against the API and routes by outcome — session → refetch `["me"]` → dashboard;
+     `mfa_required` → the challenge page via a new `AuthContext.startMfaChallenge()` (the
+     flag MfaVerifyPage gates on was previously settable only by `login()`);
+     `needs_linking` → an inline password form driving `POST /oauth/google/link`, which was
+     previously uncalled from the web. The Login/Link buttons now fetch the auth URL from a
+     new `api/queries/oauth.ts` and `window.location.assign` it (they were anchors
+     navigating to the JSON endpoint), and Unlink is a real POST mutation invalidating
+     `["me"]`. Web tests per B6: five OAuthCallbackPage cases (all outcomes + no-code +
+     API rejection) and the OAuthTab gating trio, with MSW handlers (`googleCallbackIs`
+     override factory) validating the link payload against the shared schema.
+  5. **Admin-management slice built.** Migration `005_admin_registration_invitation_type.sql`
+     adds an `admin_registration` invitation type ("become a platform admin" — distinct from
+     `admin_invite`, which creates a _user_), mirrored in shared `INVITATION_TYPES` and the
+     TTL map (7 days). New `/api/admin/admins` area: list (any admin, `adminsQuerySchema`
+     filters incl. `root`), invite (root-only; email template links to
+     `/admin/complete-registration`), and `POST /:adminId/disable` (root-only; revokes the
+     target's tokens in-transaction, S4). Redemption is the public
+     `POST /api/admin/auth/complete-registration`, mirroring the user flow: creates a
+     non-root admin, marks the invitation used, issues a session via authService. Root
+     gating is a new `requireRootAdmin` middleware that **re-reads the admins row rather
+     than trusting the token's `root` claim** — refresh rotation currently mints tokens
+     without it (the D6 claims-drift item), so a claims check would silently drop root
+     after the first refresh. Last-admin protection is the model's existing
+     only-active-root-admin 409; since root is the only caller of disable, a root
+     self-lockout is structurally impossible (asserted over HTTP). New
+     `integration/adminAdmins.test.ts` (20 tests: house minimum per endpoint plus root-gating
+     403s, re-invite invalidation, invitation-type confusion 400, S4 refresh revocation);
+     four roleBoundary rows. Minimal UI: AdminAdminsPage (list + root-gated invite dialog
+     and disable confirm), AdminCompleteRegistrationPage, dashboard card, hooks keyed
+     `["admin","admins"]`; a gating test pins that a non-root admin is offered neither
+     mutating action.
+
+  Gate: 976 API tests (42 suites), 66 web tests (13 files), format/typecheck/lint clean.
+
+  **Reviewed (2026-08-06) — clean at HIGH/MED; three fixes applied from the pass.** A security
+  pass and an adversarial correctness pass over the working tree found no privilege escalation
+  (root gating holds unauthenticated/user/non-root; invitation type-pinning refuted in both
+  directions — an admin_registration token cannot mint a user and no other type can mint an
+  admin; the removed set-password path is dead at all three layers) and no runtime
+  regressions. The one deep FE candidate — AdminCompleteRegistrationPage bouncing to
+  /admin/login because the me-query had already 401'd — was refuted empirically against the
+  installed React Query v5: invalidateQueries reverts an errored query to pending, so
+  AdminRoute spinners through the refetch, and the pattern is identical to the existing
+  admin login. Fixed from the findings: (1) the admin-invite duplicate pre-check now
+  lowercases before lookup — the admins model matches email verbatim while createInvitation
+  stores lowercase, so a mixed-case duplicate slipped the 409 and failed only at redemption,
+  after the invitee had set a password; pinned by a mixed-case 409 test. (2) The invite's
+  invalidate+create pair now runs in one transaction (the C3 inviteMember shape), closing
+  the concurrent-double-invite window that left two live tokens. (3) requireRootAdmin also
+  refuses an inactive root — unreachable via the API today under the single-root invariant,
+  pure defence in depth. Known and accepted: a disabled admin's access token stays valid up
+  to its 15-minute expiry (the S4 trade-off, same as users). Recorded under D6, not fixed
+  here: the admins model's email-casing gap generally (login included, pre-existing),
+  disable's non-CAS already-deactivated check, and OAuthTab's Link lacking link-intent
+  through the OAuth round trip.
+
 - **D4 · Enforce the layering that's currently discipline-only.** Add `no-restricted-imports`/
   boundaries lint for the FE three-tier rule and a rule catching raw `client.query` in controllers —
   both currently hold by convention and the next violation ships silently.
@@ -680,6 +755,18 @@ issueSession, runTransaction })` with `beginGoogleAuth` / `completeGoogleCallbac
     models the full invitation row including `token_hash` (type-level only — no endpoint
     serialises it) which sits against D1's row-shapes-stay-internal rule — split a public row
     shape from the API-internal one when next touched.
+  - **From the D3 review (2026-08-06):** the admins model never normalises email case —
+    every lookup (`getAdmin`, `getAdminWithMfaStatus`, so admin **login** too) binds the raw
+    string and `createAdmin` inserts verbatim, unlike the users model which lowercases at
+    both ends; a mixed-case habit 401s against a lowercased row. Normalise across
+    `admins.models.ts` when next touched (the D3 invite controller lowercases at its edge as
+    a local shim). Also: `deactivateAdmin` is unconditional on `is_active` (no CAS and no row
+    lock), so two concurrent disables both 200 and the second overwrites
+    `deactivated_at`/`deactivated_by` — make it a compare-and-set (`… AND is_active = true
+RETURNING`, rule 1's pre-check shape). And OAuthTab's "Link" reuses the login flow with
+    no link-intent carried through the OAuth round trip: a signed-in user whose Google email
+    differs from their account email gets a _new or different_ session instead of a link —
+    needs a link-specific state param before the mismatch case can be handled honestly.
   - **`trust proxy` is never set** (A1-part-1 review, 2026-08-05): behind any reverse proxy,
     express-rate-limit keys every client to the proxy's IP (the limiter's
     `xForwardedForHeader: false` validation silence hides the warning). The intended production
@@ -755,7 +842,7 @@ B (test net)  ── B1 (wrong-role) is the keystone ── B2..B6           ←
 C (services)  ── C1 ── C2 ── C3 ── C4 — ALL DONE ── A1 part 1 (refresh endpoint) DONE
       │
 D (rest)      ── D2 org soft-delete DONE + A2 clean == BILLING UNBLOCKED
-                 D1 schema single-source DONE ── D3 features ── D4 lint ── D5 docs/CI ── D6
+                 D1 schema single-source DONE ── D3 features DONE ── D4 lint ── D5 docs/CI ── D6
                  D7 supply chain: local half DONE, CI half binds D5
 ```
 

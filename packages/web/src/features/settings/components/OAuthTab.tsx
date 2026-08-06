@@ -7,20 +7,28 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useAuth } from "@/hooks";
+import { toast } from "sonner";
+import { useAuth, useApiError } from "@/hooks";
 import { useConfig } from "@/api/queries/config";
-
-const GOOGLE_LINK_URL = import.meta.env.VITE_API_URL
-  ? `${import.meta.env.VITE_API_URL}/oauth/google`
-  : "http://localhost:3000/api/oauth/google";
-
-const GOOGLE_UNLINK_URL = import.meta.env.VITE_API_URL
-  ? `${import.meta.env.VITE_API_URL}/oauth/google/unlink`
-  : "http://localhost:3000/api/oauth/google/unlink";
+import { useGoogleAuth, useUnlinkGoogle } from "@/api/queries/oauth";
 
 export function OAuthTab() {
   const { user } = useAuth();
   const { data: config } = useConfig();
+  const { handleError } = useApiError();
+  // "Link" starts the same Google flow as login: the callback recognises the
+  // existing local account, asks for its password, and links.
+  const googleAuth = useGoogleAuth();
+  const unlinkGoogle = useUnlinkGoogle();
+
+  const handleUnlink = async () => {
+    try {
+      await unlinkGoogle.mutateAsync();
+      toast.success("Google account unlinked");
+    } catch (error) {
+      handleError(error);
+    }
+  };
 
   const googleEnabled = config?.data?.oauth?.google ?? false;
   const hasGoogle =
@@ -80,12 +88,22 @@ export function OAuthTab() {
           <div className="flex items-center gap-2">
             {hasGoogle && <Badge>Connected</Badge>}
             {hasGoogle && hasLocal ? (
-              <Button variant="outline" asChild>
-                <a href={GOOGLE_UNLINK_URL}>Unlink</a>
+              <Button
+                variant="outline"
+                disabled={unlinkGoogle.isPending}
+                onClick={handleUnlink}
+              >
+                Unlink
               </Button>
             ) : !hasGoogle && googleEnabled ? (
-              <Button variant="outline" asChild>
-                <a href={GOOGLE_LINK_URL}>Link</a>
+              <Button
+                variant="outline"
+                disabled={googleAuth.isPending}
+                onClick={() =>
+                  googleAuth.mutate(undefined, { onError: handleError })
+                }
+              >
+                Link
               </Button>
             ) : !hasLocal ? (
               <p className="text-xs text-muted-foreground">

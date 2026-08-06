@@ -4,7 +4,6 @@ import type {
   LoginUserDto,
   PublicUser,
   ChangePasswordDto,
-  UpdateProfileDto,
   RegisterDto,
   CompleteRegistrationDto,
   ForgotPasswordDto,
@@ -134,18 +133,6 @@ export function useChangePassword() {
         "/auth/change-password",
         data,
       ),
-  });
-}
-
-export function useUpdateProfile() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (data: UpdateProfileDto) =>
-      api.put<AuthResponse>("/auth/profile", data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["me"] });
-    },
   });
 }
 

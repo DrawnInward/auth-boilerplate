@@ -49,10 +49,12 @@ MFA_ENCRYPTION_KEY="${mfaEncryptionKey}"
 ACCOUNT_CREATION_MODE=open
 ORG_CREATION_MODE=open
 
-# Google OAuth (configure these with your Google Cloud credentials)
+# Google OAuth (configure these with your Google Cloud credentials).
+# The callback URL is the SPA's /oauth/callback route — the page exchanges the
+# code against the API — and must match the redirect URI registered with Google.
 # GOOGLE_CLIENT_ID=""
 # GOOGLE_CLIENT_SECRET=""
-# GOOGLE_CALLBACK_URL="http://localhost:3000/api/auth/google/callback"
+# GOOGLE_CALLBACK_URL="http://localhost:5173/oauth/callback"
 `;
 
   fs.writeFileSync(".env", envContent);

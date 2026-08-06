@@ -23,6 +23,7 @@ import {
   ForgotPasswordPage,
   ResetPasswordPage,
   ConfirmEmailChangePage,
+  OAuthCallbackPage,
 } from "@/features/auth/pages";
 
 // User pages
@@ -41,6 +42,8 @@ import {
   AdminDashboardPage,
   AdminUsersPage,
   AdminUserDetailPage,
+  AdminAdminsPage,
+  AdminCompleteRegistrationPage,
   AdminOrgsPage,
   AdminOrgDetailPage,
 } from "@/features/admin/pages";
@@ -77,6 +80,7 @@ function UserRoutes() {
           element={<ConfirmEmailChangePage />}
         />
         <Route path="/mfa-verify" element={<MfaVerifyPage />} />
+        <Route path="/oauth/callback" element={<OAuthCallbackPage />} />
         <Route path="/invitations/:token" element={<AcceptInvitePage />} />
       </Route>
 
@@ -127,6 +131,10 @@ function AdminRoutes() {
       <Route element={<PublicLayout />}>
         <Route path="login" element={<AdminLoginPage />} />
         <Route path="mfa-verify" element={<AdminMfaVerifyPage />} />
+        <Route
+          path="complete-registration"
+          element={<AdminCompleteRegistrationPage />}
+        />
       </Route>
 
       {/* Admin protected routes */}
@@ -139,6 +147,7 @@ function AdminRoutes() {
           <Route index element={<AdminDashboardPage />} />
           <Route path="users" element={<AdminUsersPage />} />
           <Route path="users/:id" element={<AdminUserDetailPage />} />
+          <Route path="admins" element={<AdminAdminsPage />} />
           <Route path="organizations" element={<AdminOrgsPage />} />
           <Route path="organizations/:id" element={<AdminOrgDetailPage />} />
         </Route>

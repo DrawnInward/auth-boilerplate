@@ -3,6 +3,7 @@ import {
   getUsers,
   getUserById,
   getUser,
+  getUserStats,
   modifyUser,
   deleteUser,
   updateUserOrgPermission,
@@ -18,7 +19,6 @@ import { sendSuccess, sendCreated } from "../../utils/responseUtils";
 import { getValidatedQuery } from "../../middleware/validate";
 import type { UserParams, UsersQuery } from "@auth-boilerplate/shared";
 import { services } from "../../services";
-import { hashPassword } from "../../utils";
 import { httpError } from "../../utils/httpError";
 import { withTransaction } from "../../utils/withTransaction";
 
@@ -75,6 +75,21 @@ export const getAllUsers = async (
   }
 };
 
+// GET /api/admin/users/stats
+export const getUserStatsHandler = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const stats = await getUserStats();
+
+    return sendSuccess(res, stats, "User stats retrieved successfully");
+  } catch (error) {
+    next(error);
+  }
+};
+
 // GET /api/admin/users/:userId
 export const getUserByIdHandler = async (
   req: Request<UserParams>,
@@ -105,12 +120,6 @@ export const updateUser = async (
   try {
     const { userId } = req.params;
     const updates = req.body;
-
-    // If password is provided, hash it
-    if (updates.password) {
-      updates.password_hash = await hashPassword(updates.password);
-      delete updates.password;
-    }
 
     const updatedUser = await withTransaction(db, async (client) => {
       const updated = await modifyUser(userId, updates, client);

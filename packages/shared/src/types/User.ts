@@ -49,12 +49,6 @@ export const changePasswordSchema = z.object({
 
 export type ChangePasswordDto = z.infer<typeof changePasswordSchema>;
 
-export const updateProfileSchema = z.object({
-  email: z.string().email("Invalid email address").optional(),
-});
-
-export type UpdateProfileDto = z.infer<typeof updateProfileSchema>;
-
 export const adminInviteUserSchema = z.object({
   email: z.string().email("Invalid email address"),
 });
@@ -63,12 +57,12 @@ export type AdminInviteUserDto = z.infer<typeof adminInviteUserSchema>;
 
 // PUT /api/admin/users/:userId — the admin's user-update contract. Only these
 // fields are writable over HTTP: row-management columns (deleted_at,
-// deactivated_at, deactivated_by) belong to their dedicated flows and are
-// deliberately not patchable here.
+// deactivated_at, deactivated_by) belong to their dedicated flows, and
+// passwords are never set by an admin — custody stays with the user via the
+// send-password-reset flow (D3).
 export const updateUserSchema = z
   .object({
     email: z.string().email("Invalid email address"),
-    password: z.string().min(1),
     email_verified: z.boolean(),
     is_active: z.boolean(),
     can_create_orgs: z.boolean().nullable(),

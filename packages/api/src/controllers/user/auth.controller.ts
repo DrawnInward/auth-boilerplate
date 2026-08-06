@@ -573,36 +573,6 @@ export const changePassword = async (
   }
 };
 
-export const updateProfile = async (
-  req: RequestWithUser,
-  res: Response,
-  next: NextFunction,
-) => {
-  try {
-    const { role_id } = req.user!;
-
-    const user = await getUserById(role_id);
-    if (!user) {
-      throw httpError(404, "User not found");
-    }
-
-    return sendSuccess(
-      res,
-      {
-        user_id: user.user_id,
-        email: user.email,
-        email_verified: user.email_verified,
-        is_active: user.is_active,
-        mfa_enabled: user.mfa_enabled,
-        auth_provider: user.auth_provider,
-      },
-      "Profile retrieved successfully",
-    );
-  } catch (error) {
-    next(error);
-  }
-};
-
 export const requestEmailChange = async (
   req: RequestWithUser,
   res: Response,

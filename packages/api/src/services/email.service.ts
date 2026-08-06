@@ -10,6 +10,7 @@ import { EmailProvider } from "../interfaces/email";
 import {
   buildAccountExistsEmail,
   buildAdminInviteEmail,
+  buildAdminRegistrationInviteEmail,
   buildEmailChangeNotificationEmail,
   buildEmailChangeVerificationEmail,
   buildMfaDisabledEmail,
@@ -31,6 +32,7 @@ export type EmailService = {
   sendVerification(to: string, token: string): Promise<void>;
   sendPasswordReset(to: string, token: string): Promise<void>;
   sendAdminInvite(to: string, token: string): Promise<void>;
+  sendAdminRegistrationInvite(to: string, token: string): Promise<void>;
   sendOrgInvite(params: {
     to: string;
     token: string;
@@ -66,6 +68,11 @@ export const createEmailService = ({
 
     sendAdminInvite: (to, token) =>
       provider.send(buildAdminInviteEmail({ to, token, ...branding })),
+
+    sendAdminRegistrationInvite: (to, token) =>
+      provider.send(
+        buildAdminRegistrationInviteEmail({ to, token, ...branding }),
+      ),
 
     sendOrgInvite: (params) =>
       provider.send(buildOrgInviteEmail({ ...params, ...branding })),

@@ -9,7 +9,6 @@ import {
   forgotPasswordSchema,
   resetPasswordSchema,
   changePasswordSchema,
-  updateProfileSchema,
   requestEmailChangeSchema,
   mfaVerifySchema,
   mfaBackupVerifySchema,
@@ -30,7 +29,6 @@ import {
   setPassword,
   getMe,
   changePassword,
-  updateProfile,
   requestEmailChange,
   confirmEmailChange,
 } from "../../controllers/user/auth.controller";
@@ -92,12 +90,6 @@ router.put(
   authoriseUser(["user"]),
   validateBody(changePasswordSchema),
   changePassword,
-);
-router.put(
-  "/profile",
-  authoriseUser(["user"]),
-  validateBody(updateProfileSchema),
-  updateProfile,
 );
 router.post(
   "/request-email-change",

@@ -2,13 +2,16 @@ import { z } from "zod";
 import { ASSIGNABLE_ORGANIZATION_ROLES } from "./Organization";
 
 // Mirrors the invitations.type CHECK constraint in the migrations — the DB, the
-// Zod enum and the API's internal schema must always carry the same five values.
+// Zod enum and the API's internal schema must always carry the same values.
+// admin_invite is an admin inviting a *user*; admin_registration is the root
+// admin inviting a new *platform admin*.
 export const INVITATION_TYPES = [
   "registration",
   "org_invite",
   "password_reset",
   "email_change",
   "admin_invite",
+  "admin_registration",
 ] as const;
 
 export const invitationTypeSchema = z.enum(INVITATION_TYPES);

@@ -3,5 +3,7 @@ export { AdminMfaVerifyPage } from "./AdminMfaVerifyPage";
 export { AdminDashboardPage } from "./AdminDashboardPage";
 export { AdminUsersPage } from "./AdminUsersPage";
 export { AdminUserDetailPage } from "./AdminUserDetailPage";
+export { AdminAdminsPage } from "./AdminAdminsPage";
+export { AdminCompleteRegistrationPage } from "./AdminCompleteRegistrationPage";
 export { AdminOrgsPage } from "./AdminOrgsPage";
 export { AdminOrgDetailPage } from "./AdminOrgDetailPage";

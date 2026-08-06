@@ -15,6 +15,7 @@ const EXPIRY_TIMES: Record<InvitationType, number> = {
   password_reset: 60 * 60 * 1000, // 1 hour
   email_change: 24 * 60 * 60 * 1000, // 24 hours
   admin_invite: 7 * 24 * 60 * 60 * 1000, // 7 days
+  admin_registration: 7 * 24 * 60 * 60 * 1000, // 7 days
 };
 
 export const createInvitation = async (

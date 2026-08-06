@@ -175,13 +175,14 @@ Admins can override org creation permission per-user via `PATCH /api/admin/users
 To enable Google sign-in:
 
 1. Create credentials in [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
-2. Add authorized redirect URI: `http://localhost:3000/api/oauth/google/callback`
+2. Add authorized redirect URI: `http://localhost:5173/oauth/callback` (the
+   SPA's callback route — the page exchanges the code against the API)
 3. Set environment variables:
 
 ```bash
 GOOGLE_CLIENT_ID=your-client-id
 GOOGLE_CLIENT_SECRET=your-client-secret
-GOOGLE_CALLBACK_URL=http://localhost:3000/api/oauth/google/callback
+GOOGLE_CALLBACK_URL=http://localhost:5173/oauth/callback
 ```
 
 The frontend shows/hides Google sign-in based on whether OAuth is configured (via `GET /api/config`).

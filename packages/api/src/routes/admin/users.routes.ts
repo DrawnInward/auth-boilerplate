@@ -14,6 +14,7 @@ import {
 import {
   createUserHandler,
   getAllUsers,
+  getUserStatsHandler,
   getUserByIdHandler,
   updateUser,
   deleteUserHandler,
@@ -38,6 +39,10 @@ router.get(
   validateQuery(usersQuerySchema),
   getAllUsers,
 );
+
+// Registered before the /:userId param routes so "stats" is never captured as
+// a userId.
+router.get("/stats", authoriseUser(["admin"]), getUserStatsHandler);
 
 router.post(
   "/reset-password/:userId",

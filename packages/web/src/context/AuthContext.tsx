@@ -34,6 +34,11 @@ export interface AuthContextValue {
   isLoading: boolean;
   isAuthenticated: boolean;
   mfaRequired: boolean;
+  /**
+   * Marks a challenge as pending so MfaVerifyPage will render — for flows
+   * (OAuth callback) that learn mfa_required outside login().
+   */
+  startMfaChallenge: () => void;
   login: (data: LoginUserDto) => Promise<void>;
   logout: () => Promise<void>;
   verifyMfa: (data: MfaVerifyDto) => Promise<void>;
@@ -75,6 +80,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [loginMutation, navigate, location.state, queryClient],
   );
 
+  const startMfaChallenge = useCallback(() => setMfaRequired(true), []);
+
   const logout = useCallback(async () => {
     await logoutMutation.mutateAsync();
     setMfaRequired(false);
@@ -111,6 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading,
       isAuthenticated,
       mfaRequired,
+      startMfaChallenge,
       login,
       logout,
       verifyMfa,
@@ -121,6 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading,
       isAuthenticated,
       mfaRequired,
+      startMfaChallenge,
       login,
       logout,
       verifyMfa,

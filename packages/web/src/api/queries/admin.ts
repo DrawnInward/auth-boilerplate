@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../client";
 import type {
   AdminInviteUserDto,
+  InviteAdminDto,
+  CompleteRegistrationDto,
   LoginAdminDto,
   PublicAdmin,
   PublicUser,
@@ -208,6 +210,60 @@ export function useAdminDisableUserMfa(id: string) {
       ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "users", id] });
+    },
+  });
+}
+
+// Admin Management (platform admins, D3)
+interface AdminsResponse {
+  status: string;
+  data: PublicAdmin[];
+}
+
+interface AdminResponse {
+  status: string;
+  data: PublicAdmin;
+}
+
+export function useAdminAdmins() {
+  return useQuery({
+    queryKey: ["admin", "admins"],
+    queryFn: () => api.get<AdminsResponse>("/admin/admins"),
+  });
+}
+
+export function useAdminInviteAdmin() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: InviteAdminDto) =>
+      api.post<InviteResponse>("/admin/admins", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "admins"] });
+    },
+  });
+}
+
+export function useAdminDisableAdmin() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) =>
+      api.post<AdminResponse>(`/admin/admins/${id}/disable`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "admins"] });
+    },
+  });
+}
+
+export function useAdminCompleteRegistration() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: CompleteRegistrationDto) =>
+      api.post<AdminResponse>("/admin/auth/complete-registration", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "me"] });
     },
   });
 }

@@ -8,10 +8,10 @@ import { getUserUuid } from "../../src/database/test-data/testUuids";
 require("dotenv").config({ quiet: true });
 
 // B4: the self-account mutation endpoints, which previously had no spec at
-// all. PUT /auth/profile is characterised as the read-only no-op it currently
-// is (D3 will either implement or remove it — this spec pins today's
-// behaviour and must change with it). 401/unauthenticated and 403/wrong-role
-// for both routes are asserted by roleBoundary.test.ts.
+// all. PUT /auth/profile was removed under D3 (profile's only field is email,
+// and email changes go through the verified request-email-change flow) — a
+// test pins its absence. 401/unauthenticated and 403/wrong-role are asserted
+// by roleBoundary.test.ts.
 
 describe("Self-account mutations (B4)", () => {
   const login = async (email: string, password = "Password1") => {
@@ -30,54 +30,21 @@ describe("Self-account mutations (B4)", () => {
     await db.end();
   });
 
-  describe("PUT /api/auth/profile", () => {
-    let aliceCookies: string[];
+  describe("PUT /api/auth/profile (removed, D3)", () => {
+    it("no longer exists", async () => {
+      const aliceCookies = await login("alice@example.com");
 
-    beforeAll(async () => {
-      aliceCookies = await login("alice@example.com");
-    });
-
-    it("returns the current profile", async () => {
-      const response = await request(app)
-        .put("/api/auth/profile")
-        .set("Cookie", aliceCookies)
-        .send({})
-        .expect(200);
-
-      expect(response.body.status).toBe("success");
-      expect(response.body.message).toBe("Profile retrieved successfully");
-      expect(response.body.data).toEqual({
-        user_id: getUserUuid(2),
-        email: "alice@example.com",
-        email_verified: true,
-        is_active: true,
-        mfa_enabled: false,
-        auth_provider: "local",
-      });
-    });
-
-    it("does not change the email when one is supplied (no-op, D3)", async () => {
-      const response = await request(app)
+      await request(app)
         .put("/api/auth/profile")
         .set("Cookie", aliceCookies)
         .send({ email: "hijacked@example.com" })
-        .expect(200);
-
-      expect(response.body.data.email).toBe("alice@example.com");
+        .expect(404);
 
       const me = await request(app)
         .get("/api/auth/me")
         .set("Cookie", aliceCookies)
         .expect(200);
       expect(me.body.data.email).toBe("alice@example.com");
-    });
-
-    it("rejects a malformed email", async () => {
-      await request(app)
-        .put("/api/auth/profile")
-        .set("Cookie", aliceCookies)
-        .send({ email: "not-an-email" })
-        .expect(400);
     });
   });
 

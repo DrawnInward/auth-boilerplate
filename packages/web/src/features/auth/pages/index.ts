@@ -6,3 +6,4 @@ export { CompleteRegistrationPage } from "./CompleteRegistrationPage";
 export { ForgotPasswordPage } from "./ForgotPasswordPage";
 export { ResetPasswordPage } from "./ResetPasswordPage";
 export { ConfirmEmailChangePage } from "./ConfirmEmailChangePage";
+export { OAuthCallbackPage } from "./OAuthCallbackPage";

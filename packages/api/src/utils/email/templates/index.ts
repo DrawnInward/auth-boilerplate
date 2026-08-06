@@ -9,3 +9,4 @@ export { buildMfaDisabledEmail } from "./mfaDisabledEmail";
 export { buildEmailChangeVerificationEmail } from "./emailChangeVerificationEmail";
 export { buildEmailChangeNotificationEmail } from "./emailChangeNotificationEmail";
 export { buildAdminInviteEmail } from "./adminInviteEmail";
+export { buildAdminRegistrationInviteEmail } from "./adminRegistrationInviteEmail";
