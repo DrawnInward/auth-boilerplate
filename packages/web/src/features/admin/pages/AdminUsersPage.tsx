@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -27,16 +26,16 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import {
+  adminInviteUserSchema,
+  type AdminInviteUserDto,
+} from "@auth-boilerplate/shared";
 import { useAdminUsers, useAdminCreateUser } from "@/api/queries/admin";
 import { UserTable, UserCards } from "../components";
 import { LoadingSpinner } from "@/components/shared";
 import { useApiError } from "@/hooks";
 
-const inviteUserSchema = z.object({
-  email: z.string().email("Invalid email address"),
-});
-
-type InviteUserData = z.infer<typeof inviteUserSchema>;
+type InviteUserData = AdminInviteUserDto;
 
 export function AdminUsersPage() {
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -45,7 +44,7 @@ export function AdminUsersPage() {
   const { handleError } = useApiError();
 
   const form = useForm<InviteUserData>({
-    resolver: zodResolver(inviteUserSchema),
+    resolver: zodResolver(adminInviteUserSchema),
     defaultValues: { email: "" },
   });
 

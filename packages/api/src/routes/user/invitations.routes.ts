@@ -1,8 +1,10 @@
 import express from "express";
 import { validateParams, validateBody } from "../../middleware/validate";
 import { authLimiter } from "../../middleware/rateLimiter";
-import { tokenParamsSchema } from "@auth-boilerplate/shared";
-import { acceptInviteSchema } from "../../types/Invitation";
+import {
+  acceptInviteSchema,
+  tokenParamsSchema,
+} from "@auth-boilerplate/shared";
 import {
   getInvitation,
   acceptInvitation,

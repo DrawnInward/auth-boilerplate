@@ -143,15 +143,6 @@ export const organizationWithRoleSchema = organizationSchema.extend({
 
 export type OrganizationWithRole = z.infer<typeof organizationWithRoleSchema>;
 
-export const paginationOptionsSchema = z
-  .object({
-    limit: z.number().positive().max(1000).optional(),
-    offset: z.number().nonnegative().optional(),
-  })
-  .strict();
-
-export type PaginationOptions = z.infer<typeof paginationOptionsSchema>;
-
 export type ValidatedCreateOrganizationRequest = {
   body: CreateOrganizationDto;
 };

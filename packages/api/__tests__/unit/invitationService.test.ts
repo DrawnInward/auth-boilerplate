@@ -5,7 +5,8 @@ import {
   InvitationService,
   SessionStart,
 } from "../../src/services";
-import { Invitation, User } from "../../src/types";
+import { Invitation } from "@auth-boilerplate/shared";
+import { User } from "../../src/types";
 import { httpError } from "../../src/utils/httpError";
 
 const ORG_ID = "11111111-1111-1111-1111-111111111111";

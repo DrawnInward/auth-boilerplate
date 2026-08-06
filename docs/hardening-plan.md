@@ -529,6 +529,52 @@ issueSession, runTransaction })` with `beginGoogleAuth` / `completeGoogleCallbac
   `mfaRequiredResponseSchema`. Row shapes carrying `password_hash`/`mfa_secret` stay API-internal —
   that split is correct. **Rule to prevent recurrence:** the API never defines a schema for anything
   the frontend also sees.
+
+  **Status (2026-08-06) — DONE.** `api/src/types` now carries only genuinely internal shapes
+  (rows with secrets, model insert/patch DTOs, JWT/request plumbing); every schema the frontend
+  also sees lives once in `shared`. Fourteen duplicated schemas deleted from the API copies
+  (login ×2 roles, register, complete-registration, forgot/reset-password, change-password,
+  update-profile, request-email-change, invite-member, accept-invite, the invitation row,
+  user/admin stats), with routes, models, seed, services and one unit spec importing from
+  `@auth-boilerplate/shared` instead; the internal user patch DTO is renamed
+  `userPatchSchema`/`UserPatchDto` so it can no longer be mistaken for the HTTP contract. The
+  two admin request schemas moved into shared: `adminInviteUserSchema` verbatim, and
+  `updateUserSchema` rebuilt as the real contract —
+  `{email, password, email_verified, is_active, can_create_orgs}`, all optional. One deliberate
+  hardening rode along: the old schema was derived from the row shape, so row-management
+  columns passed validation, and `deleted_at`/`deactivated_at`/`deactivated_by` sit in the
+  model's patch allow-list — an admin PUT could soft-delete a user while skipping the delete
+  flow's token revocation (an S4 bypass). The narrowed contract strips them, pinned by two new
+  integration tests (row-management-only body → 400 with the row untouched; mixed body → legal
+  fields applied, row-management fields ignored). `password` stays in the contract
+  deliberately: it preserves today's 403-at-the-model behaviour, whose fate is the D3
+  set-user-password decision. The web's two hand-rolled admin schemas are gone —
+  AdminUsersPage validates with shared `adminInviteUserSchema`, AdminUserDetailPage derives
+  its form via `updateUserSchema.pick({email, is_active}).required()`, and the admin mutations
+  are typed by the shared DTOs. Also under this item: the two `PaginationOptions` collapsed
+  (the shared copy had no consumers; the API-internal one — a model-layer concern, not a
+  contract — survives), the dead `mfaRequiredResponseSchema` deleted, and the D6
+  invitation-shape straggler fixed below. Gate: 945 API tests (41 suites), 55 web.
+
+  **Reviewed (2026-08-06) — clean, no findings.** A security pass and an adversarial
+  correctness pass over the working tree both cleared the change: every touched contract is
+  equal or strictly narrower field-by-field (the only widening is at the _type_ level — shared
+  `UpdateUserDto` advertises `password`, which the model still 403s; deliberate, D3 decides);
+  nothing newly exported from shared carries secret material; every route that validated with a
+  deleted schema still wires `validateBody` with the shared equivalent; the flat invitation
+  response drops `organization.slug`, which had no consumer anywhere. Message drift was ruled
+  out by executing the installed zod (4.x): bare `.email()`'s default message is already
+  "Invalid email address", so the deleted bare-`.email()` login schemas and their
+  message-carrying shared replacements produce identical issues, and the web form derivations
+  (`.pick().required()`) were verified to yield the old hand-rolled messages exactly. The
+  `modifyUser` allow-list's row-management residue is currently dead capability (both call
+  sites verified: the admin controller's stripped body, and `confirmEmailChange`'s literal
+  `{email}`) — trimming it to match the contract is recorded under D6. Observations recorded,
+  not fixed here: shared `invitationSchema` models the full row including `token_hash`
+  (pre-existing, type-level only — D6); `modifyUser` doesn't lowercase email while `createUser`
+  and every lookup do (pre-existing — D6); admin-PUT-password's 403 path has no test (attach it
+  to the D3 set-user-password decision).
+
 - **D2 · Organizations soft-delete (billing prerequisite).** Add `deleted_at` to `organizations`,
   filter it everywhere, convert `deleteOrganization` from hard cascade to soft delete. Billing will
   FK financial history to organizations, so a hard cascade would either be blocked by the FK (500) or
@@ -593,6 +639,14 @@ issueSession, runTransaction })` with `beginGoogleAuth` / `completeGoogleCallbac
   `validateBody` (500 / unvalidated body); `refresh.models.ts:64-72` hand-rolls a patch with no
   column allow-list (route through `buildPatch`); `MFA_ENCRYPTION_KEY` format-check at boot; MFA
   setup response casing differs between user (`qr_code`) and admin (`qrCode`).
+  - **From the D1 review (2026-08-06):** trim `USER_PATCH_FIELDS` of
+    `deleted_at`/`deactivated_at`/`deactivated_by` — no remaining caller can set them, and the
+    model should be the backstop for the narrowed HTTP contract, not a wider allow-list;
+    `modifyUser` doesn't lowercase `email` while `createUser` and every lookup do, so an admin
+    PUT with a mixed-case address makes the account unloginable; shared `invitationSchema`
+    models the full invitation row including `token_hash` (type-level only — no endpoint
+    serialises it) which sits against D1's row-shapes-stay-internal rule — split a public row
+    shape from the API-internal one when next touched.
   - **`trust proxy` is never set** (A1-part-1 review, 2026-08-05): behind any reverse proxy,
     express-rate-limit keys every client to the proxy's IP (the limiter's
     `xForwardedForHeader: false` validation silence hides the warning). The intended production
@@ -615,7 +669,10 @@ issueSession, runTransaction })` with `beginGoogleAuth` / `completeGoogleCallbac
     `publicInvitationSchema` and `AcceptInvitePage` expect flat
     `organization_id`/`organization_name`** (surfaced by the D2 review; pre-existing) — the FE
     falls back to "an organization" instead of showing the name. Align the shape under D1's
-    schema single-sourcing.
+    schema single-sourcing. _Fixed with D1 (2026-08-06):_ the response is now the flat
+    `publicInvitationSchema` shape (including the previously missing `type`), the
+    AcceptInvitePage name and post-accept navigation work, and a test asserts the response
+    parses against the shared schema verbatim.
   - **Invitation redemption has no designed concurrency guard** (surfaced by the C3 review,
     2026-08-05; pre-existing, moved verbatim into `invitation.service.ts`). Two concurrent
     accepts of the same token both read the invitation unlocked (`validateInvitationToken` has
@@ -665,7 +722,7 @@ B (test net)  ── B1 (wrong-role) is the keystone ── B2..B6           ←
 C (services)  ── C1 ── C2 ── C3 ── C4 — ALL DONE ── A1 part 1 (refresh endpoint) DONE
       │
 D (rest)      ── D2 org soft-delete DONE + A2 clean == BILLING UNBLOCKED
-                 D1 schema single-source ── D3 features ── D4 lint ── D5 docs/CI ── D6
+                 D1 schema single-source DONE ── D3 features ── D4 lint ── D5 docs/CI ── D6
                  D7 supply chain: local half DONE, CI half binds D5
 ```
 

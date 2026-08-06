@@ -11,8 +11,6 @@ import {
   changePasswordSchema,
   updateProfileSchema,
   requestEmailChangeSchema,
-} from "../../types";
-import {
   mfaVerifySchema,
   mfaBackupVerifySchema,
   setPasswordSchema,

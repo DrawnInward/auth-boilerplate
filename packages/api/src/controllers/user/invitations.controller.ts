@@ -139,17 +139,17 @@ export const getInvitation = async (
       throw httpError(404, "Invalid or expired invitation");
     }
 
+    // Flat shape per the shared publicInvitationSchema — the contract the
+    // AcceptInvitePage validates against.
     return sendSuccess(
       res,
       {
         email: invitation.email,
-        role: invitation.role,
+        type: invitation.type,
         is_existing_user: invitation.is_existing_user,
-        organization: {
-          id: organization.id,
-          name: organization.name,
-          slug: organization.slug,
-        },
+        organization_id: organization.id,
+        organization_name: organization.name,
+        role: invitation.role,
       },
       "Invitation is valid",
     );

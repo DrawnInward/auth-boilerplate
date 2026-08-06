@@ -48,11 +48,3 @@ export const mfaBackupCodesResponseSchema = z.object({
 export type MfaBackupCodesResponse = z.infer<
   typeof mfaBackupCodesResponseSchema
 >;
-
-export const mfaRequiredResponseSchema = z.object({
-  status: z.string(),
-  mfa_required: z.boolean(),
-  message: z.string(),
-});
-
-export type MfaRequiredResponse = z.infer<typeof mfaRequiredResponseSchema>;

@@ -31,31 +31,14 @@ export const updateAdminSchema = adminSchema.partial().omit({
   updated_at: true,
 });
 
-export const loginAdminSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1, "Password is required"),
-});
-
 export const getAdminsOptionsSchema = z.object({
   is_active: z.boolean().optional(),
   email_verified: z.boolean().optional(),
   root: z.boolean().optional(),
 });
 
-export const adminStatsSchema = z.object({
-  total: z.number(),
-  active: z.number(),
-  inactive: z.number(),
-  verified: z.number(),
-  unverified: z.number(),
-  root_admins: z.number(),
-  deleted: z.number(),
-});
-
 export type GetAdminsOptions = z.infer<typeof getAdminsOptionsSchema>;
-export type AdminStats = z.infer<typeof adminStatsSchema>;
 
 export type Admin = z.infer<typeof adminSchema>;
 export type CreateAdminDto = z.infer<typeof createAdminSchema>;
 export type UpdateAdminDto = z.infer<typeof updateAdminSchema>;
-export type LoginAdminDto = z.infer<typeof loginAdminSchema>;

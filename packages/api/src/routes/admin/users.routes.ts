@@ -5,8 +5,12 @@ import {
   validateBody,
   validateQuery,
 } from "../../middleware/validate";
-import { userParamsSchema, usersQuerySchema } from "@auth-boilerplate/shared";
-import { adminInviteUserSchema, updateUserSchema } from "../../types";
+import {
+  adminInviteUserSchema,
+  updateUserSchema,
+  userParamsSchema,
+  usersQuerySchema,
+} from "@auth-boilerplate/shared";
 import {
   createUserHandler,
   getAllUsers,

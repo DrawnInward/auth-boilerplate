@@ -1,12 +1,7 @@
 import db from "../database/db";
 import { Pool, PoolClient } from "pg";
-import {
-  CreateUserDto,
-  GetUsersOptions,
-  UpdateUserDto,
-  User,
-  UserStats,
-} from "../types";
+import { UserStats } from "@auth-boilerplate/shared";
+import { CreateUserDto, GetUsersOptions, UserPatchDto, User } from "../types";
 import { PaginationOptions } from "../types/PaginationOptions";
 import { isUniqueViolation, violatedConstraint } from "../utils/pgErrors";
 import { httpError } from "../utils/httpError";
@@ -154,7 +149,7 @@ export const getUserWithPasswordById = async (
 
 export const modifyUser = async (
   userId: string,
-  detailsToUpdate: UpdateUserDto,
+  detailsToUpdate: UserPatchDto,
   client: PoolClient | Pool = db,
 ): Promise<Omit<User, "password_hash">> => {
   // Prevent password_hash updates through this function

@@ -1,4 +1,5 @@
 import request from "supertest";
+import { publicInvitationSchema } from "@auth-boilerplate/shared";
 import app from "../../src/app";
 import db from "../../src/database/db";
 import seed from "../../src/database/seed";
@@ -339,8 +340,13 @@ describe("Organization Invitation Integration Tests", () => {
       expect(response.body.data.email).toBe("getinvite@example.com");
       expect(response.body.data.role).toBe("member");
       expect(response.body.data.is_existing_user).toBe(false);
-      expect(response.body.data.organization).toBeDefined();
-      expect(response.body.data.organization.name).toBe("Acme Corporation");
+      expect(response.body.data.type).toBe("org_invite");
+      expect(response.body.data.organization_id).toBeDefined();
+      expect(response.body.data.organization_name).toBe("Acme Corporation");
+      // The response is the shared contract, verbatim — drift fails here.
+      expect(publicInvitationSchema.safeParse(response.body.data).success).toBe(
+        true,
+      );
     });
 
     it("should return 404 for invalid token", async () => {
@@ -684,7 +690,7 @@ describe("Organization Invitation Integration Tests", () => {
         .expect(200);
 
       expect(viewResponse.body.data.email).toBe("fullfloworg2@example.com");
-      expect(viewResponse.body.data.organization.name).toBe("Acme Corporation");
+      expect(viewResponse.body.data.organization_name).toBe("Acme Corporation");
 
       // Step 4: User accepts invitation
       const acceptResponse = await request(app)

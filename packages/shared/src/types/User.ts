@@ -54,3 +54,25 @@ export const updateProfileSchema = z.object({
 });
 
 export type UpdateProfileDto = z.infer<typeof updateProfileSchema>;
+
+export const adminInviteUserSchema = z.object({
+  email: z.string().email("Invalid email address"),
+});
+
+export type AdminInviteUserDto = z.infer<typeof adminInviteUserSchema>;
+
+// PUT /api/admin/users/:userId — the admin's user-update contract. Only these
+// fields are writable over HTTP: row-management columns (deleted_at,
+// deactivated_at, deactivated_by) belong to their dedicated flows and are
+// deliberately not patchable here.
+export const updateUserSchema = z
+  .object({
+    email: z.string().email("Invalid email address"),
+    password: z.string().min(1),
+    email_verified: z.boolean(),
+    is_active: z.boolean(),
+    can_create_orgs: z.boolean().nullable(),
+  })
+  .partial();
+
+export type UpdateUserDto = z.infer<typeof updateUserSchema>;

@@ -2,8 +2,8 @@ import express from "express";
 import { validateBody } from "../../middleware/validate";
 import { authLimiter } from "../../middleware/rateLimiter";
 import { authoriseUser } from "../../middleware/authoriseUser";
-import { loginAdminSchema } from "../../types";
 import {
+  loginAdminSchema,
   mfaVerifySchema,
   mfaBackupVerifySchema,
 } from "@auth-boilerplate/shared";

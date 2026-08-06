@@ -1,11 +1,11 @@
 import db from "../database/db";
 import { Pool, PoolClient } from "pg";
+import { AdminStats } from "@auth-boilerplate/shared";
 import {
   CreateAdminDto,
   GetAdminsOptions,
   UpdateAdminDto,
   Admin,
-  AdminStats,
 } from "../types";
 import { PaginationOptions } from "../types/PaginationOptions";
 import { isUniqueViolation } from "../utils/pgErrors";

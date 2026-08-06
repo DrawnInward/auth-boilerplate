@@ -1,9 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../client";
 import type {
+  AdminInviteUserDto,
   LoginAdminDto,
   PublicAdmin,
   PublicUser,
+  UpdateUserDto,
   UserStats,
   OrganizationStats,
   OrganizationWithMemberCount,
@@ -155,7 +157,7 @@ export function useAdminCreateUser() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: { email: string }) =>
+    mutationFn: (data: AdminInviteUserDto) =>
       api.post<InviteResponse>("/admin/users", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
@@ -167,7 +169,7 @@ export function useAdminUpdateUser(id: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: { email?: string; is_active?: boolean }) =>
+    mutationFn: (data: UpdateUserDto) =>
       api.put<UserResponse>(`/admin/users/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "users"] });

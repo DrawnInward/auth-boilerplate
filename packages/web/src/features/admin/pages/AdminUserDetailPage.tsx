@@ -33,6 +33,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { updateUserSchema } from "@auth-boilerplate/shared";
 import {
   useAdminUser,
   useAdminUpdateUser,
@@ -43,12 +44,13 @@ import {
 import { FullPageSpinner, FullPageError } from "@/components/shared";
 import { useApiError } from "@/hooks";
 
-const updateUserSchema = z.object({
-  email: z.string().email("Invalid email address"),
-  is_active: z.boolean(),
-});
+// The shared admin update contract, narrowed to this form's fields — both
+// required here because the form always submits them.
+const updateUserFormSchema = updateUserSchema
+  .pick({ email: true, is_active: true })
+  .required();
 
-type UpdateUserData = z.infer<typeof updateUserSchema>;
+type UpdateUserData = z.infer<typeof updateUserFormSchema>;
 
 export function AdminUserDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -68,7 +70,7 @@ export function AdminUserDetailPage() {
   const user = data?.data;
 
   const form = useForm<UpdateUserData>({
-    resolver: zodResolver(updateUserSchema),
+    resolver: zodResolver(updateUserFormSchema),
     values: {
       email: user?.email ?? "",
       is_active: user?.is_active ?? true,

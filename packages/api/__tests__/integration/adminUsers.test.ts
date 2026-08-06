@@ -466,6 +466,54 @@ describe("Admin User Management Integration Tests", () => {
       expect(response.body.message).toContain("validation");
     });
 
+    it("rejects a body of only row-management fields (D1 narrowed contract)", async () => {
+      const userId = testUsers[1].user_id;
+
+      // deleted_at/deactivated_* are owned by their dedicated flows; the
+      // shared updateUserSchema strips them, so a body of nothing else is a
+      // 400 and the row is untouched — an admin PUT can no longer soft-delete
+      // a user while skipping the delete flow's token revocation (S4).
+      const response = await request(app)
+        .put(`/api/admin/users/${userId}`)
+        .set("Cookie", adminCookies)
+        .send({
+          deleted_at: new Date().toISOString(),
+          deactivated_at: new Date().toISOString(),
+          mfa_secret: "attacker-controlled",
+        })
+        .expect(400);
+
+      expect(response.body.message).toBe("No valid fields to update");
+
+      const check = await db.query(
+        "SELECT deleted_at, deactivated_at FROM users WHERE user_id = $1",
+        [userId],
+      );
+      expect(check.rows[0].deleted_at).toBeNull();
+      expect(check.rows[0].deactivated_at).toBeNull();
+    });
+
+    it("ignores row-management fields sent alongside legal ones", async () => {
+      const userId = testUsers[1].user_id;
+
+      const response = await request(app)
+        .put(`/api/admin/users/${userId}`)
+        .set("Cookie", adminCookies)
+        .send({
+          email_verified: true,
+          deleted_at: new Date().toISOString(),
+        })
+        .expect(200);
+
+      expect(response.body.data.email_verified).toBe(true);
+
+      const check = await db.query(
+        "SELECT deleted_at FROM users WHERE user_id = $1",
+        [userId],
+      );
+      expect(check.rows[0].deleted_at).toBeNull();
+    });
+
     it("should reject request without authentication", async () => {
       const fakeUuid = "00000000-0000-0000-0000-000000000000";
       const response = await request(app)

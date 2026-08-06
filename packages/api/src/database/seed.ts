@@ -1,5 +1,9 @@
-import { Organization, OrganizationMember } from "@auth-boilerplate/shared";
-import { Admin, Invitation, RefreshToken, User } from "../types";
+import {
+  Invitation,
+  Organization,
+  OrganizationMember,
+} from "@auth-boilerplate/shared";
+import { Admin, RefreshToken, User } from "../types";
 import db from "./db";
 import { runMigrations } from "./migrate";
 

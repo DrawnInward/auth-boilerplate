@@ -1,7 +1,8 @@
 import db from "../database/db";
 import { Pool, PoolClient } from "pg";
 import { v4 as uuidv4 } from "uuid";
-import { Invitation, CreateInvitationDto, InvitationType } from "../types";
+import { Invitation, InvitationType } from "@auth-boilerplate/shared";
+import { CreateInvitationDto } from "../types";
 import { determinateHash } from "../utils";
 import { PaginationOptions } from "../types/PaginationOptions";
 import { isUniqueViolation } from "../utils/pgErrors";

@@ -11,8 +11,8 @@ import {
   validateBody,
   validateQuery,
 } from "../../middleware/validate";
-import { inviteMemberSchema } from "../../types/Invitation";
 import {
+  inviteMemberSchema,
   organizationParamsSchema,
   organizationMemberParamsSchema,
   organizationInvitationParamsSchema,

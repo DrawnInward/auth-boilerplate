@@ -4,7 +4,7 @@ import type * as invitationModels from "../models/invitations.models";
 import type * as userModels from "../models/users.models";
 import type * as organizationModels from "../models/organization.models";
 import type * as memberModels from "../models/organizationMembers.models";
-import { Invitation, OrgInviteRole } from "../types";
+import { Invitation, OrgInviteRole } from "@auth-boilerplate/shared";
 import { hashPassword } from "../utils";
 import { httpError } from "../utils/httpError";
 import { AuthService, SessionStart } from "./auth.service";
