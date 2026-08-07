@@ -822,6 +822,18 @@ RETURNING`, rule 1's pre-check shape). And OAuthTab's "Link" reuses the login fl
     (`… AND used_at IS NULL RETURNING id`, throw on no row — rule 1's pre-check shape, matching
     the MFA-challenge consume). Ship with a two-concurrent-accepts integration test asserting
     one session, one membership row, and an invitation-shaped error for the loser.
+
+    **Status (2026-08-07) — DONE; half the premise turned out stale.** `getInvitationByTokenHash`
+    has carried `FOR UPDATE` since the original invitation commit, and every redemption flow
+    (org-accept, both complete-registrations, password reset, email change) validates inside its
+    transaction with the client passed — so concurrent redeems already serialised on the row
+    lock, and the loser already answered 400 "Invitation has already been used" out of
+    `validateInvitationToken`. What was real: `markInvitationUsed` had no `used_at IS NULL`
+    predicate, leaving the downstream unique constraints as the only guard if the lock
+    discipline ever slips (exactly the fragility described above). It is now a compare-and-set;
+    on a missed update it re-reads to answer honestly (404 row missing / 400 already used).
+    Comments at both sites document the lock discipline. Tests: the two-concurrent-accepts
+    integration test as specified, plus a CRUD pin of the CAS refusal.
 - **D7 · Supply chain.** Adopted 2026-08-05, the day after the 4 Aug npm worm (2,234 poisoned
   versions across 444 packages, including `flat-cache`/`file-entry-cache` — inside ESLint, and
   therefore inside this tree). Two facts drive the design: install scripts were the execution

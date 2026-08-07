@@ -422,6 +422,52 @@ describe("Organization Invitation Integration Tests", () => {
       expect(loginResponse.status).toBe(200);
     });
 
+    it("gives two concurrent accepts of one token exactly one winner", async () => {
+      const { createInvitation } =
+        await import("../../src/models/invitations.models");
+      const result = await createInvitation({
+        email: "concurrentaccept@example.com",
+        type: "org_invite",
+        organization_id: getOrganizationUuid(1),
+        role: "member",
+        invited_by: getUserUuid(1),
+      });
+
+      // Both redeems race on the invitation row lock: the loser blocks on
+      // FOR UPDATE, re-reads the committed used_at, and fails validation.
+      const [first, second] = await Promise.all([
+        request(app)
+          .post(`/api/invitations/${result.token}/accept`)
+          .send({ password: "SecurePassword123" }),
+        request(app)
+          .post(`/api/invitations/${result.token}/accept`)
+          .send({ password: "SecurePassword123" }),
+      ]);
+
+      expect([first.status, second.status].sort()).toEqual([200, 400]);
+
+      const winner = first.status === 200 ? first : second;
+      const loser = first.status === 200 ? second : first;
+
+      // The winner got a session; the loser's error is about the invitation,
+      // not a membership or duplicate-account side effect.
+      const cookies = winner.headers["set-cookie"];
+      expect(cookies).toBeDefined();
+      expect(loser.body.message).toBe("Invitation has already been used");
+
+      // Exactly one account and one membership row came out of the pair.
+      const users = await db.query(
+        "SELECT user_id FROM users WHERE email = $1",
+        ["concurrentaccept@example.com"],
+      );
+      expect(users.rows).toHaveLength(1);
+      const members = await db.query(
+        "SELECT * FROM organization_members WHERE user_id = $1",
+        [users.rows[0].user_id],
+      );
+      expect(members.rows).toHaveLength(1);
+    });
+
     it("refuses to accept into a soft-deleted organization (D2)", async () => {
       const { createInvitation } =
         await import("../../src/models/invitations.models");

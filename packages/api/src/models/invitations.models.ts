@@ -82,6 +82,11 @@ export const createInvitation = async (
   }
 };
 
+// FOR UPDATE: every redemption is a validate-then-mark, so concurrent redeems
+// of one token must serialise on this row — the loser blocks, then re-reads
+// the committed used_at and fails validation. That only works when the caller
+// passes its transaction client; on the pool the lock dies with the statement,
+// which is fine for read-only callers but never for a redemption.
 export const getInvitationByTokenHash = async (
   tokenHash: string,
   client: PoolClient | Pool = db,
@@ -115,6 +120,11 @@ export const getInvitationById = async (
   return result.rows[0];
 };
 
+// Compare-and-set: consumes the invitation only if it is still unused, so of
+// two concurrent redemptions exactly one commits. Under the lock discipline
+// above the loser fails validation first — this predicate is the backstop that
+// keeps a future duplicate-tolerant downstream write (membership, account)
+// from silently turning the race into a double-commit.
 export const markInvitationUsed = async (
   id: string,
   client: PoolClient | Pool = db,
@@ -122,12 +132,16 @@ export const markInvitationUsed = async (
   const queryString = `
     UPDATE invitations
     SET used_at = NOW()
-    WHERE id = $1
+    WHERE id = $1 AND used_at IS NULL
     RETURNING *;
   `;
 
   const result = await client.query(queryString, [id]);
   if (result.rows.length === 0) {
+    const existing = await getInvitationById(id, client);
+    if (existing) {
+      throw httpError(400, "Invitation has already been used");
+    }
     throw httpError(404, "Invitation not found");
   }
   return result.rows[0];

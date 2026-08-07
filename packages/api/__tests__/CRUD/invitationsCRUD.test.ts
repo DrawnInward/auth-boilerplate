@@ -264,6 +264,20 @@ describe("Invitation Model CRUD Operations", () => {
         msg: "Invitation not found",
       });
     });
+
+    it("refuses to mark an already-used invitation (single-use CAS)", async () => {
+      const { invitation } = await createInvitation({
+        email: "markusedtwice@example.com",
+        type: "registration",
+      });
+
+      await markInvitationUsed(invitation.id!);
+
+      await expect(markInvitationUsed(invitation.id!)).rejects.toMatchObject({
+        status: 400,
+        msg: "Invitation has already been used",
+      });
+    });
   });
 
   describe("invalidatePendingInvitations", () => {
