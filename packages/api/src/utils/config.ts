@@ -72,11 +72,16 @@ const REFRESH_REUSE_GRACE_SECONDS_DEFAULT = 30;
 // The reuse-interval (leeway) for rotated refresh tokens. A token presented
 // again within this window of being rotated is a concurrent or retried exchange
 // — not a replay — and is honoured without revoking the session; outside it, a
-// reused token trips breach detection. 30s matches Auth0/Okta defaults. See
-// docs/hardening-plan.md A1.
+// reused token trips breach detection. 30s matches Auth0/Okta defaults. Capped
+// at 300: the value is SECONDS (the getter converts to ms), and a units typo
+// like 30000 would otherwise silently disable breach detection for the life of
+// any session. See docs/hardening-plan.md A1.
 export const getRefreshReuseGraceMs = (): number =>
-  (readPositiveNumberEnv("REFRESH_REUSE_GRACE_SECONDS", { integer: true }) ??
-    REFRESH_REUSE_GRACE_SECONDS_DEFAULT) * 1000;
+  (readPositiveNumberEnv("REFRESH_REUSE_GRACE_SECONDS", {
+    integer: true,
+    min: 1,
+    max: 300,
+  }) ?? REFRESH_REUSE_GRACE_SECONDS_DEFAULT) * 1000;
 
 const ACCESS_TOKEN_LIFETIME_SECONDS_DEFAULT = 15 * 60;
 

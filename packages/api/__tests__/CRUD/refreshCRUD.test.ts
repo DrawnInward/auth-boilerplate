@@ -587,6 +587,35 @@ describe("Refresh Token Model CRUD Operations", () => {
         msg: "Refresh token has been revoked",
       });
     });
+
+    it("does not let the grace window extend a token past its own expiry", async () => {
+      // A token rotated moments before its expiry: the within-grace reuse must
+      // still respect expiration_time rather than buying a fresh full-lifetime
+      // lineage with an expired credential.
+      const freshToken = await addRefresh({
+        role_id: getUserUuid(2),
+        role_type: "user",
+      });
+      const decoded = jwt.verify(
+        freshToken.token,
+        process.env.REFRESH_KEY!,
+      ) as any;
+
+      await createAccessToken(decoded, freshToken.token);
+
+      // Within grace (used_at is seconds old), but the parent has now expired.
+      await db.query(
+        "UPDATE refresh SET expiration_time = NOW() - INTERVAL '1 minute' WHERE refresh_id = $1",
+        [freshToken.refresh_id],
+      );
+
+      await expect(
+        createAccessToken(decoded, freshToken.token),
+      ).rejects.toMatchObject({
+        status: 401,
+        msg: "Refresh token has expired",
+      });
+    });
   });
 
   describe("Transaction handling", () => {

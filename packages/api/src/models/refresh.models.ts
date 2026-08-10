@@ -164,134 +164,201 @@ export const createAccessToken = async (
 ): Promise<{ accessToken: string; newRefreshToken: string }> => {
   const tokenHash = determinateHash(originalRefreshToken);
 
-  return withTransaction(db, async (client) => {
-    const presented = await fetchRefreshByTokenHash(tokenHash, client);
+  const outcome = await withTransaction(
+    db,
+    async (
+      client,
+    ): Promise<
+      | { breach: { role_id: string; role_type: string } }
+      | { tokens: { accessToken: string; newRefreshToken: string } }
+    > => {
+      const presented = await fetchRefreshByTokenHash(tokenHash, client);
 
-    if (presented.used_at) {
-      // The presented token has already been rotated. Two very different things
-      // look identical here — a concurrent/retried exchange from a legitimate
-      // client (an SPA firing several requests at once after the access token
-      // expired), and a replay of a stale, stolen token. The reuse-interval
-      // (leeway) plus the recorded successor tell them apart: honour the reuse
-      // only while it is inside the window AND the successor token is still
-      // alive. A rotated-then-revoked lineage (logout, admin revoke, an earlier
-      // breach) has a dead successor and must never be resurrected within grace.
-      // (Reuse-interval per the OAuth 2.0 Security BCP; see hardening-plan A1.)
-      const usedAgoMs = Date.now() - new Date(presented.used_at).getTime();
-      const withinGrace = usedAgoMs <= getRefreshReuseGraceMs();
+      // Both time comparisons below run on the database clock, against
+      // timestamps the database wrote. Comparing a DB-written used_at against
+      // this process's Date.now() breaks the moment two app clocks disagree
+      // (second instance, VM resume, NTP step): skew ahead turns every grace
+      // race into a mass-revoking "replay", skew behind holds the grace window
+      // open forever.
+      const clock = await client.query(
+        `SELECT expiration_time < NOW() AS is_expired,
+                EXTRACT(EPOCH FROM (NOW() - used_at)) AS used_ago_seconds
+         FROM refresh
+         WHERE refresh_id = $1`,
+        [presented.refresh_id],
+      );
+      const { is_expired, used_ago_seconds } = clock.rows[0];
 
-      // Liveness proxy for the lineage: is the immediate successor still active?
-      // We deliberately check only the FIRST successor, not the whole chain.
-      // Relaxing this to "successor was rotated" (used_at set) would reopen the
-      // logout hole, because revokeUserTokens sets is_active=false WITHOUT
-      // clearing used_at — a rotated-then-logged-out successor would read as
-      // live. The cost of the conservative check: if the successor is itself
-      // rotated inside this same grace window, a late in-flight sibling holding
-      // the parent gets a spurious retriable 401 (session survives). Very hard to
-      // hit — after rotating, a client has a fresh 10-min access token and won't
-      // rotate again within the ~30s window — and Phase C single-flight removes
-      // the triggering multi-request race. A full lineage walk is the robust fix,
-      // deferred to the authService extraction. (hardening-plan A1)
-      const successorActive = presented.replaced_by
-        ? (
-            await client.query(
-              "SELECT is_active FROM refresh WHERE refresh_id = $1",
-              [presented.replaced_by],
-            )
-          ).rows[0]?.is_active === true
-        : false;
+      if (presented.used_at) {
+        // The presented token has already been rotated. Two very different
+        // things look identical here — a concurrent/retried exchange from a
+        // legitimate client (an SPA firing several requests at once after the
+        // access token expired), and a replay of a stale, stolen token. The
+        // reuse-interval (leeway) plus the recorded successor tell them apart:
+        // honour the reuse only while it is inside the window AND the successor
+        // token is still alive. A rotated-then-revoked lineage (logout, admin
+        // revoke, an earlier breach) has a dead successor and must never be
+        // resurrected within grace. (Reuse-interval per the OAuth 2.0 Security
+        // BCP; see hardening-plan A1.)
+        const withinGrace =
+          Number(used_ago_seconds) * 1000 <= getRefreshReuseGraceMs();
 
-      if (!withinGrace) {
-        // A genuine replay of a stale token — trip breach detection. This runs
-        // on the pool, not `client`, so it commits even though the throw below
-        // rolls this transaction back; the replayed row is already
-        // is_active=false so it is not among the rows the FOR UPDATE locks — no
-        // self-deadlock.
-        await revokeUserTokens(presented.role_id, presented.role_type);
-        throw httpError(
-          401,
-          "Refresh token has already been used - possible security breach",
+        if (!withinGrace) {
+          // A genuine replay of a stale token — breach. The revocation itself
+          // runs AFTER this transaction has released its connection (see the
+          // outcome handling below): awaiting a second pool connection while
+          // holding one here meant ~pool-size concurrent replays could wedge
+          // the whole pool in a circular wait. Checked before expiry so an
+          // expired replay still trips breach detection.
+          return {
+            breach: {
+              role_id: presented.role_id,
+              role_type: presented.role_type,
+            },
+          };
+        }
+
+        // Grace never extends a token past its own lifetime: a parent that
+        // expired since rotation must not buy a fresh full-lifetime lineage.
+        if (is_expired) {
+          throw httpError(401, "Refresh token has expired");
+        }
+
+        // Liveness proxy for the lineage: is the immediate successor still
+        // active? We deliberately check only the FIRST successor, not the
+        // whole chain. Relaxing this to "successor was rotated" (used_at set)
+        // would reopen the logout hole, because revokeUserTokens sets
+        // is_active=false WITHOUT clearing used_at — a rotated-then-logged-out
+        // successor would read as live. The cost of the conservative check: if
+        // the successor is itself rotated inside this same grace window, a
+        // late in-flight sibling holding the parent gets a spurious retriable
+        // 401 (session survives). Very hard to hit — after rotating, a client
+        // has a fresh access token and won't rotate again within the ~30s
+        // window — and Phase C single-flight removes the triggering
+        // multi-request race. A full lineage walk is the robust fix, deferred
+        // to the authService extraction. (hardening-plan A1)
+        //
+        // FOR UPDATE, not a plain read: it serialises a concurrent revocation
+        // (logout, breach, admin) behind this exchange, and pairs with
+        // revokeUserTokens' revoke-until-clean loop — a revocation that was
+        // blocked on this lock while we minted a successor catches that
+        // successor on its next pass. Without the pair, a within-grace refresh
+        // racing a logout could mint a token the logout never sees.
+        const successorActive = presented.replaced_by
+          ? (
+              await client.query(
+                "SELECT is_active FROM refresh WHERE refresh_id = $1 FOR UPDATE",
+                [presented.replaced_by],
+              )
+            ).rows[0]?.is_active === true
+          : false;
+
+        if (!successorActive) {
+          // Inside the window but the session was ended — reject without
+          // resurrecting it, and without punishing (it is already revoked).
+          throw httpError(401, "Refresh token has been revoked");
+        }
+        // Otherwise this is a live race: fall through and mint a fresh
+        // successor for this caller, leaving the already-retired parent
+        // untouched.
+      } else {
+        if (!presented.is_active) {
+          throw httpError(401, "Refresh token has been revoked");
+        }
+
+        if (is_expired) {
+          throw httpError(401, "Refresh token has expired");
+        }
+      }
+
+      // A refresh token is only as valid as the account behind it: a
+      // deactivated or soft-deleted principal must not mint fresh access
+      // tokens off an old refresh. Deactivation/deletion revokes tokens at its
+      // own site (see the admin handlers); this is the defensive gate that
+      // also covers any path that deactivates without revoking, and it stops a
+      // reactivated account inheriting old sessions. Read-only, so no lock
+      // conflict with the FOR UPDATE above. (S4)
+      const principal =
+        presented.role_type === "admin"
+          ? await getAdminById(presented.role_id)
+          : await getUserById(presented.role_id);
+      if (!principal || principal.is_active === false) {
+        throw httpError(401, "Account is no longer active");
+      }
+
+      const newRefreshData = await addRefresh(
+        {
+          role_id: presented.role_id,
+          role_type: presented.role_type,
+        },
+        client,
+      );
+
+      // First rotation only: retire the presented token and record its
+      // successor, so a concurrent retry within the window can recognise a
+      // live race. A within-grace reuse skips this — the parent is already
+      // retired and already points at its first successor. used_at is written
+      // by the database clock because the grace arithmetic above reads it
+      // against NOW().
+      if (!presented.used_at) {
+        await client.query(
+          `UPDATE refresh
+           SET used_at = NOW(), is_active = FALSE, last_used_time = NOW(),
+               replaced_by = $2
+           WHERE refresh_id = $1`,
+          [presented.refresh_id, newRefreshData.refresh_id],
         );
       }
 
-      if (!successorActive) {
-        // Inside the window but the session was ended — reject without
-        // resurrecting it, and without punishing (it is already revoked).
-        throw httpError(401, "Refresh token has been revoked");
+      const role_type = presented.role_type;
+      const accessKeyEnvironmentVariable = `${role_type.toUpperCase()}_ACCESS_KEY`;
+      const accessKey = process.env[accessKeyEnvironmentVariable];
+
+      if (!accessKey) {
+        throw httpError(
+          500,
+          `Missing environment variable: ${accessKeyEnvironmentVariable}`,
+        );
       }
-      // Otherwise this is a live race: fall through and mint a fresh successor
-      // for this caller, leaving the already-retired parent untouched.
-    } else {
-      if (!presented.is_active) {
-        throw httpError(401, "Refresh token has been revoked");
-      }
+      const accessToken = jwt.sign(
+        { role_id: presented.role_id, role_type },
+        accessKey,
+        { expiresIn: getAccessTokenLifetimeSeconds() },
+      );
 
-      const expirationTime = new Date(presented.expiration_time!);
-      if (expirationTime < new Date()) {
-        throw httpError(401, "Refresh token has expired");
-      }
-    }
-
-    // A refresh token is only as valid as the account behind it: a deactivated
-    // or soft-deleted principal must not mint fresh access tokens off an old
-    // refresh. Deactivation/deletion revokes tokens at its own site (see the
-    // admin handlers); this is the defensive gate that also covers any path that
-    // deactivates without revoking, and it stops a reactivated account inheriting
-    // old sessions. Read-only, so no lock conflict with the FOR UPDATE above. (S4)
-    const principal =
-      presented.role_type === "admin"
-        ? await getAdminById(presented.role_id)
-        : await getUserById(presented.role_id);
-    if (!principal || principal.is_active === false) {
-      throw httpError(401, "Account is no longer active");
-    }
-
-    const newRefreshData = await addRefresh(
-      {
-        role_id: presented.role_id,
-        role_type: presented.role_type,
-      },
-      client,
-    );
-
-    // First rotation only: retire the presented token and record its successor,
-    // so a concurrent retry within the window can recognise a live race. A
-    // within-grace reuse skips this — the parent is already retired and already
-    // points at its first successor.
-    if (!presented.used_at) {
-      await modifyRefreshById(
-        {
-          used_at: new Date().toISOString(),
-          is_active: false,
-          last_used_time: new Date().toISOString(),
-          replaced_by: newRefreshData.refresh_id,
+      return {
+        tokens: {
+          accessToken,
+          newRefreshToken: newRefreshData.token,
         },
-        presented.refresh_id!,
-        client,
+      };
+    },
+  );
+
+  if ("breach" in outcome) {
+    const { role_id, role_type } = outcome.breach;
+    try {
+      await revokeUserTokens(role_id, role_type);
+      log.warn(
+        { role_id, role_type },
+        "Refresh token replay detected — all sessions revoked",
+      );
+    } catch (err) {
+      // Deliberate log, not a double-log: the middleware never sees this
+      // error (the breach 401 below replaces it), and a replay whose
+      // revocation failed is exactly the event an operator must not lose.
+      log.error(
+        { err, role_id, role_type },
+        "Refresh token replay detected but session revocation FAILED",
       );
     }
-
-    const role_type = presented.role_type;
-    const accessKeyEnvironmentVariable = `${role_type.toUpperCase()}_ACCESS_KEY`;
-    const accessKey = process.env[accessKeyEnvironmentVariable];
-
-    if (!accessKey) {
-      throw httpError(
-        500,
-        `Missing environment variable: ${accessKeyEnvironmentVariable}`,
-      );
-    }
-    const accessToken = jwt.sign(
-      { role_id: presented.role_id, role_type },
-      accessKey,
-      { expiresIn: getAccessTokenLifetimeSeconds() },
+    throw httpError(
+      401,
+      "Refresh token has already been used - possible security breach",
     );
+  }
 
-    return {
-      accessToken,
-      newRefreshToken: newRefreshData.token,
-    };
-  });
+  return outcome.tokens;
 };
 
 export const revokeUserTokens = async (
@@ -303,16 +370,22 @@ export const revokeUserTokens = async (
     UPDATE refresh
     SET is_active = FALSE
     WHERE role_id = $1 AND role_type =$2 AND is_active = TRUE
-    RETURNING *;
+    RETURNING refresh_id;
   `;
 
-  try {
+  // Revoke until a pass finds nothing: a single UPDATE's snapshot cannot see a
+  // token committed after the statement began — in particular one minted by a
+  // within-grace exchange that this revocation was blocked behind (see the
+  // successor FOR UPDATE in createAccessToken). Each pass kills everything it
+  // can see, and honoured exchanges need an active successor the previous pass
+  // just killed, so the loop terminates almost immediately.
+  let revoked = 0;
+  for (;;) {
     const result = await client.query(queryStr, [roleId, roleType]);
-    return `${result.rowCount} tokens revoked successfully`;
-  } catch (error) {
-    log.error({ err: error }, "Error revoking user tokens");
-    throw error;
+    if (!result.rowCount) break;
+    revoked += result.rowCount;
   }
+  return `${revoked} tokens revoked successfully`;
 };
 
 export const revokeRefreshToken = async (
@@ -323,17 +396,12 @@ export const revokeRefreshToken = async (
     UPDATE refresh
     SET is_active = FALSE
     WHERE refresh_id = $1 AND is_active = TRUE
-    RETURNING *;
+    RETURNING refresh_id;
   `;
 
-  try {
-    const result = await client.query(queryStr, [refreshId]);
-    if (result.rowCount === 0) {
-      return "No active token found to revoke";
-    }
-    return "Token revoked successfully";
-  } catch (error) {
-    log.error({ err: error }, "Error revoking refresh token");
-    throw error;
+  const result = await client.query(queryStr, [refreshId]);
+  if (result.rowCount === 0) {
+    return "No active token found to revoke";
   }
+  return "Token revoked successfully";
 };

@@ -115,6 +115,19 @@ describe("validateEnv", () => {
       },
     );
 
+    // Grace is seconds, capped at 300 — a units typo like 30000 ("ms") would
+    // silently disable replay breach detection.
+    it.each(["0", "thirty", "301", "30000"])(
+      "rejects REFRESH_REUSE_GRACE_SECONDS=%s as outside the 1–300 range",
+      (value) => {
+        process.env.REFRESH_REUSE_GRACE_SECONDS = value;
+
+        expect(collectEnvProblems()).toEqual([
+          `REFRESH_REUSE_GRACE_SECONDS must be an integer between 1 and 300 (got "${value}")`,
+        ]);
+      },
+    );
+
     it.each([
       ["PORT", "3000"],
       ["REFRESH_TOKEN_DAYS", "30"],
@@ -122,6 +135,9 @@ describe("validateEnv", () => {
       ["BCRYPT_COST", "12"],
       ["BCRYPT_COST", "4"],
       ["BCRYPT_COST", "31"],
+      ["REFRESH_REUSE_GRACE_SECONDS", "1"],
+      ["REFRESH_REUSE_GRACE_SECONDS", "30"],
+      ["REFRESH_REUSE_GRACE_SECONDS", "300"],
     ])("accepts %s=%s", (name, value) => {
       process.env[name] = value;
 

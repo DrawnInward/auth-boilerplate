@@ -902,3 +902,29 @@ both repos took them in the same session and stay in lockstep):
 - **A3/S3 comment:** `oauthPending.ts` documents that the no-key-confusion property
   rests on every `MFA_CHALLENGE_KEY`-signed token type carrying a distinct, verified
   `type` claim.
+
+**2026-08-10 — A1 grace-window review fixes** (multi-agent adversarial review of the
+skoped Step-2 port; the grace logic here was byte-identical, so all fixes landed here
+first and were mirrored there):
+
+- **Logout race closed:** the successor-liveness probe now takes `FOR UPDATE` and
+  `revokeUserTokens` loops until a pass revokes nothing — without the pair, a
+  within-grace refresh racing a logout could mint a token the logout's single UPDATE
+  pass (whose snapshot predates the insert) never saw.
+- **Breach revocation moved outside the transaction:** awaiting a second pool
+  connection while `withTransaction` held one let ~pool-size concurrent replays wedge
+  the whole pool; `createAccessToken` now returns a breach outcome and revokes after
+  the connection is released, with the revoke guarded (breach `warn` on success, a
+  deliberate revocation-FAILED `error` on failure) so a failed revoke can't soften
+  the breach 401 or vanish from the logs.
+- **Expiry enforced on the grace path** (an expired parent within grace of rotation
+  no longer buys a fresh full-lifetime lineage; outside-grace still wins first so an
+  expired replay trips breach detection), with a CRUD test.
+- **All grace/expiry arithmetic moved to the DB clock** (`NOW()`-based, and rotation
+  stamps `used_at = NOW()`), immune to app-instance clock skew.
+- **`REFRESH_REUSE_GRACE_SECONDS` bounded 1–300** at boot and read site — a units
+  typo (30000 "ms") previously disabled breach detection silently.
+- **Migration 006:** partial index on `refresh(replaced_by)` (002's FK was
+  unindexed) + the purge-ordering constraint documented.
+- Double-log wrappers dropped from the revoke helpers (error middleware owns error
+  logging).

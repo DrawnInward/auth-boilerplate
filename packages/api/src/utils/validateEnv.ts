@@ -28,7 +28,9 @@ const POSITIVE_INTEGER_KNOBS: readonly {
 }[] = [
   { name: "PORT" },
   { name: "REFRESH_TOKEN_DAYS" },
-  { name: "REFRESH_REUSE_GRACE_SECONDS" },
+  // Grace is SECONDS with a hard cap: a units typo (30000 "ms") would pass a
+  // positive-integer check and silently disable replay breach detection.
+  { name: "REFRESH_REUSE_GRACE_SECONDS", min: 1, max: 300 },
   { name: "ACCESS_TOKEN_LIFETIME_SECONDS" },
   { name: "BCRYPT_COST", min: 4, max: 31 },
 ];
