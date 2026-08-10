@@ -84,6 +84,22 @@ export const collectEnvProblems = (): string[] => {
     );
   }
 
+  // S6: originCheck exact-matches ALLOWED_ORIGIN against the browser's
+  // Origin header on every state-changing request, so in production a
+  // missing value (silent localhost fallback) or a malformed one (trailing
+  // slash or path — browsers serialise Origin as scheme://host[:port])
+  // would 403 every write site-wide while GETs keep working.
+  if (process.env.NODE_ENV === "production") {
+    const origin = (process.env.ALLOWED_ORIGIN ?? "").trim();
+    if (!origin) {
+      problems.push("ALLOWED_ORIGIN must be set in production");
+    } else if (!/^https?:\/\/[^/]+$/.test(origin)) {
+      problems.push(
+        `ALLOWED_ORIGIN must be scheme://host[:port] with no trailing slash or path (got "${origin}")`,
+      );
+    }
+  }
+
   // Likewise, an unusable SendGrid config falls back to logging emails to the
   // console, which in production means silently sending nothing.
   if ((process.env.EMAIL_PROVIDER ?? "").trim().toLowerCase() === "sendgrid") {

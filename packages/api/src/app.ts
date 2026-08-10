@@ -1,5 +1,5 @@
 import express from "express";
-import cors from "cors";
+import cors, { type CorsOptions } from "cors";
 import helmet from "helmet";
 import pinoHttp from "pino-http";
 import userRouter from "./routes/user.routes";
@@ -10,8 +10,11 @@ import { globalLimiter } from "./middleware/rateLimiter";
 import { originCheck } from "./middleware/originCheck";
 import { getAllowedOrigin } from "./utils/config";
 
-const corsOptions = {
-  origin: getAllowedOrigin(),
+const corsOptions: CorsOptions = {
+  // Read per request, matching originCheck — a module-load snapshot here
+  // while originCheck reads per request would let the two disagree if the
+  // env changes after import.
+  origin: (_requestOrigin, callback) => callback(null, getAllowedOrigin()),
   credentials: true,
 };
 

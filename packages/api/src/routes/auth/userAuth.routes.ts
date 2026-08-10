@@ -91,8 +91,11 @@ router.put(
   validateBody(changePasswordSchema),
   changePassword,
 );
+// authLimiter: the taken-address branch (S5) emails an attacker-chosen
+// address, so probes must be capped like the other email-sending auth routes.
 router.post(
   "/request-email-change",
+  authLimiter,
   authoriseUser(["user"]),
   validateBody(requestEmailChangeSchema),
   requestEmailChange,

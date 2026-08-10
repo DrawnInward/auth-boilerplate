@@ -3,6 +3,7 @@ import app from "../../src/app";
 import db from "../../src/database/db";
 import seed from "../../src/database/seed";
 import { testUsers } from "../../src/database/test-data";
+import { getPendingInvitationsForEmail } from "../../src/models/invitations.models";
 
 require("dotenv").config({ quiet: true });
 
@@ -71,7 +72,16 @@ describe("Email Change Integration Tests", () => {
     });
 
     it("answers identically when the new email is already taken — no enumeration (S5)", async () => {
-      const response = await request(app)
+      const freshResponse = await request(app)
+        .post("/api/auth/request-email-change")
+        .set("Cookie", userCookies)
+        .send({
+          newEmail: "s5-fresh-address@example.com",
+          password: "Password1",
+        })
+        .expect(200);
+
+      const takenResponse = await request(app)
         .post("/api/auth/request-email-change")
         .set("Cookie", userCookies)
         .send({
@@ -80,11 +90,25 @@ describe("Email Change Integration Tests", () => {
         })
         .expect(200);
 
-      // Indistinguishable from the success path: the owner of the taken
-      // address is notified by email instead.
-      expect(response.body.status).toBe("success");
-      expect(response.body.message).toContain("Verification email sent");
-      expect(response.body.data.newEmail).toBe("alice@example.com");
+      // Compared to the live success path, not to literals: any drift
+      // between the two branches' responses is an enumeration oracle. The
+      // owner of the taken address is notified by email instead.
+      expect(takenResponse.body.status).toBe(freshResponse.body.status);
+      expect(takenResponse.body.message).toBe(freshResponse.body.message);
+      expect(Object.keys(takenResponse.body.data)).toEqual(
+        Object.keys(freshResponse.body.data),
+      );
+      expect(takenResponse.body.data.newEmail).toBe("alice@example.com");
+
+      // ...and no email-change invitation is minted for the taken address —
+      // a live token would 409 at confirm time and reopen the oracle.
+      const pending = await getPendingInvitationsForEmail(
+        "test@example.com",
+        "email_change",
+      );
+      expect(pending.some((inv) => inv.new_email === "alice@example.com")).toBe(
+        false,
+      );
     });
 
     it("should reject invalid email format", async () => {

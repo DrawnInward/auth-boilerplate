@@ -278,31 +278,32 @@ export const register = async (
 
     const { email } = req.body;
 
+    // The models canonicalise to lowercase (stored users, invitation rows),
+    // so the response echoes the canonical form on both branches.
+    const canonicalEmail = email.toLowerCase();
+
     const existingUser = await getUser(email);
     if (existingUser) {
-      // S5: identical response to the new-account path, so an address's
-      // existence is never observable here — the owner is told by email.
-      await services.email.sendAccountExists(existingUser.email!);
+      // S5: the shared exit below keeps the response identical to the
+      // new-account path, so the body never reveals whether the address has
+      // an account — the owner is told by email instead. (Residual: this
+      // branch skips the invitation writes, so timing is not fully
+      // equalised.)
+      await services.email.sendAccountExists(canonicalEmail);
+    } else {
+      await invalidatePendingInvitations(email, "registration");
 
-      return sendCreated(
-        res,
-        { email: existingUser.email },
-        "Registration email sent. Please check your inbox.",
-      );
+      const { token } = await createInvitation({
+        email,
+        type: "registration",
+      });
+
+      await services.email.sendVerification(email, token);
     }
-
-    await invalidatePendingInvitations(email, "registration");
-
-    const { invitation, token } = await createInvitation({
-      email,
-      type: "registration",
-    });
-
-    await services.email.sendVerification(email, token);
 
     return sendCreated(
       res,
-      { email: invitation.email },
+      { email: canonicalEmail },
       "Registration email sent. Please check your inbox.",
     );
   } catch (error) {
@@ -602,27 +603,27 @@ export const requestEmailChange = async (
 
     const existingUser = await getUser(newEmail);
     if (existingUser) {
-      // S5: identical response to the success path — same emails to the same
-      // inboxes, so neither the response nor the requester's own inbox
-      // reveals whether the target address already has an account.
-      await services.email.sendAccountExists(newEmail);
-      await services.email.sendEmailChangeNotification(user.email!, newEmail);
-
-      return sendSuccess(
-        res,
-        { newEmail },
-        "Verification email sent to your new email address",
+      // S5: the shared exit below keeps the response identical to the
+      // success path — same emails to the same inboxes, so neither the body
+      // nor the requester's own inbox reveals whether the target address has
+      // an account. No invitation exists, so the change can never complete;
+      // this log line is support's only way to tell that apart from a
+      // delivered-but-unclicked verification email.
+      req.log?.info(
+        { event: "email_change_refused_target_exists", userId: role_id },
+        "email change target already has an account; account-exists notice sent",
       );
+      await services.email.sendAccountExists(newEmail);
+    } else {
+      const { token } = await createInvitation({
+        email: user.email!,
+        type: "email_change",
+        new_email: newEmail,
+        user_id: role_id,
+      });
+
+      await services.email.sendEmailChangeVerification(newEmail, token);
     }
-
-    const { token } = await createInvitation({
-      email: user.email!,
-      type: "email_change",
-      new_email: newEmail,
-      user_id: role_id,
-    });
-
-    await services.email.sendEmailChangeVerification(newEmail, token);
 
     await services.email.sendEmailChangeNotification(user.email!, newEmail);
 

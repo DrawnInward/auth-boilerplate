@@ -3,10 +3,11 @@ import app from "../../src/app";
 import db from "../../src/database/db";
 import seed from "../../src/database/seed";
 import { testUsers } from "../../src/database/test-data";
+import { getAllowedOrigin } from "../../src/utils/config";
 
 require("dotenv").config({ quiet: true });
 
-const allowedOrigin = process.env.ALLOWED_ORIGIN || "http://localhost:5173";
+const allowedOrigin = getAllowedOrigin();
 
 describe("Security headers and origin check (S6)", () => {
   beforeAll(async () => {

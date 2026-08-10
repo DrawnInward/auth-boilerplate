@@ -80,7 +80,9 @@ Start registration process. Sends verification email.
 
 - `400` - Invalid email format
 - `403` - Registration disabled (when `ACCOUNT_CREATION_MODE` is not `open`)
-- `409` - Email already registered
+
+An email address that already has an account gets the same `201` response
+(no enumeration); the address owner is notified by email instead.
 
 ---
 

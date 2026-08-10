@@ -3,7 +3,10 @@ import app from "../../src/app";
 import db from "../../src/database/db";
 import seed from "../../src/database/seed";
 import { testUsers } from "../../src/database/test-data";
-import { getInvitationByTokenHash } from "../../src/models/invitations.models";
+import {
+  getInvitationByTokenHash,
+  getPendingInvitationsForEmail,
+} from "../../src/models/invitations.models";
 import { determinateHash } from "../../src/utils";
 
 require("dotenv").config({ quiet: true });
@@ -50,6 +53,16 @@ describe("User Registration Integration Tests", () => {
         Object.keys(newResponse.body.data),
       );
       expect(existingResponse.body.data.email).toBe("test@example.com");
+
+      // The identical response must not come with real registration
+      // artefacts: no invitation is minted for an address that already has
+      // an account (a live token here would 500 on redemption and reopen
+      // the oracle).
+      const invitations = await getPendingInvitationsForEmail(
+        "test@example.com",
+        "registration",
+      );
+      expect(invitations).toHaveLength(0);
     });
 
     it("should reject registration with invalid email", async () => {
