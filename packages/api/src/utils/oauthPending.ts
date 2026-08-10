@@ -8,6 +8,12 @@ import { httpError } from "./httpError";
 // Google sign-ins. Falls back to MFA_CHALLENGE_KEY (a required secret) so a
 // default install needs no extra env; set OAUTH_STATE_KEY to separate the keys.
 // (S3)
+//
+// Because of that fallback, MFA challenge tokens and pending-link tokens can be
+// signed with the SAME key — the only thing preventing one being accepted as
+// the other is the `type` claim each verifier checks. Any future token type
+// signed with MFA_CHALLENGE_KEY must likewise carry and verify its own distinct
+// `type` claim, or key confusion reopens.
 
 export interface OauthPendingPayload {
   google_id: string;

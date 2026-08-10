@@ -877,3 +877,28 @@ D (rest)      ── D2 org soft-delete DONE + A2 clean == BILLING UNBLOCKED
 are the only hard prerequisites. Everything else can proceed in parallel with early billing slices,
 but doing A and B before C is not optional: refactoring auth without the boundary net is how a
 silent role regression ships.
+
+---
+
+## Post-plan addenda
+
+**2026-08-10 — four fixes from the skoped Step-1 port review** (two independent review
+passes over the ported A6/A3/S10/S11 diff found these; they existed identically here, so
+both repos took them in the same session and stay in lockstep):
+
+- **S11 range bound:** `BCRYPT_COST` now bounded to bcrypt's valid 4–31 — `envNumber`
+  gained optional `min`/`max` (shared by boot check and read site), `validateEnv` refuses
+  out-of-range, `getBcryptCost` falls back to 12. A typo like `120` previously booted
+  clean and made every hash take effectively forever.
+- **Generic 500 bodies:** `handleCustomError` no longer echoes 500 messages (operator
+  detail — env-var names, driver errors) to the caller: non-dev 500s answer
+  `{ status, message: "Internal server error", requestId }`; `NODE_ENV=development`
+  keeps the real message; logging unchanged. 502/503 messages are deliberately
+  client-facing and still pass through. New `errorHandling.test.ts` pins the contract.
+- **S10 compiler enforcement:** `SafeUser`/`SafeAdmin` moved from `services/index.ts`
+  to `types/` and widened to `Omit<…, "password_hash" | "mfa_secret">`; all projected
+  model return types use them, so reading `mfa_secret` off a projected row is now a
+  type error.
+- **A3/S3 comment:** `oauthPending.ts` documents that the no-key-confusion property
+  rests on every `MFA_CHALLENGE_KEY`-signed token type carrying a distinct, verified
+  `type` claim.

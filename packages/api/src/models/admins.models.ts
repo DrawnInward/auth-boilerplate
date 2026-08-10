@@ -6,6 +6,7 @@ import {
   GetAdminsOptions,
   UpdateAdminDto,
   Admin,
+  SafeAdmin,
 } from "../types";
 import { PaginationOptions } from "../types/PaginationOptions";
 import { isUniqueViolation } from "../utils/pgErrors";
@@ -35,7 +36,7 @@ const ADMIN_PATCH_FIELDS = [
 export const createAdmin = async (
   newAdmin: CreateAdminDto,
   client: PoolClient | Pool = db,
-): Promise<Omit<Admin, "password_hash">> => {
+): Promise<SafeAdmin> => {
   if (!newAdmin.email || !newAdmin.password_hash) {
     throw httpError(400, "Email and password_hash are required");
   }
@@ -81,7 +82,7 @@ export const createAdmin = async (
 export const getAdmin = async (
   email: string,
   options: { includeSoftDeleted?: boolean } = {},
-): Promise<Omit<Admin, "password_hash"> | null> => {
+): Promise<SafeAdmin | null> => {
   let queryString = `
     SELECT ${SAFE_ADMIN_COLUMNS} FROM admins
     WHERE email = $1
@@ -100,7 +101,7 @@ export const getAdmin = async (
 
 export const getAdminById = async (
   adminId: string,
-): Promise<Omit<Admin, "password_hash"> | null> => {
+): Promise<SafeAdmin | null> => {
   const queryString = `
     SELECT ${SAFE_ADMIN_COLUMNS} FROM admins
     WHERE admin_id = $1 AND deleted_at IS NULL;
@@ -116,7 +117,7 @@ export const getAdminById = async (
 export const getAdmins = async (
   filters: GetAdminsOptions = {},
   pagination: PaginationOptions = {},
-): Promise<Omit<Admin, "password_hash">[]> => {
+): Promise<SafeAdmin[]> => {
   const { text, values } = pagedQuery({
     select: `SELECT ${SAFE_ADMIN_COLUMNS} FROM admins`,
     where: ["deleted_at IS NULL"],
@@ -167,7 +168,7 @@ export const modifyAdmin = async (
   adminId: string,
   detailsToUpdate: UpdateAdminDto,
   client: PoolClient | Pool = db,
-): Promise<Omit<Admin, "password_hash">> => {
+): Promise<SafeAdmin> => {
   if ("password_hash" in detailsToUpdate) {
     throw httpError(
       403,
@@ -239,7 +240,7 @@ export const updateAdminPassword = async (
 export const deleteAdmin = async (
   adminId: string,
   client: PoolClient | Pool = db,
-): Promise<Omit<Admin, "password_hash">> => {
+): Promise<SafeAdmin> => {
   const checkQuery = `
     SELECT deleted_at, root FROM admins WHERE admin_id = $1;
   `;
@@ -279,7 +280,7 @@ export const deleteAdmin = async (
 export const activateAdmin = async (
   adminId: string,
   client: PoolClient | Pool = db,
-): Promise<Omit<Admin, "password_hash">> => {
+): Promise<SafeAdmin> => {
   const queryString = `
     UPDATE admins
     SET is_active = true, 
@@ -301,7 +302,7 @@ export const deactivateAdmin = async (
   adminId: string,
   deactivatorId: string,
   client: PoolClient | Pool = db,
-): Promise<Omit<Admin, "password_hash">> => {
+): Promise<SafeAdmin> => {
   const checkRootQuery = `
     SELECT root FROM admins 
     WHERE admin_id = $1 AND deleted_at IS NULL;
@@ -339,7 +340,7 @@ export const deactivateAdmin = async (
 export const verifyAdminEmail = async (
   adminId: string,
   client: PoolClient | Pool = db,
-): Promise<Omit<Admin, "password_hash">> => {
+): Promise<SafeAdmin> => {
   const queryString = `
     UPDATE admins
     SET email_verified = true, updated_at = NOW()

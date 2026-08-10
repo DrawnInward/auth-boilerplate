@@ -32,7 +32,7 @@ import {
   getAdminWithPasswordById,
 } from "../models/admins.models";
 import { withTransaction } from "../utils/withTransaction";
-import { Admin, User } from "../types";
+import { SafeAdmin, SafeUser } from "../types";
 import { createAuthService, AuthService } from "./auth.service";
 import { createEmailService, EmailService } from "./email.service";
 import { createMfaService, MfaService } from "./mfa.service";
@@ -42,8 +42,9 @@ import {
 } from "./invitation.service";
 import { createOauthService, OauthService } from "./oauth.service";
 
-export type SafeUser = Omit<User, "password_hash">;
-export type SafeAdmin = Omit<Admin, "password_hash">;
+// Moved to types/User.ts / types/Admin.ts (and widened to omit mfa_secret);
+// re-exported so existing importers keep working.
+export type { SafeAdmin, SafeUser };
 
 export type Services = {
   auth: AuthService;

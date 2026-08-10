@@ -94,8 +94,6 @@ describe("validateEnv", () => {
       ["REFRESH_TOKEN_DAYS", "not-a-number"],
       ["ACCESS_TOKEN_LIFETIME_SECONDS", "0"],
       ["ACCESS_TOKEN_LIFETIME_SECONDS", "fifteen"],
-      ["BCRYPT_COST", "0"],
-      ["BCRYPT_COST", "twelve"],
     ])("rejects %s=%s", (name, value) => {
       process.env[name] = value;
 
@@ -104,11 +102,26 @@ describe("validateEnv", () => {
       ]);
     });
 
+    // BCRYPT_COST is range-bounded: a cost like 120 is well-formed but would
+    // make every hash take effectively forever.
+    it.each(["0", "twelve", "3", "32", "120"])(
+      "rejects BCRYPT_COST=%s as outside bcrypt's valid range",
+      (value) => {
+        process.env.BCRYPT_COST = value;
+
+        expect(collectEnvProblems()).toEqual([
+          `BCRYPT_COST must be an integer between 4 and 31 (got "${value}")`,
+        ]);
+      },
+    );
+
     it.each([
       ["PORT", "3000"],
       ["REFRESH_TOKEN_DAYS", "30"],
       ["ACCESS_TOKEN_LIFETIME_SECONDS", "900"],
       ["BCRYPT_COST", "12"],
+      ["BCRYPT_COST", "4"],
+      ["BCRYPT_COST", "31"],
     ])("accepts %s=%s", (name, value) => {
       process.env[name] = value;
 

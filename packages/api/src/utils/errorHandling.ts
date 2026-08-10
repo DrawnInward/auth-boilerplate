@@ -28,6 +28,19 @@ export const handleCustomError = (
       logFor(req).warn({ status: error.status }, message);
     }
 
+    // 500 messages are written for operators (env-var names, driver errors) —
+    // they live in the log line above, keyed by requestId, and echoing them to
+    // the caller would disclose internals. Other 5xx codes (502/503) carry
+    // deliberately client-facing messages and pass through. Development keeps
+    // the real message inline for fast feedback.
+    if (error.status === 500 && process.env.NODE_ENV !== "development") {
+      return res.status(500).json({
+        status: "error",
+        message: "Internal server error",
+        requestId: req.id,
+      });
+    }
+
     return res.status(error.status).json({
       status: "error",
       message,
@@ -48,5 +61,6 @@ export const catchAllError = (
   return res.status(500).json({
     status: "error",
     message: "Internal server error",
+    requestId: req.id,
   });
 };

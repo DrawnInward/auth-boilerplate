@@ -52,6 +52,12 @@ export const getUsersOptionsSchema = z.object({
 });
 
 export type User = z.infer<typeof userSchema>;
+
+// The shape S10's SAFE_USER_COLUMNS projection actually returns — credential
+// material is absent at runtime, and this alias makes the compiler enforce it:
+// a consumer reading `mfa_secret` off a projected row is a type error, not a
+// silent undefined.
+export type SafeUser = Omit<User, "password_hash" | "mfa_secret">;
 export type GetUsersOptions = z.infer<typeof getUsersOptionsSchema>;
 export type CreateUserDto = z.infer<typeof createUserSchema>;
 export type UserPatchDto = z.infer<typeof userPatchSchema>;

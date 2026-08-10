@@ -1,7 +1,13 @@
 import db from "../database/db";
 import { Pool, PoolClient } from "pg";
 import { UserStats } from "@auth-boilerplate/shared";
-import { CreateUserDto, GetUsersOptions, UserPatchDto, User } from "../types";
+import {
+  CreateUserDto,
+  GetUsersOptions,
+  UserPatchDto,
+  User,
+  SafeUser,
+} from "../types";
 import { PaginationOptions } from "../types/PaginationOptions";
 import { isUniqueViolation, violatedConstraint } from "../utils/pgErrors";
 import { httpError } from "../utils/httpError";
@@ -30,7 +36,7 @@ const USER_PATCH_FIELDS = [
 export const createUser = async (
   newUser: CreateUserDto,
   client: PoolClient | Pool = db,
-): Promise<Omit<User, "password_hash">> => {
+): Promise<SafeUser> => {
   if (!newUser.email || !newUser.password_hash) {
     throw httpError(400, "Email and password_hash are required");
   }
@@ -66,7 +72,7 @@ export const createUser = async (
 export const getUser = async (
   email: string,
   options: { includeSoftDeleted?: boolean } = {},
-): Promise<Omit<User, "password_hash"> | null> => {
+): Promise<SafeUser | null> => {
   let queryString = `
     SELECT ${SAFE_USER_COLUMNS} FROM users
     WHERE email = $1
@@ -83,9 +89,7 @@ export const getUser = async (
   return result.rows[0];
 };
 
-export const getUserById = async (
-  userId: string,
-): Promise<Omit<User, "password_hash"> | null> => {
+export const getUserById = async (userId: string): Promise<SafeUser | null> => {
   const queryString = `
     SELECT ${SAFE_USER_COLUMNS} FROM users
     WHERE user_id = $1 AND deleted_at IS NULL;
@@ -101,7 +105,7 @@ export const getUserById = async (
 export const getUsers = async (
   filters: GetUsersOptions = {},
   pagination: PaginationOptions = {},
-): Promise<Omit<User, "password_hash">[]> => {
+): Promise<SafeUser[]> => {
   const { text, values } = pagedQuery({
     select: `SELECT ${SAFE_USER_COLUMNS} FROM users`,
     where: ["deleted_at IS NULL"],
@@ -151,7 +155,7 @@ export const modifyUser = async (
   userId: string,
   detailsToUpdate: UserPatchDto,
   client: PoolClient | Pool = db,
-): Promise<Omit<User, "password_hash">> => {
+): Promise<SafeUser> => {
   // Prevent password_hash updates through this function
   if ("password_hash" in detailsToUpdate) {
     throw httpError(
@@ -205,7 +209,7 @@ export const updatePassword = async (
 export const deleteUser = async (
   userId: string,
   client: PoolClient | Pool = db,
-): Promise<Omit<User, "password_hash">> => {
+): Promise<SafeUser> => {
   const checkQuery = `
     SELECT deleted_at FROM users WHERE user_id = $1;
   `;
@@ -235,7 +239,7 @@ export const deleteUser = async (
 export const activateUser = async (
   userId: string,
   client: PoolClient | Pool = db,
-): Promise<Omit<User, "password_hash">> => {
+): Promise<SafeUser> => {
   const queryString = `
     UPDATE users
     SET is_active = true, 
@@ -257,7 +261,7 @@ export const deactivateUser = async (
   userId: string,
   deactivatorId: string,
   client: PoolClient | Pool = db,
-): Promise<Omit<User, "password_hash">> => {
+): Promise<SafeUser> => {
   const queryString = `
     UPDATE users
     SET is_active = false, 
@@ -278,7 +282,7 @@ export const deactivateUser = async (
 export const verifyUserEmail = async (
   userId: string,
   client: PoolClient | Pool = db,
-): Promise<Omit<User, "password_hash">> => {
+): Promise<SafeUser> => {
   const queryString = `
     UPDATE users
     SET email_verified = true, updated_at = NOW()
@@ -322,7 +326,7 @@ export type AuthProvider = "local" | "google" | "both";
 
 export const getUserByGoogleId = async (
   googleId: string,
-): Promise<Omit<User, "password_hash"> | null> => {
+): Promise<SafeUser | null> => {
   const queryString = `
     SELECT ${SAFE_USER_COLUMNS} FROM users
     WHERE google_id = $1 AND deleted_at IS NULL;
@@ -339,7 +343,7 @@ export const setGoogleId = async (
   userId: string,
   googleId: string,
   client: PoolClient | Pool = db,
-): Promise<Omit<User, "password_hash">> => {
+): Promise<SafeUser> => {
   const queryString = `
     UPDATE users
     SET google_id = $1, updated_at = NOW()
@@ -365,7 +369,7 @@ export const setAuthProvider = async (
   userId: string,
   provider: AuthProvider,
   client: PoolClient | Pool = db,
-): Promise<Omit<User, "password_hash">> => {
+): Promise<SafeUser> => {
   const queryString = `
     UPDATE users
     SET auth_provider = $1, updated_at = NOW()
@@ -384,7 +388,7 @@ export const createGoogleUser = async (
   email: string,
   googleId: string,
   client: PoolClient | Pool = db,
-): Promise<Omit<User, "password_hash">> => {
+): Promise<SafeUser> => {
   const queryString = `
     INSERT INTO users
     (email, google_id, auth_provider, email_verified, is_active)
@@ -412,7 +416,7 @@ export const createGoogleUser = async (
 export const unlinkGoogleAccount = async (
   userId: string,
   client: PoolClient | Pool = db,
-): Promise<Omit<User, "password_hash">> => {
+): Promise<SafeUser> => {
   const queryString = `
     UPDATE users
     SET google_id = NULL, auth_provider = 'local', updated_at = NOW()
@@ -446,7 +450,7 @@ export const updateUserOrgPermission = async (
   userId: string,
   canCreateOrgs: boolean | null,
   client: PoolClient | Pool = db,
-): Promise<Omit<User, "password_hash">> => {
+): Promise<SafeUser> => {
   const queryString = `
     UPDATE users
     SET can_create_orgs = $1, updated_at = NOW()

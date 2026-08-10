@@ -90,8 +90,11 @@ export const getAccessTokenLifetimeSeconds = (): number =>
 
 // OWASP's current bcrypt minimum. Overridable so a deployment can trade
 // hashing latency against hardware (BCRYPT_COST=4 makes test runs cheap).
+// Bounded to bcrypt's own valid range (4–31): boot validation refuses anything
+// outside it, and this read site falls back to the default rather than hash
+// with a cost that would take effectively forever.
 const BCRYPT_COST_DEFAULT = 12;
 
 export const getBcryptCost = (): number =>
-  readPositiveNumberEnv("BCRYPT_COST", { integer: true }) ??
+  readPositiveNumberEnv("BCRYPT_COST", { integer: true, min: 4, max: 31 }) ??
   BCRYPT_COST_DEFAULT;

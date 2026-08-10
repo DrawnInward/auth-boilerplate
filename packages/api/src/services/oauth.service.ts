@@ -3,7 +3,7 @@ import { PoolClient } from "pg";
 import { GoogleOAuthProvider } from "../interfaces/googleOAuth";
 import type * as userModels from "../models/users.models";
 import type * as mfaModels from "../models/mfa.models";
-import { User } from "../types";
+import { SafeUser } from "../types";
 import { httpError } from "../utils/httpError";
 import { AuthService, SessionStart } from "./auth.service";
 
@@ -31,7 +31,7 @@ export type GoogleCallbackOutcome =
   | { kind: "needs_linking"; googleId: string; email: string }
   | {
       kind: "logged_in" | "created";
-      user: Omit<User, "password_hash">;
+      user: SafeUser;
       accessToken: string;
       refreshToken: string;
     };

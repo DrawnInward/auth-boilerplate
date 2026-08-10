@@ -18,13 +18,20 @@ const REQUIRED_SECRETS = [
   "MFA_ENCRYPTION_KEY",
 ] as const;
 
-const POSITIVE_INTEGER_KNOBS = [
-  "PORT",
-  "REFRESH_TOKEN_DAYS",
-  "REFRESH_REUSE_GRACE_SECONDS",
-  "ACCESS_TOKEN_LIFETIME_SECONDS",
-  "BCRYPT_COST",
-] as const;
+// BCRYPT_COST additionally carries bcrypt's own hard cost range: anything
+// outside 4–31 either throws in the bcrypt library or (e.g. a typo like 120)
+// boots clean and then makes every hash take effectively forever.
+const POSITIVE_INTEGER_KNOBS: readonly {
+  name: string;
+  min?: number;
+  max?: number;
+}[] = [
+  { name: "PORT" },
+  { name: "REFRESH_TOKEN_DAYS" },
+  { name: "REFRESH_REUSE_GRACE_SECONDS" },
+  { name: "ACCESS_TOKEN_LIFETIME_SECONDS" },
+  { name: "BCRYPT_COST", min: 4, max: 31 },
+];
 
 const GOOGLE_OAUTH_VARS = [
   "GOOGLE_CLIENT_ID",
@@ -50,10 +57,14 @@ export const collectEnvProblems = (): string[] => {
     problems.push("one of DATABASE_URL or PGDATABASE must be set");
   }
 
-  for (const name of POSITIVE_INTEGER_KNOBS) {
-    if (envSetButNotPositive(name, { integer: true })) {
+  for (const { name, min, max } of POSITIVE_INTEGER_KNOBS) {
+    if (envSetButNotPositive(name, { integer: true, min, max })) {
+      const requirement =
+        min !== undefined && max !== undefined
+          ? `an integer between ${min} and ${max}`
+          : "a positive integer";
       problems.push(
-        `${name} must be a positive integer (got "${process.env[name]}")`,
+        `${name} must be ${requirement} (got "${process.env[name]}")`,
       );
     }
   }

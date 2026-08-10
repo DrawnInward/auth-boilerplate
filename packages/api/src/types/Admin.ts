@@ -40,5 +40,8 @@ export const getAdminsOptionsSchema = z.object({
 export type GetAdminsOptions = z.infer<typeof getAdminsOptionsSchema>;
 
 export type Admin = z.infer<typeof adminSchema>;
+
+// See SafeUser: the SAFE_ADMIN_COLUMNS projection shape, compiler-enforced.
+export type SafeAdmin = Omit<Admin, "password_hash" | "mfa_secret">;
 export type CreateAdminDto = z.infer<typeof createAdminSchema>;
 export type UpdateAdminDto = z.infer<typeof updateAdminSchema>;
