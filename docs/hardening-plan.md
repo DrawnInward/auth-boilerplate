@@ -977,3 +977,40 @@ code, mirrored here):
 - Deferred (skoped review, applies here identically): mint-time `is_existing_user`
   freeze (a user who self-registers between invite and accept can never accept — 409),
   and the in-memory-only `/mfa-verify` gate losing the hand-off on page refresh.
+
+**2026-08-10 — A5/A7 review fixes** (review of the skoped Step-5 port; the challenge
+code is shared, mirrored here):
+
+- **Backup-code verify no longer wedges the pool**: `challenges.fail` ran on the pool
+  while `completeLoginWithBackupCode` held its transaction client across a bcrypt
+  loop — ~pool-size concurrent wrong-code requests each pinned a connection and
+  awaited one more, forever. The bcrypt loop, fail-count write and principal read all
+  run before the transaction now; only burn + consume + issue are transactional.
+- **`connectionTimeoutMillis: 10s` on the pool** (was 0 = wait forever): class-wide
+  blast-radius cap — an acquire-while-holding burst now degrades to bounded 500s
+  instead of a restart-only outage.
+- **`authLimiter` on both `/mfa/disable` routes**: the A5/S8 password check made the
+  route a password-guessing oracle for a stolen session at the global limiter's rate
+  (~48k guesses/day) — the only password-accepting surface without it.
+- **Attempt cap enforced in the UPDATE predicate** (`consumed_at IS NULL AND
+failed_attempts < $2`): the guard's plain SELECT was check-then-act — K concurrent
+  guesses all passed before any increment landed. CRUD test pins the cap.
+- **Challenge expiry on the DB clock, row-side**: `expires_at` written as
+  `NOW() + make_interval`, consume CAS gains `expires_at > NOW()`, guard checks a
+  DB-computed `is_expired` — clock skew could previously sweep a still-valid
+  challenge (GC compared an app-clock timestamp) or honour a dead one.
+- **GC out of transactions**: the expired-challenge sweep in
+  `createMfaChallengeToken` is fire-and-forget on the pool, never the caller's
+  client — inside the invitation-accept transaction it held table-wide GC row locks
+  until commit.
+- **TOTP consume+issue atomic** (`completeLoginWithTotp` wraps them in
+  `runTransaction`): a transient failure after a correct code burned the challenge
+  with no session. Semantics change, pinned in the unit suite: a principal refusal
+  now rolls the consume back — the surviving challenge is inert because
+  `issueSession` structurally refuses it.
+- Known-loose, left as-is: migration 003's `role_type` has no CHECK (immutable once
+  merged; skoped's renumbered copy gained `IN ('user','admin')` pre-commit — adopt in
+  a future migration if the column ever gets a second writer).
+- Deferred: a single `verifyAndConsumeMfaChallenge` seam owning the
+  guard → fail → consume sequence and the pool-vs-client decision (C2 territory);
+  the 8-site `verifyPrincipalPassword` step-up extraction (C1/C2).

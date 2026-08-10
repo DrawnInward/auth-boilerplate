@@ -1,4 +1,4 @@
-import { Navigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import {
   Card,
   CardContent,
@@ -44,11 +44,18 @@ export function MfaVerifyPage() {
           Enter the 6-digit code from your authenticator app
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
         <MfaVerifyForm
           onSubmitCode={handleSubmitCode}
           onSubmitBackup={handleSubmitBackup}
         />
+        {/* The way out of a dead challenge (expired, or attempts spent):
+            a fresh login mints a fresh one. */}
+        <div className="text-center text-sm text-muted-foreground">
+          <Link to="/login" className="text-primary hover:underline">
+            Back to sign in
+          </Link>
+        </div>
       </CardContent>
     </Card>
   );

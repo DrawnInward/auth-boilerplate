@@ -310,11 +310,15 @@ export const createMfaService = <P extends { email: string }>({
       throw httpError(401, "Invalid verification code");
     }
 
-    await challenges.consumeOrThrow(payload.jti);
-    onChallengeConsumed?.();
-
     const principal = await getPrincipalOrThrow(payload.role_id);
-    const tokens = await issueSession(principals.toSessionPrincipal(principal));
+
+    // Consume and mint atomically — a transient failure after a correct
+    // code must not leave the challenge burned with no session issued.
+    const tokens = await runTransaction(async (client) => {
+      await challenges.consumeOrThrow(payload.jti, client);
+      return issueSession(principals.toSessionPrincipal(principal), client);
+    });
+    onChallengeConsumed?.();
 
     return { principal, tokens };
   };
@@ -330,22 +334,23 @@ export const createMfaService = <P extends { email: string }>({
     // pre-check, the CAS consume below is the enforcement.
     await challenges.guard(payload.jti);
 
-    return runTransaction(async (client) => {
-      const backupCode = await findMatchingBackupCode(
-        payload.role_id,
-        code,
-        client,
-      );
-      if (!backupCode) {
-        await challenges.fail(payload.jti);
-        throw httpError(401, "Invalid backup code");
-      }
+    // The bcrypt loop, the fail-count write and the principal read all run
+    // before the transaction: a pool write while holding a client is the
+    // pool-wedge shape (every wrong-code request would pin one connection
+    // and queue for a second), and the hash loop must not pin one either.
+    const backupCode = await findMatchingBackupCode(payload.role_id, code);
+    if (!backupCode) {
+      await challenges.fail(payload.jti);
+      throw httpError(401, "Invalid backup code");
+    }
 
+    const principal = await getPrincipalOrThrow(payload.role_id);
+
+    return runTransaction(async (client) => {
       await store.markBackupCodeUsed(backupCode.id, client);
       await challenges.consumeOrThrow(payload.jti, client);
       onChallengeConsumed?.();
 
-      const principal = await getPrincipalOrThrow(payload.role_id);
       const tokens = await issueSession(
         principals.toSessionPrincipal(principal),
         client,

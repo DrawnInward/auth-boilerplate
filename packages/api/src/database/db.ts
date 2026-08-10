@@ -16,6 +16,11 @@ if (!process.env.PGDATABASE && !process.env.DATABASE_URL) {
 const config = {
   connectionString: process.env.DATABASE_URL,
   max: 20,
+  // pg's default is 0 = wait forever, which turns any accidental
+  // acquire-while-holding burst into a permanent API-wide outage needing a
+  // restart. With a bound, the worst case degrades to some 500s under a
+  // burst and the pool self-heals.
+  connectionTimeoutMillis: 10_000,
 };
 
 const pool = new Pool(config);

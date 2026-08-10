@@ -13,14 +13,12 @@ import { getUserUuid } from "../../src/database/test-data/testUuids";
 
 const MAX_ATTEMPTS = 5;
 
-const futureExpiry = () => new Date(Date.now() + 5 * 60 * 1000);
-
-const insertChallenge = (overrides: { expires_at?: Date } = {}) =>
+const insertChallenge = (overrides: { ttl_seconds?: number } = {}) =>
   createMfaChallenge({
     jti: randomUUID(),
     role_id: getUserUuid(1),
     role_type: "user",
-    expires_at: overrides.expires_at ?? futureExpiry(),
+    ttl_seconds: overrides.ttl_seconds ?? 5 * 60,
   });
 
 describe("MFA Challenges Model CRUD Operations", () => {
@@ -50,7 +48,7 @@ describe("MFA Challenges Model CRUD Operations", () => {
           jti: challenge.jti,
           role_id: getUserUuid(1),
           role_type: "user",
-          expires_at: futureExpiry(),
+          ttl_seconds: 5 * 60,
         }),
       ).rejects.toThrow();
     });
@@ -84,8 +82,15 @@ describe("MFA Challenges Model CRUD Operations", () => {
       const challenge = await insertChallenge();
 
       for (let i = 0; i < MAX_ATTEMPTS; i++) {
-        await incrementMfaChallengeAttempts(challenge.jti);
+        await incrementMfaChallengeAttempts(challenge.jti, MAX_ATTEMPTS);
       }
+
+      const consumed = await consumeMfaChallenge(challenge.jti, MAX_ATTEMPTS);
+      expect(consumed).toBeNull();
+    });
+
+    it("refuses an expired challenge even when otherwise live", async () => {
+      const challenge = await insertChallenge({ ttl_seconds: -1 });
 
       const consumed = await consumeMfaChallenge(challenge.jti, MAX_ATTEMPTS);
       expect(consumed).toBeNull();
@@ -96,19 +101,38 @@ describe("MFA Challenges Model CRUD Operations", () => {
     it("returns the running count, and null for an unknown jti", async () => {
       const challenge = await insertChallenge();
 
-      expect(await incrementMfaChallengeAttempts(challenge.jti)).toBe(1);
-      expect(await incrementMfaChallengeAttempts(challenge.jti)).toBe(2);
+      expect(
+        await incrementMfaChallengeAttempts(challenge.jti, MAX_ATTEMPTS),
+      ).toBe(1);
+      expect(
+        await incrementMfaChallengeAttempts(challenge.jti, MAX_ATTEMPTS),
+      ).toBe(2);
 
-      expect(await incrementMfaChallengeAttempts(randomUUID())).toBeNull();
+      expect(
+        await incrementMfaChallengeAttempts(randomUUID(), MAX_ATTEMPTS),
+      ).toBeNull();
+    });
+
+    it("caps in the UPDATE itself so concurrent failures cannot exceed the budget", async () => {
+      const challenge = await insertChallenge();
+
+      for (let i = 0; i < MAX_ATTEMPTS; i++) {
+        expect(
+          await incrementMfaChallengeAttempts(challenge.jti, MAX_ATTEMPTS),
+        ).toBe(i + 1);
+      }
+
+      // The cap predicate refuses the sixth — check-then-act cannot overrun.
+      expect(
+        await incrementMfaChallengeAttempts(challenge.jti, MAX_ATTEMPTS),
+      ).toBeNull();
     });
   });
 
   describe("deleteExpiredMfaChallenges", () => {
     it("removes only expired rows", async () => {
       const live = await insertChallenge();
-      const expired = await insertChallenge({
-        expires_at: new Date(Date.now() - 1000),
-      });
+      const expired = await insertChallenge({ ttl_seconds: -1 });
 
       await deleteExpiredMfaChallenges();
 

@@ -28,6 +28,7 @@ import {
   useMfaLoginBackup,
   isMfaRequired,
 } from "@/api/queries/auth";
+import { readSessionFlag, writeSessionFlag } from "@/lib/sessionFlag";
 
 export interface AuthContextValue {
   user: PublicUser | null;
@@ -47,11 +48,24 @@ export interface AuthContextValue {
 
 export const AuthContext = createContext<AuthContextValue | null>(null);
 
+// The mfa_challenge cookie is httpOnly, so the FE cannot read it to decide
+// whether a challenge is in flight — this flag is the /mfa-verify arm state,
+// kept in sessionStorage so a mid-flow page refresh doesn't bounce the user
+// to /login while their (still valid, 5-minute) challenge cookie sits unused.
+const MFA_PENDING_KEY = "mfa_pending";
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
-  const [mfaRequired, setMfaRequired] = useState(false);
+  const [mfaRequired, setMfaRequiredState] = useState(() =>
+    readSessionFlag(MFA_PENDING_KEY),
+  );
+
+  const setMfaRequired = useCallback((value: boolean) => {
+    writeSessionFlag(MFA_PENDING_KEY, value);
+    setMfaRequiredState(value);
+  }, []);
 
   const { data, isLoading } = useMe();
   const loginMutation = useLogin();
@@ -77,16 +91,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         navigate(from);
       }
     },
-    [loginMutation, navigate, location.state, queryClient],
+    [loginMutation, navigate, location.state, queryClient, setMfaRequired],
   );
 
-  const startMfaChallenge = useCallback(() => setMfaRequired(true), []);
+  const startMfaChallenge = useCallback(
+    () => setMfaRequired(true),
+    [setMfaRequired],
+  );
 
   const logout = useCallback(async () => {
     await logoutMutation.mutateAsync();
     setMfaRequired(false);
     navigate("/login");
-  }, [logoutMutation, navigate]);
+  }, [logoutMutation, navigate, setMfaRequired]);
 
   const verifyMfa = useCallback(
     async (data: MfaVerifyDto) => {
@@ -97,7 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         (location.state as { from?: Location })?.from?.pathname || "/dashboard";
       navigate(from);
     },
-    [mfaVerifyMutation, location.state, queryClient, navigate],
+    [mfaVerifyMutation, location.state, queryClient, navigate, setMfaRequired],
   );
 
   const verifyMfaBackup = useCallback(
@@ -109,7 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         (location.state as { from?: Location })?.from?.pathname || "/dashboard";
       navigate(from);
     },
-    [mfaBackupMutation, location.state, queryClient, navigate],
+    [mfaBackupMutation, location.state, queryClient, navigate, setMfaRequired],
   );
 
   const value = useMemo(

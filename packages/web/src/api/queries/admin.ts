@@ -13,6 +13,7 @@ import type {
   OrganizationWithMemberCount,
   MfaVerifyDto,
   MfaBackupVerifyDto,
+  MfaRequiredResponse,
 } from "@auth-boilerplate/shared";
 
 interface AdminAuthResponse {
@@ -20,20 +21,18 @@ interface AdminAuthResponse {
   data: PublicAdmin;
 }
 
-interface AdminMfaRequiredApiResponse {
-  status: string;
-  data: { mfa_required: true };
-  message: string;
-}
+// The wire shape is declared once, in shared (mfaRequiredResponseSchema) —
+// this alias keeps the established local name.
+type AdminMfaRequiredApiResponse = MfaRequiredResponse;
 
 type AdminLoginResponse = AdminAuthResponse | AdminMfaRequiredApiResponse;
 
-export function isAdminMfaRequired(
-  response: AdminLoginResponse,
-): response is AdminMfaRequiredApiResponse {
+export function isAdminMfaRequired(response: {
+  data?: unknown;
+}): response is AdminMfaRequiredApiResponse {
   return (
-    "data" in response &&
-    response.data &&
+    !!response.data &&
+    typeof response.data === "object" &&
     "mfa_required" in response.data &&
     response.data.mfa_required === true
   );

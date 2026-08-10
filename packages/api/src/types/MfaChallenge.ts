@@ -14,5 +14,7 @@ export interface CreateMfaChallengeDto {
   jti: string;
   role_id: string;
   role_type: MfaChallengeRoleType;
-  expires_at: Date;
+  // Lifetime, not a timestamp: expires_at is written on the DB clock
+  // (NOW() + ttl) so expiry decisions never mix app and DB clocks.
+  ttl_seconds: number;
 }

@@ -20,6 +20,7 @@ import {
   useAdminMfaLoginBackup,
   isAdminMfaRequired,
 } from "@/api/queries/admin";
+import { readSessionFlag, writeSessionFlag } from "@/lib/sessionFlag";
 
 interface AdminAuthContextValue {
   admin: PublicAdmin | null;
@@ -34,10 +35,21 @@ interface AdminAuthContextValue {
 
 const AdminAuthContext = createContext<AdminAuthContextValue | null>(null);
 
+// Mirrors the user AuthContext: the challenge cookie is httpOnly, so this
+// sessionStorage flag is what lets /admin/mfa-verify survive a page refresh.
+const ADMIN_MFA_PENDING_KEY = "admin_mfa_pending";
+
 export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const [mfaRequired, setMfaRequired] = useState(false);
+  const [mfaRequired, setMfaRequiredState] = useState(() =>
+    readSessionFlag(ADMIN_MFA_PENDING_KEY),
+  );
+
+  const setMfaRequired = useCallback((value: boolean) => {
+    writeSessionFlag(ADMIN_MFA_PENDING_KEY, value);
+    setMfaRequiredState(value);
+  }, []);
 
   const { data, isLoading } = useAdminMe();
   const loginMutation = useAdminLogin();
@@ -61,14 +73,14 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
         navigate(from);
       }
     },
-    [loginMutation, navigate, location.state],
+    [loginMutation, navigate, location.state, setMfaRequired],
   );
 
   const logout = useCallback(async () => {
     await logoutMutation.mutateAsync();
     setMfaRequired(false);
     navigate("/admin/login");
-  }, [logoutMutation, navigate]);
+  }, [logoutMutation, navigate, setMfaRequired]);
 
   const verifyMfa = useCallback(
     async (data: MfaVerifyDto) => {
@@ -78,7 +90,7 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
         (location.state as { from?: Location })?.from?.pathname || "/admin";
       navigate(from);
     },
-    [mfaVerifyMutation, navigate, location.state],
+    [mfaVerifyMutation, navigate, location.state, setMfaRequired],
   );
 
   const verifyMfaBackup = useCallback(
@@ -89,7 +101,7 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
         (location.state as { from?: Location })?.from?.pathname || "/admin";
       navigate(from);
     },
-    [mfaBackupMutation, navigate, location.state],
+    [mfaBackupMutation, navigate, location.state, setMfaRequired],
   );
 
   const value = useMemo(

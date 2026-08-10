@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../client";
 import type {
   LoginUserDto,
+  MfaRequiredResponse,
   PublicUser,
   ChangePasswordDto,
   RegisterDto,
@@ -18,11 +19,9 @@ interface AuthResponse {
   data: PublicUser;
 }
 
-interface MfaRequiredApiResponse {
-  status: string;
-  data: { mfa_required: true };
-  message: string;
-}
+// The wire shape is declared once, in shared (mfaRequiredResponseSchema) —
+// this alias keeps the established local name.
+type MfaRequiredApiResponse = MfaRequiredResponse;
 
 type LoginResponse = AuthResponse | MfaRequiredApiResponse;
 

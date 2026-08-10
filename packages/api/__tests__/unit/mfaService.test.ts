@@ -157,7 +157,22 @@ describe("mfaService", () => {
       },
       store: makeStore(),
       challenges: makeChallenges(),
-      runTransaction: (fn) => fn(txClient),
+      // Models the real withTransaction for the one write the fakes track:
+      // a throw inside the callback rolls the challenge-state back.
+      runTransaction: async (fn) => {
+        const snapshot = new Map(
+          [...challengeState].map(([k, v]) => [k, { ...v }] as const),
+        );
+        try {
+          return await fn(txClient);
+        } catch (err) {
+          challengeState.clear();
+          for (const [k, v] of snapshot) {
+            challengeState.set(k, v);
+          }
+          throw err;
+        }
+      },
       issueSession: async (principal, client) => {
         issueCalls.push({ principal, client });
         if (!principal.is_active) {
@@ -434,7 +449,11 @@ describe("mfaService", () => {
       });
     });
 
-    it("still consumes the challenge and fires the callback when issuance refuses a deactivated principal", async () => {
+    it("rolls the consume back and keeps the cookie when issuance refuses a deactivated principal", async () => {
+      // Consume and issue are one transaction now (a transient failure after
+      // a correct code must not burn the challenge), so a principal refusal
+      // rolls the consume back too. The live-but-useless challenge is inert:
+      // issueSession structurally refuses it on every retry until expiry.
       userRow!.is_active = false;
       let callbackFired = false;
 
@@ -444,8 +463,8 @@ describe("mfaService", () => {
         }),
       ).rejects.toMatchObject({ status: 403 });
 
-      expect(callbackFired).toBe(true);
-      expect(challengeState.get("jti-1")!.consumed).toBe(true);
+      expect(callbackFired).toBe(false);
+      expect(challengeState.get("jti-1")!.consumed).toBe(false);
     });
   });
 

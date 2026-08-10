@@ -40,13 +40,18 @@ export async function createMfaChallengeToken(
 
   const jti = randomUUID();
 
-  await deleteExpiredMfaChallenges(client);
+  // Opportunistic GC — fire-and-forget on the POOL, never the caller's
+  // client: a table-wide DELETE inside a business transaction (invitation
+  // accept, OAuth) would hold GC row locks until that commit. Expiry is
+  // enforced read-side (guard + consume predicates) regardless.
+  void deleteExpiredMfaChallenges().catch(() => {});
+
   await createMfaChallenge(
     {
       jti,
       role_id: roleId,
       role_type: roleType,
-      expires_at: new Date(Date.now() + MFA_CHALLENGE_MAX_AGE),
+      ttl_seconds: MFA_CHALLENGE_MAX_AGE / 1000,
     },
     client,
   );
@@ -88,6 +93,7 @@ export async function guardMfaChallenge(
   const challenge = jti ? await getMfaChallengeByJti(jti, client) : null;
   if (
     !challenge ||
+    challenge.is_expired ||
     challenge.consumed_at !== null ||
     challenge.failed_attempts >= MFA_CHALLENGE_MAX_ATTEMPTS
   ) {
@@ -95,11 +101,15 @@ export async function guardMfaChallenge(
   }
 }
 
-// Deliberately on the pool, never a transaction client: the caller is about
-// to throw, and a rollback must not erase the failed-attempt count.
+// The caller is about to throw, so this write must survive the surrounding
+// rollback: run it on the pool — but ONLY from a call site that is not
+// holding a transaction client (acquiring a second connection while holding
+// one is the pool-wedge shape). Callers that hold a client must fail the
+// challenge before opening their transaction. The increment is capped in
+// SQL, so concurrent failures can never grow the budget past the cap.
 export async function failMfaChallenge(jti: string | undefined): Promise<void> {
   if (jti) {
-    await incrementMfaChallengeAttempts(jti);
+    await incrementMfaChallengeAttempts(jti, MFA_CHALLENGE_MAX_ATTEMPTS);
   }
 }
 

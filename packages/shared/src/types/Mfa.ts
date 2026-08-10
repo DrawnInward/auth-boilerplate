@@ -48,3 +48,15 @@ export const mfaBackupCodesResponseSchema = z.object({
 export type MfaBackupCodesResponse = z.infer<
   typeof mfaBackupCodesResponseSchema
 >;
+
+// The envelope every endpoint that can demand a second factor answers with
+// (user/admin login, OAuth, invitation accept): mfa_required nested under
+// data, alongside any flow-specific fields (e.g. accept's organization_id).
+// The FE's isMfaRequired/isAdminMfaRequired guards narrow to this type.
+export const mfaRequiredResponseSchema = z.object({
+  status: z.string(),
+  data: z.object({ mfa_required: z.literal(true) }).catchall(z.unknown()),
+  message: z.string(),
+});
+
+export type MfaRequiredResponse = z.infer<typeof mfaRequiredResponseSchema>;
