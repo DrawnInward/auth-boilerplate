@@ -101,13 +101,14 @@ export const getAdmin = async (
 
 export const getAdminById = async (
   adminId: string,
+  client: PoolClient | Pool = db,
 ): Promise<SafeAdmin | null> => {
   const queryString = `
     SELECT ${SAFE_ADMIN_COLUMNS} FROM admins
     WHERE admin_id = $1 AND deleted_at IS NULL;
   `;
 
-  const result = await db.query(queryString, [adminId]);
+  const result = await client.query(queryString, [adminId]);
   if (result.rows.length === 0) {
     return null;
   }

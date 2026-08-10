@@ -4,6 +4,7 @@ import db from "../../src/database/db";
 import seed from "../../src/database/seed";
 import { testAdmins, testUsers } from "../../src/database/test-data";
 import { createUser } from "../../src/models/users.models";
+import { hashPassword } from "../../src/utils";
 
 require("dotenv").config({ quiet: true });
 
@@ -57,7 +58,6 @@ describe("Admin User Management Integration Tests", () => {
     };
 
     it("kills a deactivated user's sessions so they cannot refresh", async () => {
-      const { hashPassword } = await import("../../src/utils");
       const user = await createUser({
         email: "s4.deactivate@test.com",
         password_hash: await hashPassword("Password1"),
@@ -73,8 +73,18 @@ describe("Admin User Management Integration Tests", () => {
         .send({ is_active: false })
         .expect(200);
 
+      // The revocation happened at the admin call itself, not lazily at the
+      // next rotation: every refresh row is already dead before any exchange.
+      const rows = await db.query(
+        "SELECT is_active FROM refresh WHERE role_id = $1",
+        [user.user_id],
+      );
+      expect(rows.rows.length).toBeGreaterThan(0);
+      rows.rows.forEach((r) => expect(r.is_active).toBe(false));
+
       // Deactivation revoked the tokens inside its transaction (A4), so the
-      // exchange dies at the revoked-token check.
+      // exchange dies at the revoked-token check — not at the principal gate,
+      // whose message would be "Account is no longer active".
       const response = await request(app)
         .post("/api/auth/refresh")
         .set("Cookie", [refreshCookie])
@@ -83,7 +93,6 @@ describe("Admin User Management Integration Tests", () => {
     });
 
     it("kills a deleted user's sessions so they cannot refresh", async () => {
-      const { hashPassword } = await import("../../src/utils");
       const user = await createUser({
         email: "s4.delete@test.com",
         password_hash: await hashPassword("Password1"),
@@ -98,10 +107,19 @@ describe("Admin User Management Integration Tests", () => {
         .set("Cookie", adminCookies)
         .expect(200);
 
-      await request(app)
+      // As above: pin the at-source revocation, not just the eventual 401.
+      const rows = await db.query(
+        "SELECT is_active FROM refresh WHERE role_id = $1",
+        [user.user_id],
+      );
+      expect(rows.rows.length).toBeGreaterThan(0);
+      rows.rows.forEach((r) => expect(r.is_active).toBe(false));
+
+      const response = await request(app)
         .post("/api/auth/refresh")
         .set("Cookie", [refreshCookie])
         .expect(401);
+      expect(response.body.message).toBe("Refresh token has been revoked");
     });
   });
 

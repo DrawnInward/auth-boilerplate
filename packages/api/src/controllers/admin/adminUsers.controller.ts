@@ -124,8 +124,14 @@ export const updateUser = async (
     const updatedUser = await withTransaction(db, async (client) => {
       const updated = await modifyUser(userId, updates, client);
       // Deactivating an account must end its live sessions in the same
-      // transaction, so a banned user can't keep working from an open tab. (S4)
-      if (updates.is_active === false) {
+      // transaction, so a banned user can't keep working from an open tab.
+      // The schema also lets deleted_at/deactivated_at through this endpoint —
+      // any of the three means "this account stops working now". (S4)
+      if (
+        updates.is_active === false ||
+        updates.deleted_at ||
+        updates.deactivated_at
+      ) {
         await revokeUserTokens(userId, "user", client);
       }
       return updated;

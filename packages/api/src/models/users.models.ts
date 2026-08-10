@@ -89,13 +89,16 @@ export const getUser = async (
   return result.rows[0];
 };
 
-export const getUserById = async (userId: string): Promise<SafeUser | null> => {
+export const getUserById = async (
+  userId: string,
+  client: PoolClient | Pool = db,
+): Promise<SafeUser | null> => {
   const queryString = `
     SELECT ${SAFE_USER_COLUMNS} FROM users
     WHERE user_id = $1 AND deleted_at IS NULL;
   `;
 
-  const result = await db.query(queryString, [userId]);
+  const result = await client.query(queryString, [userId]);
   if (result.rows.length === 0) {
     return null;
   }

@@ -170,6 +170,7 @@ export const createAccessToken = async (
       client,
     ): Promise<
       | { breach: { role_id: string; role_type: string } }
+      | { inactivePrincipal: { refresh_id: string } }
       | { tokens: { accessToken: string; newRefreshToken: string } }
     > => {
       const presented = await fetchRefreshByTokenHash(tokenHash, client);
@@ -274,16 +275,23 @@ export const createAccessToken = async (
       // A refresh token is only as valid as the account behind it: a
       // deactivated or soft-deleted principal must not mint fresh access
       // tokens off an old refresh. Deactivation/deletion revokes tokens at its
-      // own site (see the admin handlers); this is the defensive gate that
-      // also covers any path that deactivates without revoking, and it stops a
-      // reactivated account inheriting old sessions. Read-only, so no lock
-      // conflict with the FOR UPDATE above. (S4)
+      // own site (see the admin handlers); this is the defensive gate for any
+      // path that deactivates without revoking. Loaded through the transaction
+      // client — a pool read here would hold this connection while queueing
+      // for a second one, and enough concurrent rotations would wedge the
+      // whole pool. !is_active, not === false: the column is nullable, and a
+      // NULL row can't log in so it must not rotate either. (S4)
       const principal =
         presented.role_type === "admin"
-          ? await getAdminById(presented.role_id)
-          : await getUserById(presented.role_id);
-      if (!principal || principal.is_active === false) {
-        throw httpError(401, "Account is no longer active");
+          ? await getAdminById(presented.role_id, client)
+          : await getUserById(presented.role_id, client);
+      if (!principal || !principal.is_active) {
+        // Refusing alone would leave the presented token live and dormant —
+        // working again the moment the account is reactivated. Burn it on the
+        // way out (in the outcome handling below, outside this transaction,
+        // so the 401 can't roll the write back). Unpresented tokens of the
+        // lineage remain the revoke-at-source's job, not this gate's.
+        return { inactivePrincipal: { refresh_id: presented.refresh_id! } };
       }
 
       const newRefreshData = await addRefresh(
@@ -334,6 +342,21 @@ export const createAccessToken = async (
       };
     },
   );
+
+  if ("inactivePrincipal" in outcome) {
+    const { refresh_id } = outcome.inactivePrincipal;
+    try {
+      await revokeRefreshToken(refresh_id);
+    } catch (err) {
+      // Deliberate log — the middleware only sees the 401 below, and a
+      // dormant token we failed to burn is worth an operator's attention.
+      log.error(
+        { err, refresh_id },
+        "Inactive-account refresh refused but token revocation FAILED",
+      );
+    }
+    throw httpError(401, "Account is no longer active");
+  }
 
   if ("breach" in outcome) {
     const { role_id, role_type } = outcome.breach;

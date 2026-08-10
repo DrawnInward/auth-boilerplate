@@ -928,3 +928,24 @@ first and were mirrored there):
   unindexed) + the purge-ordering constraint documented.
 - Double-log wrappers dropped from the revoke helpers (error middleware owns error
   logging).
+
+**2026-08-10 — A4/S4 review fixes** (review of the skoped Step-3 port; shared code,
+fixed here first and mirrored):
+
+- **Principal gate loads through the transaction client** — `getUserById`/
+  `getAdminById` gained the standard optional `client` param; the pool read inside
+  the held transaction was a happy-path variant of the breach-path pool wedge
+  (~pool-size concurrent rotations starved each other permanently).
+- **Refused rotations burn the presented token** via the outcome pattern (revoked
+  after the transaction, guarded, then the 401): the gate previously threw before
+  the token was retired, so any deactivation that bypassed the admin handler left
+  every cookie dormant-but-live, resurrected wholesale on reactivation.
+- **Gate predicate NULL-safe** (`!is_active`, not `=== false`) — is_active is
+  nullable and a NULL row can't log in, so it must not rotate.
+- **Admin updateUser revokes on `deleted_at`/`deactivated_at` too** — the schema
+  lets both through, so a PUT could soft-delete with no revocation.
+- **S4 tests pin the at-source mechanism** (DB rows dead immediately after the
+  admin call + the revoked-token message) — verified they previously passed with
+  the controller revocation deleted, riding on the rotation gate's identical 401.
+- Known-broken, deferred: the admin password-update branch has never worked
+  (modifyUser 403s any password_hash patch) — feeds the D3 remove-vs-fix decision.
