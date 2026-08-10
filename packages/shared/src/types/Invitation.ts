@@ -95,6 +95,19 @@ export const publicInvitationSchema = z.object({
 
 export type PublicInvitation = z.infer<typeof publicInvitationSchema>;
 
+// What a successful (non-MFA) accept returns. An MFA-enabled existing user
+// gets { mfa_required: true, organization_id, role } and no session instead
+// (hardening A2) — the FE narrows the union with its isMfaRequired guard.
+export const acceptInviteResponseSchema = z.object({
+  user_id: z.string().uuid(),
+  organization_id: z.string().uuid(),
+  role: orgInviteRoleSchema,
+});
+
+export type AcceptInviteResponseData = z.infer<
+  typeof acceptInviteResponseSchema
+>;
+
 export const requestEmailChangeSchema = z.object({
   newEmail: z.string().email("Invalid email address"),
   password: z.string().min(1, "Password is required"),

@@ -949,3 +949,31 @@ fixed here first and mirrored):
   the controller revocation deleted, riding on the rotation gate's identical 401.
 - Known-broken, deferred: the admin password-update branch has never worked
   (modifyUser 403s any password_hash patch) — feeds the D3 remove-vs-fix decision.
+
+**2026-08-10 — A2/invitation review fixes** (review of the skoped Step-4 port; shared
+code, mirrored here):
+
+- **`isAccountActive` extracted to `utils/`** at its third consumer (per the Step-3
+  deferral): `issueSession`, the rotation gate and the invitation-accept path all use
+  the one NULL-safe predicate. (The OAuth/MFA-verify gates the skoped review flagged
+  are already structural here — every verify path re-loads the principal and routes
+  through `issueSession`.)
+- **bcrypt hoisted out of the FOR UPDATE window** in `acceptInvitation`: all password
+  CPU (compare + hash) now runs against a pool pre-read before the transaction, which
+  re-validates the token under the lock — ~pool-size concurrent accepts of one token
+  could previously stall every endpoint for the bcrypt duration.
+- **D2 dead-org guard centralised into `validateInvitationToken`** — it lived in the
+  service/controller bodies while `verifyToken` (same validator) reported a dead-org
+  invite token as "valid"; the fake validator in the service unit test now models it.
+- **Passwordless (OAuth-only) invitee answers 401, not a bcrypt 500** — the accept
+  path's existing-user branch compared against a NULL hash.
+- **`getUserWithPassword`/`getOrganizationById` gained the optional `client` param**
+  (the A4 pool-wedge class, closed at its remaining read sites).
+- **Accept response contract single-sourced**: `acceptInviteResponseSchema` in shared;
+  the web union derives from it. `isMfaRequired` widened past `LoginResponse`;
+  AcceptInvitePage routes `mfa_required` into the armed `/mfa-verify` flow
+  (`startMfaChallenge`), with the redirect pinned through the real MfaVerifyPage gate;
+  the `mfa_required` branch no longer fires a guaranteed-401 `/auth/me` refetch.
+- Deferred (skoped review, applies here identically): mint-time `is_existing_user`
+  freeze (a user who self-registers between invite and accept can never accept — 409),
+  and the in-memory-only `/mfa-verify` gate losing the hand-off on page refresh.

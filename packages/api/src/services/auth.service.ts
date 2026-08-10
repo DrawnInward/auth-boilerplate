@@ -14,6 +14,7 @@ import db from "../database/db";
 import { CreateRefreshTokenDto } from "../types";
 import { getAccessTokenLifetimeSeconds } from "../utils/config";
 import { httpError } from "../utils/httpError";
+import { isAccountActive } from "../utils/isAccountActive";
 
 // The principal carries exactly what its access token claims, plus is_active —
 // callers state where each claim came from (a row, or a fact the flow itself
@@ -90,7 +91,7 @@ export const createAuthService = ({
     principal: SessionPrincipal,
     client: PoolClient | Pool = db,
   ): Promise<SessionTokens> => {
-    if (!principal.is_active) {
+    if (!isAccountActive(principal)) {
       throw httpError(403, "Account is deactivated");
     }
 

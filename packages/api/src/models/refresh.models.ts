@@ -6,7 +6,7 @@ import {
   RefreshToken,
   UpdateRefreshTokenDto,
 } from "../types";
-import { determinateHash } from "../utils";
+import { determinateHash, isAccountActive } from "../utils";
 import {
   getAccessTokenLifetimeSeconds,
   getRefreshTokenDays,
@@ -279,13 +279,12 @@ export const createAccessToken = async (
       // path that deactivates without revoking. Loaded through the transaction
       // client — a pool read here would hold this connection while queueing
       // for a second one, and enough concurrent rotations would wedge the
-      // whole pool. !is_active, not === false: the column is nullable, and a
-      // NULL row can't log in so it must not rotate either. (S4)
+      // whole pool. (S4)
       const principal =
         presented.role_type === "admin"
           ? await getAdminById(presented.role_id, client)
           : await getUserById(presented.role_id, client);
-      if (!principal || !principal.is_active) {
+      if (!isAccountActive(principal)) {
         // Refusing alone would leave the presented token live and dormant —
         // working again the moment the account is reactivated. Burn it on the
         // way out (in the outcome handling below, outside this transaction,

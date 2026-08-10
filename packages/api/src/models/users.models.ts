@@ -126,13 +126,14 @@ export const getUsers = async (
 
 export const getUserWithPassword = async (
   email: string,
+  client: PoolClient | Pool = db,
 ): Promise<User | null> => {
   const queryString = `
     SELECT * FROM users
     WHERE email = $1 AND deleted_at IS NULL;
   `;
 
-  const result = await db.query(queryString, [email.toLowerCase()]);
+  const result = await client.query(queryString, [email.toLowerCase()]);
   if (result.rows.length === 0) {
     return null;
   }

@@ -25,4 +25,5 @@ export * from "./encryption";
 export * from "./totp";
 export * from "./backupCodes";
 export * from "./mfaChallenge";
+export * from "./isAccountActive";
 export * from "./googleOAuth";

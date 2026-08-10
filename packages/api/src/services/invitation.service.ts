@@ -5,7 +5,7 @@ import type * as userModels from "../models/users.models";
 import type * as organizationModels from "../models/organization.models";
 import type * as memberModels from "../models/organizationMembers.models";
 import { Invitation, OrgInviteRole } from "@auth-boilerplate/shared";
-import { hashPassword } from "../utils";
+import { hashPassword, isAccountActive } from "../utils";
 import { httpError } from "../utils/httpError";
 import { AuthService, SessionStart } from "./auth.service";
 import { EmailService } from "./email.service";
@@ -121,8 +121,69 @@ export const createInvitationService = ({
   const acceptInvitation = async (
     token: string,
     password: string | undefined,
-  ): Promise<AcceptedInvitation> =>
-    runTransaction(async (client) => {
+  ): Promise<AcceptedInvitation> => {
+    // All bcrypt CPU runs before the locking transaction: a burst of accepts
+    // (or wrong-password retries) must not pin a pool connection and the
+    // invitation's FOR UPDATE row lock for the length of a hash. The
+    // transaction re-validates the token under the lock, so this pre-read
+    // adds no TOCTOU beyond what login already accepts. (The validator also
+    // owns the dead-org D2 invariant, so a soft-deleted tenant is refused
+    // here and again under the lock.)
+    const preview = await invitations.validateInvitationToken(
+      token,
+      "org_invite",
+    );
+
+    if (!preview.organization_id || !preview.role) {
+      throw httpError(400, "Invalid organization invitation");
+    }
+
+    // An existing account can carry MFA and a deactivated flag; a freshly
+    // created one never does.
+    let verifiedUserId: string | null = null;
+    let mfaRequired = false;
+    let newUserPasswordHash: string | null = null;
+
+    if (preview.is_existing_user) {
+      if (!password) {
+        throw httpError(400, "Password is required to verify your identity");
+      }
+
+      const user = await users.getUserWithPassword(preview.email);
+      if (!user) {
+        throw httpError(404, "User not found");
+      }
+
+      // Mirror login exactly: a deactivated account cannot authenticate
+      // through this path either.
+      if (!isAccountActive(user)) {
+        throw httpError(403, "Account is deactivated");
+      }
+
+      // An OAuth-only account has no password to verify — without this
+      // guard bcrypt throws on the NULL hash and the request 500s.
+      if (!user.password_hash) {
+        throw httpError(401, "Invalid password");
+      }
+
+      const passwordMatch = await bcrypt.compare(password, user.password_hash);
+      if (!passwordMatch) {
+        throw httpError(401, "Invalid password");
+      }
+
+      verifiedUserId = user.user_id!;
+      mfaRequired = !!user.mfa_enabled;
+    } else {
+      if (!password) {
+        throw httpError(400, "Password is required to create your account");
+      }
+
+      newUserPasswordHash = await hashPassword(password);
+    }
+
+    return runTransaction(async (client) => {
+      // Re-validated under FOR UPDATE: of two concurrent accepts the loser
+      // blocks here, re-reads the committed used_at and fails validation.
       const invitation = await invitations.validateInvitationToken(
         token,
         "org_invite",
@@ -133,57 +194,17 @@ export const createInvitationService = ({
         throw httpError(400, "Invalid organization invitation");
       }
 
-      // Organizations soft-delete (D2): the invitation row outlives its
-      // organization, so a token must not mint accounts or memberships into a
-      // dead tenant. Reads exactly like a token that never existed.
-      const organization = await organizations.getOrganizationById(
-        invitation.organization_id,
-      );
-      if (!organization) {
-        throw httpError(404, "Invalid or expired invitation");
-      }
-
       let userId: string;
-      // An existing account can carry MFA and a deactivated flag; a freshly
-      // created one never does.
-      let mfaRequired = false;
 
       if (invitation.is_existing_user) {
-        if (!password) {
-          throw httpError(400, "Password is required to verify your identity");
-        }
-
-        const user = await users.getUserWithPassword(invitation.email);
-        if (!user) {
-          throw httpError(404, "User not found");
-        }
-
-        // Mirror login exactly: a deactivated account cannot authenticate
-        // through this path either.
-        if (!user.is_active) {
-          throw httpError(403, "Account is deactivated");
-        }
-
-        const passwordMatch = await bcrypt.compare(
-          password,
-          user.password_hash!,
-        );
-        if (!passwordMatch) {
-          throw httpError(401, "Invalid password");
-        }
-
-        userId = user.user_id!;
-        mfaRequired = !!user.mfa_enabled;
+        // is_existing_user is frozen at mint, so the pre-read took this
+        // branch too and verified the password there.
+        userId = verifiedUserId!;
       } else {
-        if (!password) {
-          throw httpError(400, "Password is required to create your account");
-        }
-
-        const passwordHash = await hashPassword(password);
         const user = await users.createUser(
           {
             email: invitation.email,
-            password_hash: passwordHash,
+            password_hash: newUserPasswordHash!,
             email_verified: true,
             is_active: true,
             created_through: "org_invited",
@@ -226,6 +247,7 @@ export const createInvitationService = ({
 
       return { start, invitation, userId };
     });
+  };
 
   return { inviteMember, acceptInvitation };
 };

@@ -625,6 +625,41 @@ describe("Organization Invitation Integration Tests", () => {
       expect(response.body.status).toBe("error");
     });
 
+    it("answers 401, not 500, for an OAuth-only account with no password", async () => {
+      const { createUser } = await import("../../src/models/users.models");
+      const { hashPassword } = await import("../../src/utils");
+      const { createInvitation } =
+        await import("../../src/models/invitations.models");
+
+      const user = await createUser({
+        email: "oauth.invitee@example.com",
+        password_hash: await hashPassword("Password1"),
+        email_verified: true,
+        is_active: true,
+        created_through: "self_registered",
+      });
+      // The shape an account created through Google sign-in has: no local hash.
+      await db.query(
+        "UPDATE users SET password_hash = NULL, auth_provider = 'google' WHERE user_id = $1",
+        [user.user_id],
+      );
+
+      const result = await createInvitation({
+        email: "oauth.invitee@example.com",
+        type: "org_invite",
+        organization_id: getOrganizationUuid(2),
+        role: "member",
+        invited_by: getUserUuid(3),
+      });
+
+      const response = await request(app)
+        .post(`/api/invitations/${result.token}/accept`)
+        .send({ password: "AnyPassword1" })
+        .expect(401);
+
+      expect(response.body.status).toBe("error");
+    });
+
     it("should reject new user without password", async () => {
       const { createInvitation } =
         await import("../../src/models/invitations.models");

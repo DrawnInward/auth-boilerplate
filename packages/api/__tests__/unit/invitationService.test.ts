@@ -80,6 +80,12 @@ describe("invitationService", () => {
           if (!found) {
             throw httpError(404, "Invalid or expired invitation");
           }
+          // The real validator owns the dead-org invariant (D2) — the fake
+          // must model it or the service tests exercise a validator that
+          // doesn't exist.
+          if (found.organization_id && !orgExists) {
+            throw httpError(404, "Invalid or expired invitation");
+          }
           return found;
         },
         markInvitationUsed: async (id) => {

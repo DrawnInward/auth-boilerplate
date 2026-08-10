@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from "uuid";
 import { Invitation, InvitationType } from "@auth-boilerplate/shared";
 import { CreateInvitationDto } from "../types";
 import { determinateHash } from "../utils";
+import { getOrganizationById } from "./organization.models";
 import { PaginationOptions } from "../types/PaginationOptions";
 import { isUniqueViolation } from "../utils/pgErrors";
 import { httpError } from "../utils/httpError";
@@ -229,6 +230,19 @@ export const validateInvitationToken = async (
 
   if (expectedType && invitation.type !== expectedType) {
     throw httpError(400, "Invalid invitation type");
+  }
+
+  // The invitation row outlives a soft-deleted organization, so an org-bound
+  // token must read exactly like one that never existed — this validator owns
+  // that invariant so every redeemer (and verifyToken) answers alike. (D2)
+  if (invitation.organization_id) {
+    const organization = await getOrganizationById(
+      invitation.organization_id,
+      client,
+    );
+    if (!organization) {
+      throw httpError(404, "Invalid or expired invitation");
+    }
   }
 
   return invitation;

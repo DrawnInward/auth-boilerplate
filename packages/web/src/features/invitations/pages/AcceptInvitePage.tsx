@@ -26,13 +26,15 @@ import {
   FormDescription,
 } from "@/components/ui/form";
 import { useInvitation, useAcceptInvitation } from "@/api/queries/invitations";
+import { isMfaRequired } from "@/api/queries/auth";
 import { FullPageSpinner } from "@/components/shared";
-import { useApiError } from "@/hooks";
+import { useAuth, useApiError } from "@/hooks";
 
 export function AcceptInvitePage() {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
   const { handleError } = useApiError();
+  const { startMfaChallenge } = useAuth();
 
   const { data, isLoading, isError } = useInvitation(token);
   const acceptInvitation = useAcceptInvitation(token!);
@@ -82,7 +84,17 @@ export function AcceptInvitePage() {
 
   const handleSubmit = async (formData: AcceptInviteDto) => {
     try {
-      await acceptInvitation.mutateAsync(formData);
+      const response = await acceptInvitation.mutateAsync(formData);
+      // The org-join is committed either way; an MFA-enabled account gets its
+      // session only after the second factor, exactly like login (A2).
+      if (isMfaRequired(response)) {
+        toast.success(
+          "Invitation accepted — enter your verification code to sign in",
+        );
+        startMfaChallenge();
+        navigate("/mfa-verify");
+        return;
+      }
       toast.success("Invitation accepted!");
       if (invitation.organization_id) {
         navigate(`/organizations/${invitation.organization_id}`);

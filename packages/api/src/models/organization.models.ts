@@ -74,13 +74,14 @@ export const getOrganizationBySlug = async (
 
 export const getOrganizationById = async (
   id: string,
+  client: PoolClient | Pool = db,
 ): Promise<Organization | null> => {
   const queryString = `
     SELECT * FROM organizations
     WHERE id = $1 AND deleted_at IS NULL;
   `;
 
-  const result = await db.query(queryString, [id]);
+  const result = await client.query(queryString, [id]);
   if (result.rows.length === 0) {
     return null;
   }

@@ -26,12 +26,15 @@ interface MfaRequiredApiResponse {
 
 type LoginResponse = AuthResponse | MfaRequiredApiResponse;
 
-function isMfaRequired(
-  response: LoginResponse,
-): response is MfaRequiredApiResponse {
+// Widened past LoginResponse so any endpoint that can answer mfa_required
+// (login, OAuth callback/link, invitation accept) narrows through the same
+// guard.
+function isMfaRequired(response: {
+  data?: unknown;
+}): response is MfaRequiredApiResponse {
   return (
-    "data" in response &&
-    response.data &&
+    !!response.data &&
+    typeof response.data === "object" &&
     "mfa_required" in response.data &&
     response.data.mfa_required === true
   );
