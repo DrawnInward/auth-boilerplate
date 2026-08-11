@@ -1014,3 +1014,21 @@ failed_attempts < $2`): the guard's plain SELECT was check-then-act — K concur
 - Deferred: a single `verifyAndConsumeMfaChallenge` seam owning the
   guard → fail → consume sequence and the pool-vs-client decision (C2 territory);
   the 8-site `verifyPrincipalPassword` step-up extraction (C1/C2).
+
+**2026-08-11 — OAuth deactivation gate reverse-ported from skoped** (skoped Step-8
+divergence adopted; both repos now share one contract):
+
+- **The Google callback and link paths refuse a deactivated account up front**
+  (403 "Account is deactivated") instead of the inherited challenge-first
+  behaviour, which issued an MFA challenge a deactivated account could never
+  complete (`issueSession` refused at the end regardless). No enumeration cost:
+  the caller has already authenticated as the Google account's owner by the time
+  either gate fires. Deliberate contract change — the pinned specs moved with it:
+  the OAuth+MFA flow fixture now activates BOB for its duration, and a new spec
+  pins the deactivated-with-MFA case (403, no `mfa_challenge` cookie, no
+  challenge row — the refusal precedes A7's mint, not just the cookie).
+- `startSession`'s MFA-first ordering is unchanged; its comment no longer cites
+  the retired OAuth contract as justification (structural refusal at
+  `issueSession` is the invariant, early caller gates are the UX).
+- The `needs_linking` callback branch stays ungated (matches skoped): the link
+  attempt itself is where the account is identified and refused.

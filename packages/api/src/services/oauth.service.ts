@@ -5,6 +5,7 @@ import type * as userModels from "../models/users.models";
 import type * as mfaModels from "../models/mfa.models";
 import { SafeUser } from "../types";
 import { httpError } from "../utils/httpError";
+import { isAccountActive } from "../utils/isAccountActive";
 import { AuthService, SessionStart } from "./auth.service";
 
 export type OauthServiceDeps = {
@@ -87,6 +88,14 @@ export const createOauthService = ({
       const googleLinkedUser = await users.getUserByGoogleId(googleUser.id);
 
       if (googleLinkedUser) {
+        // Mirror login: a deactivated account cannot authenticate through
+        // Google either — refused up front, before any MFA challenge is
+        // minted, so the account owner is told plainly instead of being
+        // walked through a TOTP dance that issueSession would refuse anyway.
+        if (!isAccountActive(googleLinkedUser)) {
+          throw httpError(403, "Account is deactivated");
+        }
+
         const mfaStatus = await getMfaStatus(
           googleLinkedUser.user_id!,
           "user",
@@ -162,6 +171,12 @@ export const createOauthService = ({
     const user = await users.getUserWithPassword(email);
     if (!user) {
       throw httpError(404, "User not found");
+    }
+
+    // Mirror login: a deactivated account cannot authenticate (or link a
+    // sign-in method) through Google either.
+    if (!isAccountActive(user)) {
+      throw httpError(403, "Account is deactivated");
     }
 
     if (!user.password_hash) {

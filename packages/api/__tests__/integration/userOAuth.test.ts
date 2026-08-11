@@ -404,10 +404,13 @@ describe("User OAuth Integration Tests", () => {
     const testSecret = "JBSWY3DPEHPK3PXP";
 
     beforeEach(async () => {
-      // Set up user with both Google and MFA
+      // Set up user with both Google and MFA. BOB's fixture row is inactive;
+      // since the callback refuses deactivated accounts (the hardening
+      // gate), this flow needs him active for its duration.
       await db.query(
         `UPDATE users
-         SET google_id = $1, auth_provider = 'both', mfa_enabled = true, mfa_secret = $2
+         SET google_id = $1, auth_provider = 'both', mfa_enabled = true, mfa_secret = $2,
+             is_active = true
          WHERE user_id = $3`,
         [
           "mfa-oauth-google-id",
@@ -420,7 +423,8 @@ describe("User OAuth Integration Tests", () => {
     afterEach(async () => {
       await db.query(
         `UPDATE users
-         SET google_id = NULL, auth_provider = 'local', mfa_enabled = false, mfa_secret = NULL
+         SET google_id = NULL, auth_provider = 'local', mfa_enabled = false, mfa_secret = NULL,
+             is_active = false
          WHERE user_id = $1`,
         [mfaOAuthUserId],
       );
@@ -452,14 +456,18 @@ describe("User OAuth Integration Tests", () => {
     });
   });
 
-  // Session issuance refuses a deactivated principal (authService C1). BOB is
-  // seeded deactivated, which is exactly what these paths need.
+  // The callback and link gates refuse a deactivated principal up front —
+  // before any MFA challenge is minted — with issueSession's structural
+  // refusal (authService C1) as the backstop. BOB is seeded deactivated,
+  // which is exactly what these paths need.
   describe("OAuth + deactivated account", () => {
     const deactivatedUserId = getUserUuid(3);
 
     afterEach(async () => {
       await db.query(
-        "UPDATE users SET google_id = NULL, auth_provider = 'local' WHERE user_id = $1",
+        `UPDATE users
+         SET google_id = NULL, auth_provider = 'local', mfa_enabled = false, mfa_secret = NULL
+         WHERE user_id = $1`,
         [deactivatedUserId],
       );
     });
@@ -504,6 +512,60 @@ describe("User OAuth Integration Tests", () => {
       expect(after.rows[0].n).toBe(before.rows[0].n);
     });
 
+    it("refuses a deactivated MFA account before minting a challenge", async () => {
+      // The gate must fire ahead of the MFA branch: a deactivated account
+      // with MFA enabled gets the same plain 403, never a challenge it
+      // could not complete anyway.
+      await db.query(
+        `UPDATE users
+         SET google_id = $1, auth_provider = 'both', mfa_enabled = true, mfa_secret = $2
+         WHERE user_id = $3`,
+        [
+          "deactivated-mfa-google-id",
+          require("../../src/utils/encryption").encrypt("JBSWY3DPEHPK3PXP"),
+          deactivatedUserId,
+        ],
+      );
+      getGoogleUserInfo.mockResolvedValueOnce({
+        id: "deactivated-mfa-google-id",
+        email: "bob@example.com",
+        verified_email: true,
+        name: "Bob",
+      });
+
+      // Earlier specs in this file mint challenges for the same fixture user,
+      // so pin the delta, not an absolute count.
+      const before = await db.query(
+        "SELECT COUNT(*)::int AS n FROM mfa_challenges WHERE role_id = $1",
+        [deactivatedUserId],
+      );
+
+      const initResponse = await request(app).get("/api/oauth/google");
+      const stateCookie = initResponse.headers["set-cookie"];
+
+      const response = await request(app)
+        .get("/api/oauth/google/callback")
+        .query({ code: "valid-auth-code", state: "test-oauth-state-12345" })
+        .set("Cookie", stateCookie)
+        .expect(403);
+
+      expect(response.body.message).toBe("Account is deactivated");
+
+      const cookies = (response.headers["set-cookie"] ??
+        []) as unknown as string[];
+      expect(cookies.some((c) => c.startsWith("mfa_challenge="))).toBe(false);
+      expect(cookies.some((c) => c.startsWith("access_token="))).toBe(false);
+      expect(cookies.some((c) => c.startsWith("refresh_token="))).toBe(false);
+
+      // No challenge row was persisted either — the refusal precedes A7's
+      // challenge mint, not just the cookie.
+      const after = await db.query(
+        "SELECT COUNT(*)::int AS n FROM mfa_challenges WHERE role_id = $1",
+        [deactivatedUserId],
+      );
+      expect(after.rows[0].n).toBe(before.rows[0].n);
+    });
+
     it("refuses Google linking for a deactivated account, and rolls the link back", async () => {
       getGoogleUserInfo.mockResolvedValueOnce({
         id: "bob-link-google-id",
@@ -533,8 +595,8 @@ describe("User OAuth Integration Tests", () => {
 
       expect(response.body.message).toBe("Account is deactivated");
 
-      // The password was correct, but the refusal rolled the transaction
-      // back: no half-linked state may survive.
+      // The gate refuses before the link is attempted (and before the
+      // password is even compared): no half-linked state may survive.
       const row = await db.query(
         "SELECT google_id, auth_provider FROM users WHERE user_id = $1",
         [deactivatedUserId],

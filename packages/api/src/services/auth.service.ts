@@ -113,11 +113,12 @@ export const createAuthService = ({
     principal: MfaCheckedPrincipal,
     client: PoolClient | Pool = db,
   ): Promise<SessionStart> => {
-    // The MFA branch deliberately comes before any deactivation check: the
-    // inherited OAuth contract (pinned by userOAuth.test.ts) issues a
-    // challenge to a deactivated MFA account. Deactivation is enforced where
-    // it matters — issueSession, which every verify path routes through — so
-    // the challenge can be started but a session can never come of it.
+    // The MFA branch deliberately comes before any deactivation check.
+    // Deactivation is enforced where it matters — issueSession, which every
+    // verify path routes through — so even if a caller starts a challenge for
+    // a deactivated account, a session can never come of it. (Today's callers
+    // all refuse deactivated principals before calling this — login, accept
+    // and the OAuth callback gate, pinned by their suites.)
     if (principal.mfa_enabled) {
       const challengeToken = await createMfaChallengeToken(
         principal.role_id,
