@@ -12,6 +12,7 @@ import {
   getUserUuid,
   getOrganizationUuid,
 } from "../../src/database/test-data/testUuids";
+import { loginAs } from "../helpers/loginAs";
 
 require("dotenv").config({ quiet: true });
 
@@ -22,7 +23,7 @@ require("dotenv").config({ quiet: true });
 // happens before the handler runs).
 
 describe("Cross-organization isolation (B3)", () => {
-  let aliceCookies: string[];
+  let aliceCookies: string;
 
   const bobsTeamId = getOrganizationUuid(2); // BOBS_TEAM — alice is not a member
   const bobId = getUserUuid(3);
@@ -34,11 +35,7 @@ describe("Cross-organization isolation (B3)", () => {
       organizationMembersData: testOrganizationMembers,
     });
 
-    const login = await request(app)
-      .post("/api/auth/login")
-      .send({ email: "alice@example.com", password: "Password1" })
-      .expect(200);
-    aliceCookies = login.headers["set-cookie"] as unknown as string[];
+    aliceCookies = await loginAs("alice@example.com");
   });
 
   afterAll(async () => {
@@ -119,6 +116,52 @@ describe("Cross-organization isolation (B3)", () => {
       path: `/api/organizations/${bobsTeamId}/invitations/${randomUUID()}`,
     },
   ];
+
+  // Walk the real Express router (same approach as roleBoundary.test.ts) so
+  // this case list can't silently fall behind the app: a new org-scoped
+  // route without an isolation case fails the sweep.
+  function collectRegisteredRoutes(stack: any[]): string[] {
+    const out: string[] = [];
+    for (const layer of stack) {
+      if (layer.route) {
+        const methods: string[] = layer.route.methods
+          ? Object.keys(layer.route.methods)
+          : layer.route.stack.map((l: any) => l.method);
+        for (const method of methods) {
+          out.push(`${method.toUpperCase()} ${layer.route.path}`);
+        }
+      } else if (layer.name === "router" && layer.handle?.stack) {
+        out.push(...collectRegisteredRoutes(layer.handle.stack));
+      }
+    }
+    return out;
+  }
+
+  const UUID_RE =
+    /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g;
+
+  it("covers every org-scoped route the app registers (completeness)", () => {
+    const router = (app as any).router ?? (app as any)._router;
+    // Shapes are compared as sets: the admin organization router registers
+    // the same membership tails (mounted under /api/admin), and those
+    // collapse into the user-side entries this suite already covers.
+    const registered = new Set(
+      collectRegisteredRoutes(router.stack)
+        .filter((r) => r.split(" ")[1].startsWith("/:organizationId"))
+        .map((r) => r.replace(/:[^/]+/g, "*")),
+    );
+    const covered = new Set(
+      cases.map((c) => {
+        const tail = c.path
+          .split("?")[0]
+          .replace(`/api/organizations/${bobsTeamId}`, "")
+          .replace(UUID_RE, "*");
+        return `${c.method.toUpperCase()} /*${tail}`;
+      }),
+    );
+
+    expect([...covered].sort()).toEqual([...registered].sort());
+  });
 
   describe("a non-member is rejected on every org-scoped endpoint", () => {
     it.each(cases.map((c) => [c.name, c]))("%s → 403", async (_name, c) => {

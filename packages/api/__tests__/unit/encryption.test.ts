@@ -7,8 +7,20 @@ const TEST_KEY =
   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
 describe("encryption", () => {
+  // The not-configured test deletes the key; suites share one process under
+  // --runInBand, so restore whatever was set before this file ran.
+  const originalKey = process.env.MFA_ENCRYPTION_KEY;
+
   beforeEach(() => {
     process.env.MFA_ENCRYPTION_KEY = TEST_KEY;
+  });
+
+  afterAll(() => {
+    if (originalKey === undefined) {
+      delete process.env.MFA_ENCRYPTION_KEY;
+    } else {
+      process.env.MFA_ENCRYPTION_KEY = originalKey;
+    }
   });
 
   it("round-trips a plaintext", () => {

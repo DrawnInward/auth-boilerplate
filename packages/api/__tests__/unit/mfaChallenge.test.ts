@@ -24,8 +24,20 @@ const expectHttpError = (fn: () => void, status: number, msg: string) => {
 };
 
 describe("mfaChallenge", () => {
+  // The not-configured test deletes the key; suites share one process under
+  // --runInBand, so restore whatever was set before this file ran.
+  const originalKey = process.env.MFA_CHALLENGE_KEY;
+
   beforeEach(() => {
     process.env.MFA_CHALLENGE_KEY = TEST_KEY;
+  });
+
+  afterAll(() => {
+    if (originalKey === undefined) {
+      delete process.env.MFA_CHALLENGE_KEY;
+    } else {
+      process.env.MFA_CHALLENGE_KEY = originalKey;
+    }
   });
 
   describe("verifyMfaChallengeToken", () => {

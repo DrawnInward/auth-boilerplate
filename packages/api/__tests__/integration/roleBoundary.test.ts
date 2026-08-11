@@ -4,6 +4,7 @@ import app from "../../src/app";
 import db from "../../src/database/db";
 import seed from "../../src/database/seed";
 import { testUsers, testAdmins } from "../../src/database/test-data";
+import { loginAs, loginAsAdmin } from "../helpers/loginAs";
 
 require("dotenv").config({ quiet: true });
 
@@ -197,23 +198,14 @@ function collectRegisteredRoutes(stack: any[]): string[] {
 }
 
 describe("Role boundary matrix (B1)", () => {
-  let userCookies: string[];
-  let adminCookies: string[];
+  let userCookies: string;
+  let adminCookies: string;
 
   beforeAll(async () => {
     await seed({ usersData: testUsers, adminsData: testAdmins });
 
-    const userLogin = await request(app)
-      .post("/api/auth/login")
-      .send({ email: "alice@example.com", password: "Password1" })
-      .expect(200);
-    userCookies = userLogin.headers["set-cookie"] as unknown as string[];
-
-    const adminLogin = await request(app)
-      .post("/api/admin/auth/login")
-      .send({ email: "root.admin@test.com", password: "Password1" })
-      .expect(200);
-    adminCookies = adminLogin.headers["set-cookie"] as unknown as string[];
+    userCookies = await loginAs("alice@example.com");
+    adminCookies = await loginAsAdmin("root.admin@test.com");
   });
 
   afterAll(async () => {

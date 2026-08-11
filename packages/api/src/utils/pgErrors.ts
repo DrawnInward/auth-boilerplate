@@ -28,8 +28,11 @@ export const isNotNullViolation = (err: unknown): boolean =>
   pgCodeOf(err) === PG_CODES.notNullViolation;
 
 // The constraint name that was violated, when the driver reports one — lets a
-// caller distinguish two unique indexes on the same table.
-export const violatedConstraint = (err: unknown): string | undefined =>
-  err !== null && typeof err === "object" && "constraint" in err
-    ? String((err as { constraint: unknown }).constraint)
-    : undefined;
+// caller distinguish two unique indexes on the same table. Value check, not a
+// presence check: pg-protocol assigns `constraint` on every DatabaseError, so
+// the property exists (as undefined) even when no constraint was involved.
+export const violatedConstraint = (err: unknown): string | undefined => {
+  if (err === null || typeof err !== "object") return undefined;
+  const constraint = (err as { constraint?: unknown }).constraint;
+  return constraint != null ? String(constraint) : undefined;
+};

@@ -7,6 +7,7 @@ import { testUsers, testAdmins } from "../../src/database/test-data";
 import {
   setMfaSecret,
   enableMfa,
+  disableMfa,
   createBackupCodes,
   deleteAllBackupCodes,
 } from "../../src/models/mfa.models";
@@ -70,11 +71,13 @@ describe("Admin MFA Integration Tests", () => {
   };
 
   const resetAdminMfa = async () => {
-    await db.query(
-      "UPDATE admins SET mfa_enabled = false, mfa_secret = NULL WHERE admin_id = $1",
-      [adminId],
-    );
+    // The real disable model function, not a hand-rolled UPDATE — if disable
+    // semantics change, this reset changes with them. Challenges minted by
+    // the login-flow tests are cleared too, so no attempt-count state leaks
+    // between tests.
+    await disableMfa(adminId, "admin");
     await deleteAllBackupCodes(adminId, "admin");
+    await db.query("DELETE FROM mfa_challenges WHERE role_id = $1", [adminId]);
   };
 
   describe("GET /api/admin/auth/mfa/status", () => {

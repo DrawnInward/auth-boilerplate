@@ -46,5 +46,11 @@ describe("pgErrors", () => {
       expect(violatedConstraint(new Error("plain"))).toBeUndefined();
       expect(violatedConstraint(null)).toBeUndefined();
     });
+
+    it("is undefined when the property exists but carries no name", () => {
+      // pg-protocol assigns `constraint` on every DatabaseError — a real
+      // constraint-less pg error has the property with value undefined.
+      expect(violatedConstraint(pgError("23502"))).toBeUndefined();
+    });
   });
 });

@@ -22,9 +22,12 @@ require("dotenv").config({ quiet: true });
 
 describe("Admin Organization Management Integration Tests", () => {
   let adminCookies: string[];
+  // Mutation tests act on this throwaway org (created below), never on the
+  // seeded fixtures — other suites in the same DB lifetime assert against
+  // the fixture rows by name and membership.
+  let mutationOrgId: string;
 
   const acmeId = getOrganizationUuid(1); // ACME_CORP
-  const bobsTeamId = getOrganizationUuid(2); // BOBS_TEAM
 
   beforeAll(async () => {
     await seed({
@@ -39,6 +42,13 @@ describe("Admin Organization Management Integration Tests", () => {
       .send({ email: "root.admin@test.com", password: "Password1" })
       .expect(200);
     adminCookies = loginResponse.headers["set-cookie"] as unknown as string[];
+
+    const created = await request(app)
+      .post("/api/admin/organizations")
+      .set("Cookie", adminCookies)
+      .send({ name: "Member Mutation Org", owner_id: getUserUuid(1) })
+      .expect(201);
+    mutationOrgId = created.body.data.id;
   });
 
   afterAll(async () => {
@@ -110,9 +120,7 @@ describe("Admin Organization Management Integration Tests", () => {
         .set("Cookie", adminCookies)
         .expect(200);
 
-      expect(response.body.data.organization_id ?? response.body.data.id).toBe(
-        acmeId,
-      );
+      expect(response.body.data.id).toBe(acmeId);
       expect(response.body.data.name).toBe("Acme Corporation");
     });
 
@@ -133,13 +141,19 @@ describe("Admin Organization Management Integration Tests", () => {
 
   describe("PUT /api/admin/organizations/:organizationId", () => {
     it("updates an organization's name", async () => {
-      const response = await request(app)
-        .put(`/api/admin/organizations/${bobsTeamId}`)
+      const created = await request(app)
+        .post("/api/admin/organizations")
         .set("Cookie", adminCookies)
-        .send({ name: "Bob's Renamed Team" })
+        .send({ name: "Rename Me Org", owner_id: getUserUuid(1) })
+        .expect(201);
+
+      const response = await request(app)
+        .put(`/api/admin/organizations/${created.body.data.id}`)
+        .set("Cookie", adminCookies)
+        .send({ name: "Renamed Org" })
         .expect(200);
 
-      expect(response.body.data.name).toBe("Bob's Renamed Team");
+      expect(response.body.data.name).toBe("Renamed Org");
     });
 
     it("404s for an unknown organization", async () => {
@@ -159,8 +173,7 @@ describe("Admin Organization Management Integration Tests", () => {
         .send({ name: "Doomed Org", owner_id: getUserUuid(1) })
         .expect(201);
 
-      const doomedId =
-        created.body.data.organization_id ?? created.body.data.id;
+      const doomedId = created.body.data.id;
 
       await request(app)
         .delete(`/api/admin/organizations/${doomedId}`)
@@ -199,13 +212,32 @@ describe("Admin Organization Management Integration Tests", () => {
     });
   });
 
-  // The three member-mutation tests below run in order against the same
-  // membership: alice is added to Bob's Team, promoted, then removed — the
-  // seeded fixture rows stay untouched for the other suites' assertions.
+  // Each member-mutation describe arranges alice's membership in the
+  // throwaway org itself (no cross-describe ordering), so filtered runs
+  // (jest -t) and reordering can't break them.
+  const removeAlice = () =>
+    request(app)
+      .delete(
+        `/api/admin/organizations/${mutationOrgId}/members/${getUserUuid(2)}`,
+      )
+      .set("Cookie", adminCookies);
+
+  const ensureAliceIsMember = async () => {
+    // 201 on first add; the duplicate-membership rejection on reruns is fine.
+    await request(app)
+      .post(`/api/admin/organizations/${mutationOrgId}/members`)
+      .set("Cookie", adminCookies)
+      .send({ user_id: getUserUuid(2), role: "member" });
+  };
+
   describe("POST /api/admin/organizations/:organizationId/members", () => {
+    beforeEach(async () => {
+      await removeAlice(); // whatever earlier tests left behind
+    });
+
     it("adds a member to an organization", async () => {
       const response = await request(app)
-        .post(`/api/admin/organizations/${bobsTeamId}/members`)
+        .post(`/api/admin/organizations/${mutationOrgId}/members`)
         .set("Cookie", adminCookies)
         .send({ user_id: getUserUuid(2), role: "member" })
         .expect(201);
@@ -216,7 +248,7 @@ describe("Admin Organization Management Integration Tests", () => {
 
     it("rejects a malformed user_id", async () => {
       await request(app)
-        .post(`/api/admin/organizations/${bobsTeamId}/members`)
+        .post(`/api/admin/organizations/${mutationOrgId}/members`)
         .set("Cookie", adminCookies)
         .send({ user_id: "not-a-uuid" })
         .expect(400);
@@ -232,9 +264,13 @@ describe("Admin Organization Management Integration Tests", () => {
   });
 
   describe("PUT /api/admin/organizations/:organizationId/members/:userId", () => {
+    beforeEach(ensureAliceIsMember);
+
     it("updates a member's role", async () => {
       const response = await request(app)
-        .put(`/api/admin/organizations/${bobsTeamId}/members/${getUserUuid(2)}`)
+        .put(
+          `/api/admin/organizations/${mutationOrgId}/members/${getUserUuid(2)}`,
+        )
         .set("Cookie", adminCookies)
         .send({ role: "admin" })
         .expect(200);
@@ -244,7 +280,9 @@ describe("Admin Organization Management Integration Tests", () => {
 
     it("rejects an unknown role", async () => {
       await request(app)
-        .put(`/api/admin/organizations/${bobsTeamId}/members/${getUserUuid(2)}`)
+        .put(
+          `/api/admin/organizations/${mutationOrgId}/members/${getUserUuid(2)}`,
+        )
         .set("Cookie", adminCookies)
         .send({ role: "supreme-leader" })
         .expect(400);
@@ -262,16 +300,13 @@ describe("Admin Organization Management Integration Tests", () => {
   });
 
   describe("DELETE /api/admin/organizations/:organizationId/members/:userId", () => {
+    beforeEach(ensureAliceIsMember);
+
     it("removes a member from an organization", async () => {
-      await request(app)
-        .delete(
-          `/api/admin/organizations/${bobsTeamId}/members/${getUserUuid(2)}`,
-        )
-        .set("Cookie", adminCookies)
-        .expect(200);
+      await removeAlice().expect(200);
 
       const members = await request(app)
-        .get(`/api/admin/organizations/${bobsTeamId}/members`)
+        .get(`/api/admin/organizations/${mutationOrgId}/members`)
         .set("Cookie", adminCookies)
         .expect(200);
 

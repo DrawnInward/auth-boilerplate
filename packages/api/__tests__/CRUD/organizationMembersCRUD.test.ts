@@ -211,6 +211,8 @@ describe("Organization Members Model CRUD Operations", () => {
         getOrganizationUuid(2),
       );
 
+      // Length anchor first: an empty array would make the forEach vacuous.
+      expect(acmeMembers.length).toBeGreaterThanOrEqual(3);
       acmeMembers.forEach((member) => {
         expect(member.organization_id).toBe(getOrganizationUuid(1));
       });
