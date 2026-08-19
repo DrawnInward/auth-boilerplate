@@ -1,11 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import {
-  getAdmin,
-  getAdmins,
-  getAdminById,
-  deactivateAdmin,
-} from "../../models/admins.models";
-import { revokeUserTokens } from "../../models/refresh.models";
+import { getAdmin, getAdmins, getAdminById } from "../../models/admins.models";
 import {
   createInvitation,
   invalidatePendingInvitations,
@@ -92,15 +86,15 @@ export const disableAdminHandler = async (
       throw httpError(409, "Admin is already deactivated");
     }
 
-    const deactivated = await withTransaction(db, async (client) => {
-      // The model refuses to deactivate the only active root admin, which is
-      // the last-admin protection: root is the only caller of this route, so a
-      // root self-lockout is structurally impossible.
-      const updated = await deactivateAdmin(adminId, req.user!.role_id, client);
-      // A deactivated admin keeps no working sessions. (S4)
-      await revokeUserTokens(adminId, "admin", client);
-      return updated;
-    });
+    // A deactivated admin keeps no working sessions (S4) — the account
+    // service owns that pairing. The model inside refuses to deactivate the
+    // only active root admin (last-admin protection): root is the only
+    // caller of this route, so a root self-lockout is structurally
+    // impossible.
+    const deactivated = await services.account.disableAdmin(
+      adminId,
+      req.user!.role_id,
+    );
 
     return sendSuccess(res, deactivated, "Admin deactivated successfully");
   } catch (error) {

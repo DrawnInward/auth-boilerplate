@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  invitationSchema,
   invitationTypeSchema,
   orgInviteRoleSchema,
 } from "@auth-boilerplate/shared";
@@ -17,3 +18,12 @@ export const createInvitationSchema = z.object({
 });
 
 export type CreateInvitationDto = z.infer<typeof createInvitationSchema>;
+
+// The DB row: the shared contract plus the credential digest. Models return
+// this; anything FE-bound types against the shared Invitation, so returning
+// a raw row through a contract is a compile error (the password_hash rule).
+export const invitationRowSchema = invitationSchema.extend({
+  token_hash: z.string().optional(),
+});
+
+export type InvitationRow = z.infer<typeof invitationRowSchema>;

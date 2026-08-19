@@ -8,7 +8,7 @@ import { catchAllError, handleCustomError } from "./utils/errorHandling";
 import { logger } from "./utils/logger";
 import { globalLimiter } from "./middleware/rateLimiter";
 import { originCheck } from "./middleware/originCheck";
-import { getAllowedOrigin } from "./utils/config";
+import { getAllowedOrigin, getTrustProxy } from "./utils/config";
 
 const corsOptions: CorsOptions = {
   // Read per request, matching originCheck — a module-load snapshot here
@@ -19,6 +19,16 @@ const corsOptions: CorsOptions = {
 };
 
 const app = express();
+// Where req.ip comes from, which is what every IP-keyed rate limiter buckets
+// on. Behind a reverse proxy this MUST name the proxy (TRUST_PROXY, see
+// utils/config.ts) or every client arrives as the proxy's address and shares
+// one bucket site-wide. A module-load read, not per-request: Express compiles
+// the setting once, and a trust boundary changing under a running process is
+// a redeploy, not a config drift to accommodate.
+const trustProxy = getTrustProxy();
+if (trustProxy !== false) {
+  app.set("trust proxy", trustProxy);
+}
 // First in the chain so every downstream handler has req.log carrying the
 // request id, and every request/response pair is logged once.
 app.use(pinoHttp({ logger }));

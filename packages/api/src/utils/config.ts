@@ -103,3 +103,30 @@ const BCRYPT_COST_DEFAULT = 12;
 export const getBcryptCost = (): number =>
   readPositiveNumberEnv("BCRYPT_COST", { integer: true, min: 4, max: 31 }) ??
   BCRYPT_COST_DEFAULT;
+
+// Where the trust boundary with a reverse proxy sits — Express's "trust
+// proxy" setting, carried by TRUST_PROXY. The value is security-sensitive in
+// both directions: unset behind a proxy and every client shares the proxy
+// IP's rate-limit buckets (login's 10/15min becomes a site-wide budget); too
+// loose and any caller can name its own IP in X-Forwarded-For and opt out of
+// IP-keyed limiting entirely. Accepted shapes (all state a boundary rather
+// than "trust anyone"):
+//   - unset / ""      → no proxy; direct connections only (the default)
+//   - "loopback", "linklocal", "uniquelocal", or an address/CIDR list
+//                     → trust exactly those peers (same-box nginx = loopback;
+//                       a proxy in a Docker bridge network = its subnet)
+//   - a positive int  → hop count, for proxies whose address isn't stable
+//                       (a managed load balancer or PaaS router)
+// The permissive value ("true") is refused at boot by validateEnv; an
+// invalid address/CIDR throws when app.ts applies it — also at boot.
+export const parseTrustProxy = (
+  raw: string | undefined,
+): string | number | false => {
+  const value = (raw ?? "").trim();
+  if (!value) return false;
+  if (/^\d+$/.test(value)) return Number(value);
+  return value;
+};
+
+export const getTrustProxy = (): string | number | false =>
+  parseTrustProxy(process.env.TRUST_PROXY);

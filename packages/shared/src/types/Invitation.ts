@@ -22,10 +22,13 @@ export const orgInviteRoleSchema = z.enum(ASSIGNABLE_ORGANIZATION_ROLES);
 
 export type OrgInviteRole = z.infer<typeof orgInviteRoleSchema>;
 
+// The FE-visible contract. Deliberately WITHOUT token_hash: the credential
+// digest never crosses the wire, and keeping it out of this schema means a
+// handler returning a raw DB row (which carries it — the API-internal
+// InvitationRow type) is a compiler error, not a hand-remembered strip.
 export const invitationSchema = z.object({
   id: z.string().uuid().optional(),
   email: z.string().email(),
-  token_hash: z.string().optional(),
   type: invitationTypeSchema,
   organization_id: z.string().uuid().nullable().optional(),
   role: orgInviteRoleSchema.nullable().optional(),

@@ -1,9 +1,5 @@
-import {
-  Invitation,
-  Organization,
-  OrganizationMember,
-} from "@auth-boilerplate/shared";
-import { Admin, RefreshToken, User } from "../types";
+import { Organization, OrganizationMember } from "@auth-boilerplate/shared";
+import { InvitationRow, Admin, RefreshToken, User } from "../types";
 import db from "./db";
 import { runMigrations } from "./migrate";
 
@@ -22,7 +18,7 @@ async function seed({
   refreshTokensData?: RefreshToken[];
   organizationsData?: Organization[];
   organizationMembersData?: OrganizationMember[];
-  invitationsData?: Invitation[];
+  invitationsData?: InvitationRow[];
   verbose?: boolean;
 }) {
   if (process.env.NODE_ENV === "production") {

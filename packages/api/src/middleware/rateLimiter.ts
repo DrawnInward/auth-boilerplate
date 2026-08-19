@@ -55,7 +55,12 @@ function createLimiter(
     standardHeaders: true,
     legacyHeaders: false,
     skipSuccessfulRequests: false,
-    validate: { xForwardedForHeader: false },
+    // The xForwardedForHeader validation is ON: it complains when a request
+    // carries X-Forwarded-For while Express is not configured to trust a
+    // proxy — precisely the one-bucket-for-everybody misconfiguration the
+    // TRUST_PROXY knob (app.ts) exists to prevent. It was suppressed here
+    // while no trust-proxy wiring existed; leaving it suppressed would hide
+    // the same mistake coming back.
   });
 }
 

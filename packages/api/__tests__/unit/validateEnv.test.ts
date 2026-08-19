@@ -20,6 +20,7 @@ const OPTIONAL_VARS = [
   "EMAIL_PROVIDER",
   "SENDGRID_API_KEY",
   "EMAIL_FROM",
+  "TRUST_PROXY",
 ];
 
 describe("validateEnv", () => {
@@ -191,6 +192,35 @@ describe("validateEnv", () => {
       process.env.EMAIL_FROM = "noreply@example.com";
 
       expect(collectEnvProblems()).toEqual([]);
+    });
+  });
+
+  describe("trust proxy", () => {
+    it.each(["loopback", "10.0.0.0/8, 172.16.0.0/12", "1"])(
+      "accepts a boundary-naming value (%s)",
+      (value) => {
+        process.env.TRUST_PROXY = value;
+
+        expect(collectEnvProblems()).toEqual([]);
+      },
+    );
+
+    // "true" trusts X-Forwarded-For from any peer — every IP-keyed limit
+    // becomes opt-out. Refused whatever the casing.
+    it.each(["true", "TRUE", "True"])("refuses the permissive %s", (value) => {
+      process.env.TRUST_PROXY = value;
+
+      expect(collectEnvProblems()).toEqual([
+        expect.stringContaining('TRUST_PROXY must never be "true"'),
+      ]);
+    });
+
+    it('refuses "false" in favour of unsetting the variable', () => {
+      process.env.TRUST_PROXY = "false";
+
+      expect(collectEnvProblems()).toEqual([
+        'TRUST_PROXY should be unset, not "false"',
+      ]);
     });
   });
 

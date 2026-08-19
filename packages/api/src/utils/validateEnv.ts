@@ -100,6 +100,23 @@ export const collectEnvProblems = (): string[] => {
     }
   }
 
+  // TRUST_PROXY takes Express's meaningful "trust proxy" shapes (see
+  // utils/config.ts). The two boolean spellings are refused: "true" trusts
+  // X-Forwarded-For from ANY peer, which lets every caller name its own IP
+  // and opt out of IP-keyed rate limiting — the permissive misconfiguration
+  // this knob exists to prevent — and "false" is ambiguous (unset the
+  // variable to mean "no proxy").
+  {
+    const trustProxy = (process.env.TRUST_PROXY ?? "").trim().toLowerCase();
+    if (trustProxy === "true") {
+      problems.push(
+        'TRUST_PROXY must never be "true" (it would trust X-Forwarded-For from any peer) — name the boundary instead: "loopback", an address/CIDR list, or a hop count',
+      );
+    } else if (trustProxy === "false") {
+      problems.push('TRUST_PROXY should be unset, not "false"');
+    }
+  }
+
   // Likewise, an unusable SendGrid config falls back to logging emails to the
   // console, which in production means silently sending nothing.
   if ((process.env.EMAIL_PROVIDER ?? "").trim().toLowerCase() === "sendgrid") {

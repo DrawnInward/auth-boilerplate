@@ -1,8 +1,8 @@
 import db from "../database/db";
 import { Pool, PoolClient } from "pg";
 import { v4 as uuidv4 } from "uuid";
-import { Invitation, InvitationType } from "@auth-boilerplate/shared";
-import { CreateInvitationDto } from "../types";
+import { InvitationType } from "@auth-boilerplate/shared";
+import { CreateInvitationDto, InvitationRow } from "../types";
 import { determinateHash } from "../utils";
 import { getOrganizationById } from "./organization.models";
 import { PaginationOptions } from "../types/PaginationOptions";
@@ -22,7 +22,7 @@ const EXPIRY_TIMES: Record<InvitationType, number> = {
 export const createInvitation = async (
   data: CreateInvitationDto,
   client: PoolClient | Pool = db,
-): Promise<{ invitation: Invitation; token: string }> => {
+): Promise<{ invitation: InvitationRow; token: string }> => {
   const { email, type, organization_id, role, invited_by, new_email, user_id } =
     data;
 
@@ -91,7 +91,7 @@ export const createInvitation = async (
 export const getInvitationByTokenHash = async (
   tokenHash: string,
   client: PoolClient | Pool = db,
-): Promise<Invitation | null> => {
+): Promise<InvitationRow | null> => {
   const queryString = `
     SELECT * FROM invitations
     WHERE token_hash = $1
@@ -108,7 +108,7 @@ export const getInvitationByTokenHash = async (
 export const getInvitationById = async (
   id: string,
   client: PoolClient | Pool = db,
-): Promise<Invitation | null> => {
+): Promise<InvitationRow | null> => {
   const queryString = `
     SELECT * FROM invitations
     WHERE id = $1;
@@ -129,7 +129,7 @@ export const getInvitationById = async (
 export const markInvitationUsed = async (
   id: string,
   client: PoolClient | Pool = db,
-): Promise<Invitation> => {
+): Promise<InvitationRow> => {
   const queryString = `
     UPDATE invitations
     SET used_at = NOW()
@@ -168,7 +168,7 @@ export const listInvitationsByOrganization = async (
   organizationId: string,
   pagination: PaginationOptions = {},
   client: PoolClient | Pool = db,
-): Promise<Invitation[]> => {
+): Promise<InvitationRow[]> => {
   const { text, values } = pagedQuery({
     select: "SELECT * FROM invitations",
     where: ["used_at IS NULL", "expires_at > NOW()"],
@@ -212,7 +212,7 @@ export const validateInvitationToken = async (
   token: string,
   expectedType?: InvitationType,
   client: PoolClient | Pool = db,
-): Promise<Invitation> => {
+): Promise<InvitationRow> => {
   const tokenHash = determinateHash(token);
   const invitation = await getInvitationByTokenHash(tokenHash, client);
 
@@ -252,7 +252,7 @@ export const getPendingInvitationsForEmail = async (
   email: string,
   type?: InvitationType,
   client: PoolClient | Pool = db,
-): Promise<Invitation[]> => {
+): Promise<InvitationRow[]> => {
   let queryString = `
     SELECT * FROM invitations
     WHERE email = $1 AND used_at IS NULL AND expires_at > NOW()

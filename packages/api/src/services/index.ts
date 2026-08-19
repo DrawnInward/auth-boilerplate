@@ -28,11 +28,14 @@ import * as userModels from "../models/users.models";
 import * as organizationModels from "../models/organization.models";
 import * as memberModels from "../models/organizationMembers.models";
 import {
+  deactivateAdmin,
   getAdminById,
   getAdminWithPasswordById,
 } from "../models/admins.models";
+import { revokeUserTokens } from "../models/refresh.models";
 import { withTransaction } from "../utils/withTransaction";
 import { SafeAdmin, SafeUser } from "../types";
+import { createAccountService, AccountService } from "./account.service";
 import { createAuthService, AuthService } from "./auth.service";
 import { createEmailService, EmailService } from "./email.service";
 import { createMfaService, MfaService } from "./mfa.service";
@@ -47,6 +50,7 @@ import { createOauthService, OauthService } from "./oauth.service";
 export type { SafeAdmin, SafeUser };
 
 export type Services = {
+  account: AccountService;
   auth: AuthService;
   email: EmailService;
   userMfa: MfaService<SafeUser>;
@@ -104,7 +108,19 @@ const mfaCommonDeps = {
   },
 };
 
+const account = createAccountService({
+  users: {
+    getUserById: userModels.getUserById,
+    modifyUser: userModels.modifyUser,
+    deleteUser: userModels.deleteUser,
+  },
+  admins: { deactivateAdmin },
+  revokeTokens: revokeUserTokens,
+  runTransaction,
+});
+
 export const services: Services = {
+  account,
   auth,
   email,
   userMfa: createMfaService<SafeUser>({
@@ -155,6 +171,11 @@ export const services: Services = {
   }),
 };
 
+export {
+  createAccountService,
+  accountValidityChanged,
+} from "./account.service";
+export type { AccountService, AccountServiceDeps } from "./account.service";
 export { createAuthService } from "./auth.service";
 export type {
   AuthService,

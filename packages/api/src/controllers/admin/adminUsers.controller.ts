@@ -4,12 +4,9 @@ import {
   getUserById,
   getUser,
   getUserStats,
-  modifyUser,
-  deleteUser,
   updateUserOrgPermission,
 } from "../../models/users.models";
 import { disableMfa, deleteAllBackupCodes } from "../../models/mfa.models";
-import { revokeUserTokens } from "../../models/refresh.models";
 import db from "../../database/db";
 import {
   createInvitation,
@@ -121,21 +118,11 @@ export const updateUser = async (
     const { userId } = req.params;
     const updates = req.body;
 
-    const updatedUser = await withTransaction(db, async (client) => {
-      const updated = await modifyUser(userId, updates, client);
-      // Deactivating an account must end its live sessions in the same
-      // transaction, so a banned user can't keep working from an open tab.
-      // The schema also lets deleted_at/deactivated_at through this endpoint —
-      // any of the three means "this account stops working now". (S4)
-      if (
-        updates.is_active === false ||
-        updates.deleted_at ||
-        updates.deactivated_at
-      ) {
-        await revokeUserTokens(userId, "user", client);
-      }
-      return updated;
-    });
+    // The account service owns the write-revoke pairing: touching
+    // is_active/deleted_at/deactivated_at — in either direction — ends the
+    // user's sessions in the same transaction. (S4 + the reactivation rule,
+    // see services/account.service.ts.)
+    const updatedUser = await services.account.updateUser(userId, updates);
 
     return sendSuccess(res, updatedUser, "User updated successfully");
   } catch (error) {
@@ -180,12 +167,9 @@ export const deleteUserHandler = async (
   try {
     const { userId } = req.params;
 
-    const deletedUser = await withTransaction(db, async (client) => {
-      const deleted = await deleteUser(userId, client);
-      // A deleted account keeps no working sessions. (S4)
-      await revokeUserTokens(userId, "user", client);
-      return deleted;
-    });
+    // A deleted account keeps no working sessions (S4) — the account service
+    // owns that pairing.
+    const deletedUser = await services.account.deleteUser(userId);
 
     return sendSuccess(res, deletedUser, "User deleted successfully");
   } catch (error) {
@@ -245,7 +229,13 @@ export const disableUserMfa = async (
       await deleteAllBackupCodes(userId, "user", client);
     });
 
-    await services.email.sendMfaDisabled(user.email!);
+    // After commit: a failed notification must not fail an MFA disable that
+    // already happened — a retry would 400 on "MFA is not enabled".
+    try {
+      await services.email.sendMfaDisabled(user.email!);
+    } catch (emailError) {
+      req.log?.warn({ err: emailError }, "mfa-disabled email failed to send");
+    }
 
     return sendSuccess(res, null, "MFA disabled for user");
   } catch (error) {

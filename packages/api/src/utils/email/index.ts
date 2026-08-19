@@ -1,4 +1,6 @@
-export { textToHtml } from "./textToHtml";
+// Deliberately narrow: the builders and the provider lookup are the whole
+// public surface. textToHtml and the wire types stay internal so a future
+// caller can't hand-roll a send around the email service.
 export { getEmailProvider } from "./providers";
 export {
   buildAccountExistsEmail,
@@ -12,4 +14,3 @@ export {
   buildAdminInviteEmail,
   buildAdminRegistrationInviteEmail,
 } from "./templates";
-export { EmailOptions, ClickableLink } from "../../interfaces/email";

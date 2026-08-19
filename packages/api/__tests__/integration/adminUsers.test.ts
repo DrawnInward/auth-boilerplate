@@ -121,6 +121,79 @@ describe("Admin User Management Integration Tests", () => {
         .expect(401);
       expect(response.body.message).toBe("Refresh token has been revoked");
     });
+
+    it("does not revoke on a benign edit, even though the form always submits is_active", async () => {
+      const user = await createUser({
+        email: "s4.benign@test.com",
+        password_hash: await hashPassword("Password1"),
+        email_verified: true,
+        is_active: true,
+        created_through: "self_registered",
+      });
+      const refreshCookie = await loginRefreshCookie("s4.benign@test.com");
+
+      // The admin edit form submits the whole form on every save — an
+      // unchanged is_active alongside a real edit must not log the user out
+      // of every device.
+      await request(app)
+        .put(`/api/admin/users/${user.user_id}`)
+        .set("Cookie", adminCookies)
+        .send({ email: "s4.benign.new@test.com", is_active: true })
+        .expect(200);
+
+      const rows = await db.query(
+        "SELECT is_active FROM refresh WHERE role_id = $1",
+        [user.user_id],
+      );
+      expect(rows.rows.length).toBeGreaterThan(0);
+      rows.rows.forEach((r) => expect(r.is_active).toBe(true));
+
+      await request(app)
+        .post("/api/auth/refresh")
+        .set("Cookie", [refreshCookie])
+        .expect(200);
+    });
+
+    it("revokes on reactivation, so sessions surviving an out-of-band deactivation die", async () => {
+      const user = await createUser({
+        email: "s4.reactivate@test.com",
+        password_hash: await hashPassword("Password1"),
+        email_verified: true,
+        is_active: true,
+        created_through: "self_registered",
+      });
+      const refreshCookie = await loginRefreshCookie("s4.reactivate@test.com");
+
+      // An out-of-band deactivation: written straight to the DB (a console
+      // fix, a migration script), so no revoke hook ran and the refresh row
+      // is still alive — the one path revoke-on-disable cannot reach.
+      await db.query("UPDATE users SET is_active = false WHERE user_id = $1", [
+        user.user_id,
+      ]);
+
+      await request(app)
+        .put(`/api/admin/users/${user.user_id}`)
+        .set("Cookie", adminCookies)
+        .send({ is_active: true })
+        .expect(200);
+
+      // The reactivated account provably starts with zero sessions: the row
+      // that survived the out-of-band write is dead now.
+      const rows = await db.query(
+        "SELECT is_active FROM refresh WHERE role_id = $1",
+        [user.user_id],
+      );
+      expect(rows.rows.length).toBeGreaterThan(0);
+      rows.rows.forEach((r) => expect(r.is_active).toBe(false));
+
+      // The account itself is active again — the refresh dies at the
+      // revoked-token check, not the principal gate.
+      const response = await request(app)
+        .post("/api/auth/refresh")
+        .set("Cookie", [refreshCookie])
+        .expect(401);
+      expect(response.body.message).toBe("Refresh token has been revoked");
+    });
   });
 
   describe("POST /api/admin/users", () => {
@@ -562,6 +635,38 @@ describe("Admin User Management Integration Tests", () => {
         [userId],
       );
       expect(check.rows[0].deleted_at).toBeNull();
+    });
+
+    it("strips a password sent alongside legal fields — admins never set passwords (D3)", async () => {
+      const user = await createUser({
+        email: "d3.password@test.com",
+        password_hash: await hashPassword("Password1"),
+        email_verified: false,
+        is_active: true,
+        created_through: "self_registered",
+      });
+
+      const before = await db.query(
+        "SELECT password_hash FROM users WHERE user_id = $1",
+        [user.user_id],
+      );
+
+      // Deliberate contract: the shared schema strips password. The legal
+      // field applies; custody of the password stays with the user via the
+      // send-password-reset flow.
+      const response = await request(app)
+        .put(`/api/admin/users/${user.user_id}`)
+        .set("Cookie", adminCookies)
+        .send({ password: "AttackerChosen1", email_verified: true })
+        .expect(200);
+
+      expect(response.body.data.email_verified).toBe(true);
+
+      const after = await db.query(
+        "SELECT password_hash FROM users WHERE user_id = $1",
+        [user.user_id],
+      );
+      expect(after.rows[0].password_hash).toBe(before.rows[0].password_hash);
     });
 
     it("rejects a password-only body now the field has left the contract (D3)", async () => {

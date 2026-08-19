@@ -1032,3 +1032,33 @@ divergence adopted; both repos now share one contract):
   `issueSession` is the invariant, early caller gates are the UX).
 - The `needs_linking` callback branch stays ungated (matches skoped): the link
   attempt itself is where the account is identified and refused.
+
+**2026-08-19 — Step-9 riders: TRUST_PROXY knob + account service (deactivate→revoke
+fusion, reactivation revoke):**
+
+- **`TRUST_PROXY` env knob** (subsumes the `TRUST_PROXY_HOPS` promise above — the
+  general shape, not just hop counts): `parseTrustProxy`/`getTrustProxy` in
+  `utils/config.ts`; unset = no proxy (the default), `"loopback"`/address/CIDR
+  list = named boundary, positive integer = hop count. `app.set("trust proxy", …)`
+  wired in app.ts at module load. Boot validation refuses `"true"` (trusts
+  X-Forwarded-For from any peer — every IP-keyed limit becomes opt-out) and
+  `"false"` (unset instead). The rate limiters' `xForwardedForHeader` validation
+  is back ON — it was suppressed while no trust-proxy wiring existed, and leaving
+  it suppressed would hide the same one-bucket-for-everybody mistake returning.
+  Pinned by `trustProxy.test.ts` (parse shapes, default posture, never-permissive,
+  per-shape resolution behaviour incl. spoof-prepend) and the validateEnv suite.
+  Deployment note: same-box nginx = `loopback`; proxy in a Docker bridge = its
+  subnet CIDR; managed LB/PaaS = hop count. Skoped's deliberate divergence:
+  it hardcodes `"loopback"` (its topology is fixed and documented in its
+  server-spec) — the knob is the boilerplate half.
+- **`account.service.ts`** now owns the write-revoke pairing the admin controllers
+  did inline (adminUsers update/delete, adminAdmins disable): touching
+  `is_active`/`deleted_at`/`deactivated_at` — in EITHER direction — ends every
+  live session in the same transaction. The new half is the **reactivation
+  revoke**: an account provably restarts with zero sessions, closing the last
+  gap — a deactivation done as an out-of-band DB write (no revoke hook ran)
+  followed by an API reactivation would otherwise hand back every session that
+  survived it. Presented tokens were already burned by the `createAccessToken`
+  gate; this kills the unpresented ones. Pinned by `accountService.test.ts`
+  (field table, both directions, same-client pairing) and a new S4 integration
+  spec (out-of-band deactivate → API reactivate → surviving refresh row dead).
