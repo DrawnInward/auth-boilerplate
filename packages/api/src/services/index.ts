@@ -7,7 +7,6 @@
 // order the rest of the application happens to import things in.
 import "../utils/loadEnv";
 
-import { PoolClient } from "pg";
 import db from "../database/db";
 import { getAccessKey, getAppName, getFrontendUrl } from "../utils/config";
 import { getEmailProvider } from "../utils/email";
@@ -28,12 +27,14 @@ import * as userModels from "../models/users.models";
 import * as organizationModels from "../models/organization.models";
 import * as memberModels from "../models/organizationMembers.models";
 import {
+  createAdmin,
   deactivateAdmin,
   getAdminById,
   getAdminWithPasswordById,
 } from "../models/admins.models";
 import { revokeUserTokens } from "../models/refresh.models";
-import { withTransaction } from "../utils/withTransaction";
+import { RunTransaction, withTransaction } from "../utils/withTransaction";
+import { hashPassword, verifyPassword } from "../utils/hashPassword";
 import { SafeAdmin, SafeUser } from "../types";
 import { createAccountService, AccountService } from "./account.service";
 import { createAuthService, AuthService } from "./auth.service";
@@ -44,6 +45,14 @@ import {
   InvitationService,
 } from "./invitation.service";
 import { createOauthService, OauthService } from "./oauth.service";
+import {
+  createCredentialService,
+  CredentialService,
+} from "./credential.service";
+import {
+  createOrganizationService,
+  OrganizationService,
+} from "./organization.service";
 
 // Moved to types/User.ts / types/Admin.ts (and widened to omit mfa_secret);
 // re-exported so existing importers keep working.
@@ -57,6 +66,8 @@ export type Services = {
   adminMfa: MfaService<SafeAdmin>;
   invitation: InvitationService;
   oauth: OauthService;
+  credential: CredentialService;
+  organization: OrganizationService;
 };
 
 // The provider is resolved per send, as the old sendEmail helper did, so
@@ -88,8 +99,7 @@ const email = createEmailService({
   frontendUrl: getFrontendUrl(),
 });
 
-const runTransaction = <T>(fn: (client: PoolClient) => Promise<T>) =>
-  withTransaction(db, fn);
+const runTransaction: RunTransaction = (fn) => withTransaction(db, fn);
 
 // Everything but the principal seam is identical between the two MFA services.
 const mfaCommonDeps = {
@@ -119,10 +129,30 @@ const account = createAccountService({
   runTransaction,
 });
 
+const credential = createCredentialService({
+  users: userModels,
+  admins: { createAdmin },
+  invitations: invitationModels,
+  mfa: mfaStore,
+  hashPassword,
+  verifyPassword,
+  revokeTokens: revokeUserTokens,
+  issueSession: auth.issueSession,
+  runTransaction,
+});
+
+const organization = createOrganizationService({
+  organizations: organizationModels,
+  members: memberModels,
+  runTransaction,
+});
+
 export const services: Services = {
   account,
   auth,
   email,
+  credential,
+  organization,
   userMfa: createMfaService<SafeUser>({
     roleType: "user",
     principals: {
@@ -210,3 +240,14 @@ export type {
   OauthServiceDeps,
   GoogleCallbackOutcome,
 } from "./oauth.service";
+export { createCredentialService } from "./credential.service";
+export type {
+  CredentialService,
+  CredentialServiceDeps,
+} from "./credential.service";
+export { createOrganizationService } from "./organization.service";
+export type {
+  OrganizationService,
+  OrganizationServiceDeps,
+  CreateOrganizationInput,
+} from "./organization.service";

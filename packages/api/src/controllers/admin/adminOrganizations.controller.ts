@@ -1,6 +1,5 @@
 import { Request, Response, NextFunction } from "express";
 import {
-  createOrganization,
   getOrganizations,
   getOrganizationById,
   modifyOrganization,
@@ -15,6 +14,7 @@ import {
   removeOrganizationMember,
 } from "../../models/organizationMembers.models";
 import { sendSuccess, sendCreated } from "../../utils/responseUtils";
+import { services } from "../../services";
 import { getValidatedQuery } from "../../middleware/validate";
 import type {
   OrganizationMemberParams,
@@ -22,9 +22,7 @@ import type {
   OrganizationsQuery,
   PaginationQuery,
 } from "@auth-boilerplate/shared";
-import db from "../../database/db";
 import { httpError } from "../../utils/httpError";
-import { withTransaction } from "../../utils/withTransaction";
 
 export const createOrganizationHandler = async (
   req: Request,
@@ -33,22 +31,10 @@ export const createOrganizationHandler = async (
 ) => {
   try {
     const { name, slug, owner_id } = req.body;
-
-    if (!owner_id) {
-      throw httpError(400, "owner_id is required");
-    }
-
-    const newOrg = await withTransaction(db, async (client) => {
-      const org = await createOrganization({ name, slug, owner_id }, client);
-
-      await addOrganizationMember(
-        org.id,
-        { user_id: owner_id, role: "owner" },
-        null,
-        client,
-      );
-
-      return org;
+    const newOrg = await services.organization.createOrganization({
+      name,
+      slug,
+      ownerId: owner_id,
     });
 
     return sendCreated(res, newOrg, "Organization created successfully");

@@ -3,10 +3,12 @@
 // (principal lookups, session-claim mapping) arriving as dependencies.
 
 import bcrypt from "bcrypt";
+import { verifyPassword } from "../utils/hashPassword";
 import { Pool, PoolClient } from "pg";
 import type * as mfaModels from "../models/mfa.models";
 import { RoleType, BackupCode } from "../models/mfa.models";
 import { generateTotpSecret, verifyTotpCode } from "../utils/totp";
+import { RunTransaction } from "../utils/withTransaction";
 import { generateBackupCodes, hashBackupCodes } from "../utils/backupCodes";
 import { httpError } from "../utils/httpError";
 import { MfaChallengePayload } from "../utils/mfaChallenge";
@@ -50,7 +52,7 @@ export type MfaServiceDeps<P> = {
   principals: MfaPrincipalSource<P>;
   store: MfaStore;
   challenges: MfaChallengeGate;
-  runTransaction: <T>(fn: (client: PoolClient) => Promise<T>) => Promise<T>;
+  runTransaction: RunTransaction;
   issueSession: AuthService["issueSession"];
   email: {
     sendMfaEnabled(to: string): Promise<void>;
@@ -226,7 +228,7 @@ export const createMfaService = <P extends { email: string }>({
         "No password set. Use set-password endpoint instead.",
       );
     }
-    if (!(await bcrypt.compare(password, principal.password_hash))) {
+    if (!(await verifyPassword(password, principal.password_hash))) {
       throw httpError(401, "Invalid password");
     }
 

@@ -4,6 +4,11 @@ import { getBcryptCost } from "./config";
 
 const log = childLogger("hashPassword");
 
+export const verifyPassword = (
+  password: string,
+  hash: string,
+): Promise<boolean> => bcrypt.compare(password, hash);
+
 export const hashPassword = async (password: string): Promise<string> => {
   try {
     const hashedPassword = await bcrypt.hash(password, getBcryptCost());

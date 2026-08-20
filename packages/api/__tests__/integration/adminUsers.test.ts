@@ -5,6 +5,15 @@ import seed from "../../src/database/seed";
 import { testAdmins, testUsers } from "../../src/database/test-data";
 import { createUser } from "../../src/models/users.models";
 import { hashPassword } from "../../src/utils";
+import {
+  createBackupCodes,
+  enableMfa,
+  getBackupCodeCount,
+  getMfaStatus,
+  setMfaSecret,
+} from "../../src/models/mfa.models";
+import { hashBackupCodes } from "../../src/utils/backupCodes";
+import { services } from "../../src/services";
 
 require("dotenv").config({ quiet: true });
 
@@ -882,6 +891,106 @@ describe("Admin User Management Integration Tests", () => {
 
       expect(JSON.stringify(listResponse.body)).not.toContain("password_hash");
       expect(JSON.stringify(listResponse.body)).not.toContain("$2b$");
+    });
+  });
+
+  describe("POST /api/admin/users/:userId/disable-mfa", () => {
+    const makeMfaUser = async (email: string) => {
+      const user = await createUser({
+        email,
+        password_hash: await hashPassword("Password1"),
+        email_verified: true,
+        is_active: true,
+        created_through: "self_registered",
+      });
+      const userId = user.user_id!;
+      await setMfaSecret(userId, "user", "JBSWY3DPEHPK3PXP");
+      await enableMfa(userId, "user");
+      await createBackupCodes(
+        userId,
+        "user",
+        await hashBackupCodes(["AAAA-1111", "BBBB-2222"]),
+      );
+      return userId;
+    };
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    it("disables MFA, deletes backup codes, and emails the user", async () => {
+      const sendSpy = jest
+        .spyOn(services.email, "sendMfaDisabled")
+        .mockResolvedValue(undefined);
+      const userId = await makeMfaUser("admin.disable.mfa@test.com");
+
+      const response = await request(app)
+        .post(`/api/admin/users/${userId}/disable-mfa`)
+        .set("Cookie", adminCookies)
+        .expect(200);
+
+      expect(response.body.message).toBe("MFA disabled for user");
+      const status = await getMfaStatus(userId, "user");
+      expect(status?.mfa_enabled).toBe(false);
+      expect(await getBackupCodeCount(userId, "user")).toBe(0);
+      expect(sendSpy).toHaveBeenCalledWith("admin.disable.mfa@test.com");
+    });
+
+    it("still succeeds when the notification email fails to send", async () => {
+      jest
+        .spyOn(services.email, "sendMfaDisabled")
+        .mockRejectedValue(new Error("smtp down"));
+      const userId = await makeMfaUser("admin.disable.mfa.email@test.com");
+
+      await request(app)
+        .post(`/api/admin/users/${userId}/disable-mfa`)
+        .set("Cookie", adminCookies)
+        .expect(200);
+
+      const status = await getMfaStatus(userId, "user");
+      expect(status?.mfa_enabled).toBe(false);
+      expect(await getBackupCodeCount(userId, "user")).toBe(0);
+    });
+
+    it("returns 400 when MFA is not enabled for the user", async () => {
+      const sendSpy = jest.spyOn(services.email, "sendMfaDisabled");
+      const user = await createUser({
+        email: "admin.disable.nomfa@test.com",
+        password_hash: await hashPassword("Password1"),
+        email_verified: true,
+        is_active: true,
+        created_through: "self_registered",
+      });
+
+      const response = await request(app)
+        .post(`/api/admin/users/${user.user_id}/disable-mfa`)
+        .set("Cookie", adminCookies)
+        .expect(400);
+
+      expect(response.body.message).toBe("MFA is not enabled for this user");
+      expect(sendSpy).not.toHaveBeenCalled();
+    });
+
+    it("returns 404 for an unknown user", async () => {
+      const response = await request(app)
+        .post(
+          "/api/admin/users/00000000-0000-4000-8000-000000000000/disable-mfa",
+        )
+        .set("Cookie", adminCookies)
+        .expect(404);
+
+      expect(response.body.message).toBe("User not found");
+    });
+
+    it("returns 401 without authentication", async () => {
+      const userId = await makeMfaUser("admin.disable.mfa.anon@test.com");
+
+      await request(app)
+        .post(`/api/admin/users/${userId}/disable-mfa`)
+        .expect(401);
+
+      const status = await getMfaStatus(userId, "user");
+      expect(status?.mfa_enabled).toBe(true);
     });
   });
 });

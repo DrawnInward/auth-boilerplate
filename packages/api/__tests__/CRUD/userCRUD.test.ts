@@ -546,6 +546,36 @@ describe("User Model CRUD Operations", () => {
   });
 
   describe("Transaction handling", () => {
+    it("getUser reads through an injected transaction client", async () => {
+      const client = await db.connect();
+
+      try {
+        await client.query("BEGIN");
+
+        await createUser(
+          {
+            email: "client.injection@example.com",
+            password_hash: "tx_hash",
+          },
+          client,
+        );
+
+        // Uncommitted: visible only to the transaction that wrote it, so a
+        // hit here proves the client is honoured rather than the pool.
+        const throughClient = await getUser(
+          "client.injection@example.com",
+          {},
+          client,
+        );
+        expect(throughClient).not.toBeNull();
+        expect(await getUser("client.injection@example.com")).toBeNull();
+
+        await client.query("ROLLBACK");
+      } finally {
+        client.release();
+      }
+    });
+
     it("should support transactions for createUser", async () => {
       const client = await db.connect();
 

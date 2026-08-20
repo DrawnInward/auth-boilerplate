@@ -6,18 +6,11 @@ import {
   getUserStats,
   updateUserOrgPermission,
 } from "../../models/users.models";
-import { disableMfa, deleteAllBackupCodes } from "../../models/mfa.models";
-import db from "../../database/db";
-import {
-  createInvitation,
-  invalidatePendingInvitations,
-} from "../../models/invitations.models";
 import { sendSuccess, sendCreated } from "../../utils/responseUtils";
 import { getValidatedQuery } from "../../middleware/validate";
 import type { UserParams, UsersQuery } from "@auth-boilerplate/shared";
 import { services } from "../../services";
 import { httpError } from "../../utils/httpError";
-import { withTransaction } from "../../utils/withTransaction";
 
 // POST /api/admin/users
 export const createUserHandler = async (
@@ -33,9 +26,7 @@ export const createUserHandler = async (
       throw httpError(409, "Email already exists");
     }
 
-    await invalidatePendingInvitations(email, "admin_invite");
-
-    const { invitation, token } = await createInvitation({
+    const { invitation, token } = await services.invitation.mintInvitation({
       email,
       type: "admin_invite",
     });
@@ -143,9 +134,7 @@ export const sendPasswordReset = async (
       throw httpError(404, "User not found");
     }
 
-    await invalidatePendingInvitations(user.email!, "password_reset");
-
-    const { token } = await createInvitation({
+    const { token } = await services.invitation.mintInvitation({
       email: user.email!,
       type: "password_reset",
     });
@@ -213,21 +202,7 @@ export const disableUserMfa = async (
   next: NextFunction,
 ) => {
   try {
-    const { userId } = req.params;
-
-    const user = await getUserById(userId);
-    if (!user) {
-      throw httpError(404, "User not found");
-    }
-
-    if (!user.mfa_enabled) {
-      throw httpError(400, "MFA is not enabled for this user");
-    }
-
-    await withTransaction(db, async (client) => {
-      await disableMfa(userId, "user", client);
-      await deleteAllBackupCodes(userId, "user", client);
-    });
+    const user = await services.credential.disableUserMfa(req.params.userId);
 
     // After commit: a failed notification must not fail an MFA disable that
     // already happened — a retry would 400 on "MFA is not enabled".

@@ -72,6 +72,7 @@ export const createUser = async (
 export const getUser = async (
   email: string,
   options: { includeSoftDeleted?: boolean } = {},
+  client: PoolClient | Pool = db,
 ): Promise<SafeUser | null> => {
   let queryString = `
     SELECT ${SAFE_USER_COLUMNS} FROM users
@@ -82,7 +83,7 @@ export const getUser = async (
     queryString += ` AND deleted_at IS NULL`;
   }
 
-  const result = await db.query(queryString, [email.toLowerCase()]);
+  const result = await client.query(queryString, [email.toLowerCase()]);
   if (result.rows.length === 0) {
     return null;
   }

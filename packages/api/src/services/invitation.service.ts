@@ -1,12 +1,13 @@
-import bcrypt from "bcrypt";
-import { PoolClient } from "pg";
 import type * as invitationModels from "../models/invitations.models";
+import { verifyPassword } from "../utils/hashPassword";
 import type * as userModels from "../models/users.models";
 import type * as organizationModels from "../models/organization.models";
 import type * as memberModels from "../models/organizationMembers.models";
 import { Invitation, OrgInviteRole } from "@auth-boilerplate/shared";
+import { CreateInvitationDto } from "../types";
 import { hashPassword, isAccountActive } from "../utils";
 import { httpError } from "../utils/httpError";
+import { RunTransaction } from "../utils/withTransaction";
 import { AuthService, SessionStart } from "./auth.service";
 import { EmailService } from "./email.service";
 
@@ -29,7 +30,7 @@ export type InvitationServiceDeps = {
   >;
   startSession: AuthService["startSession"];
   sendOrgInvite: EmailService["sendOrgInvite"];
-  runTransaction: <T>(fn: (client: PoolClient) => Promise<T>) => Promise<T>;
+  runTransaction: RunTransaction;
 };
 
 export type InviteMemberParams = {
@@ -47,6 +48,14 @@ export type AcceptedInvitation = {
 
 export type InvitationService = {
   inviteMember(params: InviteMemberParams): Promise<Invitation>;
+  /**
+   * Supersede any pending invitation for this address and type, and mint a
+   * new one — in one transaction, so a failed mint can never leave the
+   * address with its old token dead and no replacement.
+   */
+  mintInvitation(
+    dto: CreateInvitationDto,
+  ): Promise<{ invitation: Invitation; token: string }>;
   acceptInvitation(
     token: string,
     password: string | undefined,
@@ -62,6 +71,18 @@ export const createInvitationService = ({
   sendOrgInvite,
   runTransaction,
 }: InvitationServiceDeps): InvitationService => {
+  // Supersede any pending invitation for the address and mint the new one in
+  // one transaction, so exactly one token is ever live per (email, type).
+  const mintInvitation = (dto: CreateInvitationDto) =>
+    runTransaction(async (client) => {
+      await invitations.invalidatePendingInvitations(
+        dto.email,
+        dto.type,
+        client,
+      );
+      return invitations.createInvitation(dto, client);
+    });
+
   const inviteMember = async ({
     organizationId,
     email,
@@ -87,22 +108,12 @@ export const createInvitationService = ({
 
     // Atomic pair: a failed create must not leave the address with its
     // previous invitations already invalidated and nothing to accept.
-    const { invitation, token } = await runTransaction(async (client) => {
-      await invitations.invalidatePendingInvitations(
-        email,
-        "org_invite",
-        client,
-      );
-      return invitations.createInvitation(
-        {
-          email,
-          type: "org_invite",
-          organization_id: organizationId,
-          role,
-          invited_by: invitedBy,
-        },
-        client,
-      );
+    const { invitation, token } = await mintInvitation({
+      email,
+      type: "org_invite",
+      organization_id: organizationId,
+      role,
+      invited_by: invitedBy,
     });
 
     const inviter = await users.getUserById(invitedBy);
@@ -166,7 +177,7 @@ export const createInvitationService = ({
         throw httpError(401, "Invalid password");
       }
 
-      const passwordMatch = await bcrypt.compare(password, user.password_hash);
+      const passwordMatch = await verifyPassword(password, user.password_hash);
       if (!passwordMatch) {
         throw httpError(401, "Invalid password");
       }
@@ -249,5 +260,5 @@ export const createInvitationService = ({
     });
   };
 
-  return { inviteMember, acceptInvitation };
+  return { inviteMember, mintInvitation, acceptInvitation };
 };

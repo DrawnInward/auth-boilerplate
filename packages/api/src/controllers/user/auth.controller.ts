@@ -1,17 +1,12 @@
 import { Request, Response, NextFunction } from "express";
+import { verifyPassword } from "../../utils/hashPassword";
 import jwt from "jsonwebtoken";
 import { RefreshJwtPayload, RequestWithUser } from "../../types";
-import bcrypt from "bcrypt";
-import db from "../../database/db";
 import {
-  createUser,
   getUser,
   getUserWithPasswordById,
-  updatePassword,
   getUserWithMfaStatus,
   getUserById,
-  modifyUser,
-  setAuthProvider,
 } from "../../models/users.models";
 import {
   createAccessToken,
@@ -20,12 +15,10 @@ import {
 import {
   createInvitation,
   validateInvitationToken,
-  markInvitationUsed,
-  invalidatePendingInvitations,
 } from "../../models/invitations.models";
 import { sendSuccess, sendCreated } from "../../utils/responseUtils";
 import type { TokenParams } from "@auth-boilerplate/shared";
-import { setAuthCookies, hashPassword } from "../../utils";
+import { setAuthCookies } from "../../utils";
 import { clearAuthCookies } from "../../utils/clearAuthCookies";
 import { services } from "../../services";
 import {
@@ -35,7 +28,6 @@ import {
 import { parseCookies } from "../../utils";
 import { getAccountCreationMode, getOrgCreationMode } from "../../utils/config";
 import { httpError, isHttpError } from "../../utils/httpError";
-import { withTransaction } from "../../utils/withTransaction";
 
 import "../../utils/loadEnv";
 
@@ -105,7 +97,7 @@ export const login = async (
       throw httpError(401, "Invalid credentials");
     }
 
-    const passwordMatch = await bcrypt.compare(password, user.password_hash);
+    const passwordMatch = await verifyPassword(password, user.password_hash);
 
     if (!passwordMatch) {
       throw httpError(401, "Invalid credentials");
@@ -291,9 +283,7 @@ export const register = async (
       // equalised.)
       await services.email.sendAccountExists(canonicalEmail);
     } else {
-      await invalidatePendingInvitations(email, "registration");
-
-      const { token } = await createInvitation({
+      const { token } = await services.invitation.mintInvitation({
         email,
         type: "registration",
       });
@@ -343,56 +333,9 @@ export const completeRegistration = async (
   next: NextFunction,
 ) => {
   try {
-    const { accessToken, refreshToken, user } = await withTransaction(
-      db,
-      async (client) => {
-        const { token, password } = req.body;
-
-        const invitation = await validateInvitationToken(
-          token,
-          undefined,
-          client,
-        );
-
-        if (
-          invitation.type !== "registration" &&
-          invitation.type !== "admin_invite"
-        ) {
-          throw httpError(400, "Invalid invitation type for registration");
-        }
-
-        const createdThrough =
-          invitation.type === "admin_invite"
-            ? "admin_created"
-            : "self_registered";
-
-        const passwordHash = await hashPassword(password);
-        const user = await createUser(
-          {
-            email: invitation.email,
-            password_hash: passwordHash,
-            email_verified: true,
-            is_active: true,
-            created_through: createdThrough,
-          },
-          client,
-        );
-
-        await markInvitationUsed(invitation.id!, client);
-
-        const tokens = await services.auth.issueSession(
-          {
-            role_type: "user",
-            role_id: user.user_id!,
-            is_active: user.is_active === true,
-            email_verified: user.email_verified === true,
-          },
-          client,
-        );
-
-        return { ...tokens, user };
-      },
-    );
+    const { token, password } = req.body;
+    const { accessToken, refreshToken, user } =
+      await services.credential.completeRegistration({ token, password });
 
     setAuthCookies(res, accessToken, refreshToken);
 
@@ -421,9 +364,7 @@ export const forgotPassword = async (
     const user = await getUser(email);
 
     if (user) {
-      await invalidatePendingInvitations(email, "password_reset");
-
-      const { token } = await createInvitation({
+      const { token } = await services.invitation.mintInvitation({
         email,
         type: "password_reset",
       });
@@ -449,26 +390,8 @@ export const resetPassword = async (
   next: NextFunction,
 ) => {
   try {
-    await withTransaction(db, async (client) => {
-      const { token, password } = req.body;
-
-      const invitation = await validateInvitationToken(
-        token,
-        "password_reset",
-        client,
-      );
-      const user = await getUser(invitation.email);
-      if (!user) {
-        throw httpError(404, "User not found");
-      }
-
-      const passwordHash = await hashPassword(password);
-      await updatePassword(user.user_id!, passwordHash, client);
-
-      await markInvitationUsed(invitation.id!, client);
-
-      await revokeUserTokens(user.user_id!, "user", client);
-    });
+    const { token, password } = req.body;
+    await services.credential.resetPassword({ token, password });
 
     return sendSuccess(res, null, "Password reset successfully");
   } catch (error) {
@@ -482,26 +405,7 @@ export const setPassword = async (
   next: NextFunction,
 ) => {
   try {
-    await withTransaction(db, async (client) => {
-      const { role_id } = req.user!;
-      const { password } = req.body;
-
-      const user = await getUserWithPasswordById(role_id);
-      if (!user) {
-        throw httpError(404, "User not found");
-      }
-
-      if (user.password_hash) {
-        throw httpError(
-          400,
-          "Password already set. Use password reset instead.",
-        );
-      }
-
-      const passwordHash = await hashPassword(password);
-      await updatePassword(role_id, passwordHash, client);
-      await setAuthProvider(role_id, "both", client);
-    });
+    await services.credential.setPassword(req.user!.role_id, req.body.password);
 
     return sendSuccess(res, null, "Password set successfully");
   } catch (error) {
@@ -538,35 +442,12 @@ export const changePassword = async (
   next: NextFunction,
 ) => {
   try {
-    await withTransaction(db, async (client) => {
-      const { role_id } = req.user!;
-      const { current_password, new_password } = req.body;
-
-      const user = await getUserWithPasswordById(role_id);
-      if (!user) {
-        throw httpError(404, "User not found");
-      }
-
-      if (!user.password_hash) {
-        throw httpError(
-          400,
-          "No password set. Use set-password endpoint instead.",
-        );
-      }
-
-      const passwordMatch = await bcrypt.compare(
-        current_password,
-        user.password_hash,
-      );
-      if (!passwordMatch) {
-        throw httpError(401, "Current password is incorrect");
-      }
-
-      const passwordHash = await hashPassword(new_password);
-      await updatePassword(role_id, passwordHash, client);
-
-      await revokeUserTokens(role_id, "user", client);
-    });
+    const { current_password, new_password } = req.body;
+    await services.credential.changePassword(
+      req.user!.role_id,
+      current_password,
+      new_password,
+    );
 
     return sendSuccess(res, null, "Password changed successfully");
   } catch (error) {
@@ -592,7 +473,7 @@ export const requestEmailChange = async (
       throw httpError(400, "Password not set. Please set a password first.");
     }
 
-    const passwordMatch = await bcrypt.compare(password, user.password_hash);
+    const passwordMatch = await verifyPassword(password, user.password_hash);
     if (!passwordMatch) {
       throw httpError(401, "Incorrect password");
     }
@@ -643,33 +524,9 @@ export const confirmEmailChange = async (
   next: NextFunction,
 ) => {
   try {
-    const { invitation } = await withTransaction(db, async (client) => {
-      const token = req.params.token;
-
-      const invitation = await validateInvitationToken(
-        token,
-        "email_change",
-        client,
-      );
-
-      if (!invitation.new_email || !invitation.user_id) {
-        throw httpError(400, "Invalid email change invitation");
-      }
-
-      const existingUser = await getUser(invitation.new_email);
-      if (existingUser) {
-        throw httpError(409, "Email is no longer available");
-      }
-
-      await modifyUser(
-        invitation.user_id,
-        { email: invitation.new_email.toLowerCase() },
-        client,
-      );
-      await markInvitationUsed(invitation.id!, client);
-
-      return { invitation };
-    });
+    const invitation = await services.credential.confirmEmailChange(
+      req.params.token,
+    );
 
     return sendSuccess(
       res,

@@ -1,19 +1,12 @@
 import { Request, Response, NextFunction } from "express";
-import bcrypt from "bcrypt";
+import { verifyPassword } from "../../utils/hashPassword";
 import {
   getAdminWithMfaStatus,
   getAdminById,
-  createAdmin,
 } from "../../models/admins.models";
 import { revokeUserTokens } from "../../models/refresh.models";
-import {
-  validateInvitationToken,
-  markInvitationUsed,
-} from "../../models/invitations.models";
-import db from "../../database/db";
 import { sendSuccess, sendCreated } from "../../utils/responseUtils";
-import { setAuthCookies, parseCookies, hashPassword } from "../../utils";
-import { withTransaction } from "../../utils/withTransaction";
+import { setAuthCookies, parseCookies } from "../../utils";
 import { clearAuthCookies } from "../../utils/clearAuthCookies";
 import { services } from "../../services";
 import {
@@ -43,7 +36,7 @@ export const login = async (
       throw httpError(403, "Account is deactivated");
     }
 
-    const passwordMatch = await bcrypt.compare(password, admin.password_hash);
+    const passwordMatch = await verifyPassword(password, admin.password_hash);
 
     if (!passwordMatch) {
       throw httpError(401, "Invalid credentials");
@@ -142,43 +135,9 @@ export const completeRegistration = async (
   next: NextFunction,
 ) => {
   try {
-    const { accessToken, refreshToken, admin } = await withTransaction(
-      db,
-      async (client) => {
-        const { token, password } = req.body;
-
-        const invitation = await validateInvitationToken(
-          token,
-          "admin_registration",
-          client,
-        );
-
-        const passwordHash = await hashPassword(password);
-        const admin = await createAdmin(
-          {
-            email: invitation.email,
-            password_hash: passwordHash,
-            email_verified: true,
-            is_active: true,
-          },
-          client,
-        );
-
-        await markInvitationUsed(invitation.id!, client);
-
-        const tokens = await services.auth.issueSession(
-          {
-            role_type: "admin",
-            role_id: admin.admin_id!,
-            is_active: admin.is_active === true,
-            root: admin.root === true,
-          },
-          client,
-        );
-
-        return { ...tokens, admin };
-      },
-    );
+    const { token, password } = req.body;
+    const { accessToken, refreshToken, admin } =
+      await services.credential.completeAdminRegistration({ token, password });
 
     setAuthCookies(res, accessToken, refreshToken);
 

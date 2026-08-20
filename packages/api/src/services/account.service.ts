@@ -6,6 +6,7 @@
 // the Step-9 reactivation rule below.)
 
 import { Pool, PoolClient } from "pg";
+import { RunTransaction } from "../utils/withTransaction";
 import { SafeAdmin, SafeUser, UserPatchDto } from "../types";
 
 // The fields that decide whether an account is valid at all. A change to any
@@ -82,7 +83,7 @@ export type AccountServiceDeps = {
     roleType: "user" | "admin",
     client?: PoolClient | Pool,
   ) => Promise<string>;
-  runTransaction: <T>(fn: (client: PoolClient) => Promise<T>) => Promise<T>;
+  runTransaction: RunTransaction;
 };
 
 export type AccountService = {

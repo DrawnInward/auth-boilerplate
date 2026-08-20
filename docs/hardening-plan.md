@@ -1062,3 +1062,110 @@ fusion, reactivation revoke):**
   gate; this kills the unpresented ones. Pinned by `accountService.test.ts`
   (field table, both directions, same-client pairing) and a new S4 integration
   spec (out-of-band deactivate → API reactivate → surviving refresh row dead).
+
+**2026-08-20 — controllers hold no transactions: `credential.service`,
+`organization.service`, `invitation.inviteAdmin`** (both repos; the phase0 audit's
+"21 of 22 `withTransaction` sites live in controllers" is now zero). Behaviour-
+preserving under the existing suites — no existing spec edited, 1,054 → 1,076 API
+with the new unit tables:
+
+- **`credential.service.ts`** — password set/change/reset, user and admin
+  registration completion, email-change confirmation, admin disable-user-MFA. Same
+  guards, messages and codes as the inline controller transactions they replace.
+  **Client discipline changed on review** (the recurring pool-wedge class: the
+  moved code held the transaction client — and the invitation's FOR UPDATE lock —
+  through a bcrypt hash and a second pool acquire, `db.ts`'s named outage shape):
+  every bcrypt call and pool read now happens BEFORE `runTransaction`; token flows
+  pre-validate on the pool to refuse bad tokens cheaply, then re-validate under
+  FOR UPDATE inside — the `acceptInvitation` pattern. `getUser` gained the standard
+  optional client param so `confirmEmailChange` checks availability through the
+  transaction client. `disableUserMfa` reads the principal through the client
+  (skoped's Step-9 shape). A new service rather than more `accountService`
+  methods because its remit is different (credentials vs validity) and because
+  `tsc` covers `__tests__`: widening `AccountServiceDeps` would have broken the
+  existing fake builder and forced a test edit.
+- Review fixes also landed: `RunTransaction` type beside `withTransaction` (the
+  seam's shape written once), `verifyPassword` beside `hashPassword` (the ninth
+  direct `bcrypt.compare` was the moment to extract; the other eight sites are
+  unchanged and can migrate), the service signatures take the shared
+  `CompleteRegistrationDto`/`ResetPasswordDto` instead of local re-typings,
+  `revokeTokens` is `typeof revokeUserTokens`, `inviteMember`/`inviteAdmin` share a
+  private `mintInvitation`, and `createOrganization` takes `ownerId: string` (the
+  admin route's schema and the model already refuse a missing owner).
+  Deferred: `disableUserMfa` duplicates `mfa.service`'s disable pair — folding it
+  in would move the MFA-disabled email inside the service, and the integration
+  spec observes it via a spy on `services.email`, which a method reference captured
+  at composition would bypass. Record: `docs/reviews/service-extraction-2026-08-20.md`.
+- **Second pass (from the skoped review, mirrored back here):** `resetPassword`
+  now resolves its user INSIDE the transaction through the client rather than
+  from a pre-lock pool snapshot; the four older services (`account`,
+  `invitation`, `mfa`, `oauth`) take the extracted `RunTransaction` type
+  instead of hand-written copies of it; a CRUD spec pins that `getUser`
+  honours an injected client (mutation-checked). The skoped run also proposed
+  collapsing the double token validation — rejected: the locked re-validate
+  re-checks expiry and the D2 soft-deleted-org rule that
+  `markInvitationUsed`'s compare-and-set does not, and hashing first would put
+  ~250ms of bcrypt behind every junk token on an unauthenticated endpoint.
+- **Third pass (skoped's two re-run review angles, mirrored here):** the unit
+  fake for `getUser` discarded its client, so nothing pinned that the service
+  passes one — recorded and asserted now, mutation-checked. `verifyPassword`
+  had been extracted for a single consumer while six inline `bcrypt.compare`
+  password checks remained; all six migrated and the `bcrypt` import dropped
+  from four files (`mfa.service`'s backup-code compare and `utils/backupCodes`
+  keep theirs — different operation). `resetPassword` regained its cheap pool
+  404 before the hash, the one path where the pre-validate split had failed its
+  own rationale. `runTransaction`'s binding in the composition root is typed.
+  Interface JSDoc trimmed to what a `Promise<void>` cannot express. The diff
+  scan found no behaviour change in any moved handler.
+- **Fourth pass — token-mint trio (both repos):** `invalidatePendingInvitations`
+  - `createInvitation` ran outside any transaction in `register`,
+    `forgotPassword`, `adminUsers.createUserHandler` and
+    `adminUsers.sendPasswordReset`, while `inviteMember` had done that pair
+    atomically since Step 8. A create failing after the invalidate killed a live
+    token with no replacement. All four now call
+    `invitationService.mintInvitation(dto)`, the single public mint — it absorbed
+    `inviteAdmin`, which was a one-line alias. Guards, refusals and response
+    bodies stayed in the controllers. `requestEmailChange` was deliberately left:
+    it mints without superseding, a different shape (and nothing currently stops
+    a user holding several live email-change tokens — unestablished whether
+    that is intended).
+
+**2026-08-20 — OPEN, not yet done: `email_change` is the only mint that does
+not supersede.** Recorded here so it is not lost; no code has been written for
+it. `registration`, `password_reset`, `admin_invite` and `org_invite` all go
+through `invitationService.mintInvitation`, whose contract is "exactly one
+token live per address and type". `requestEmailChange` calls `createInvitation`
+directly with no `invalidatePendingInvitations`, so a user who sends a change
+to the wrong address and then corrects it leaves the first token live and
+usable by whoever controls that address; expiry and `confirmEmailChange`'s
+still-free re-check are the only mitigations, and nothing revokes. The fix is
+routing it through `mintInvitation` — note the invalidation keys on the
+invitation's `email` column (the user's _current_ address, not `new_email`),
+which gives the wanted one-pending-change-per-account semantics but IS a
+behaviour change, since two can be live today, so it needs its own test.
+Present identically in skoped (`docs/launch-backlog-2026-08-19.md` §5b);
+security-flavoured, so upstream first. No evidence either way that the
+omission was deliberate — treat the intent as unverified.
+
+- **`organization.service.ts`** — create-org + seat-owner as one transaction, shared
+  by the user and admin handlers; the admin's `owner_id is required` 400 moved in
+  with it (the user path always supplies the owner).
+- **`invitationService.inviteAdmin`** — the supersede+mint pair, no new deps. The
+  "email already an admin → 409" pre-check stays in the controller as a single
+  model read: moving it in needs an `admins.getAdmin` dep, i.e. one fake added to
+  the existing unit builder — deferred so this lands with zero test edits.
+- Controllers: `setAuthCookies`, response bodies and the post-commit warn-only
+  email in `disableUserMfa` stay at the call site; services never see `req`/`res`.
+  `db`/`withTransaction` imports are gone from every controller.
+
+**2026-08-20 — admin disable-user-MFA pinned** (both repos, test-only):
+
+- `POST /api/admin/users/:userId/disable-mfa` had no behavioural spec in either
+  repo — only the roleBoundary 401/403 matrix touched it. `adminUsers.test.ts`
+  now pins: MFA cleared + backup codes deleted + notification email sent (200);
+  **a failed email send still returns 200 with MFA disabled** (the post-commit
+  warn-only path, verified by mutation: removing the try/catch fails exactly that
+  spec); 400 when MFA is not enabled (no email); 404 unknown user; 401 anonymous
+  leaves MFA on. Test-only, no source change. Motivation: the handler is the one
+  remaining inline transaction whose behaviour the suite did not protect, ahead
+  of any move of the password-flow transactions behind a service.

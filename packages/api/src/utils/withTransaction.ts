@@ -1,5 +1,11 @@
 import { Pool, PoolClient } from "pg";
 
+// The shape services take as their transaction seam: the composition root
+// binds it to the real pool, unit tests hand it a fake client.
+export type RunTransaction = <T>(
+  fn: (client: PoolClient) => Promise<T>,
+) => Promise<T>;
+
 // The one transaction wrapper: BEGIN/COMMIT/ROLLBACK/release live here exactly
 // once, so no call site can forget the release or the rollback. The callback's
 // return value is returned after COMMIT; any throw rolls back and rethrows.

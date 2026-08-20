@@ -386,4 +386,29 @@ describe("invitationService", () => {
       });
     });
   });
+
+  describe("mintInvitation", () => {
+    it("supersedes pending admin invitations and mints the new one in the same transaction", async () => {
+      const result = await invitation.mintInvitation({
+        email: "new.admin@example.com",
+        type: "admin_registration",
+      });
+
+      expect(invalidateCalls).toEqual([
+        {
+          email: "new.admin@example.com",
+          type: "admin_registration",
+          client: txClient,
+        },
+      ]);
+      expect(createInvitationCalls).toEqual([
+        {
+          dto: { email: "new.admin@example.com", type: "admin_registration" },
+          client: txClient,
+        },
+      ]);
+      expect(result.token).toBe("raw-token");
+      expect(result.invitation.email).toBe("new.admin@example.com");
+    });
+  });
 });

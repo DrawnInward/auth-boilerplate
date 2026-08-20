@@ -1,10 +1,10 @@
-import bcrypt from "bcrypt";
-import { PoolClient } from "pg";
 import { GoogleOAuthProvider } from "../interfaces/googleOAuth";
+import { verifyPassword } from "../utils/hashPassword";
 import type * as userModels from "../models/users.models";
 import type * as mfaModels from "../models/mfa.models";
 import { SafeUser } from "../types";
 import { httpError } from "../utils/httpError";
+import { RunTransaction } from "../utils/withTransaction";
 import { isAccountActive } from "../utils/isAccountActive";
 import { AuthService, SessionStart } from "./auth.service";
 
@@ -24,7 +24,7 @@ export type OauthServiceDeps = {
   getMfaStatus: (typeof mfaModels)["getMfaStatus"];
   startSession: AuthService["startSession"];
   issueSession: AuthService["issueSession"];
-  runTransaction: <T>(fn: (client: PoolClient) => Promise<T>) => Promise<T>;
+  runTransaction: RunTransaction;
 };
 
 export type GoogleCallbackOutcome =
@@ -183,7 +183,7 @@ export const createOauthService = ({
       throw httpError(400, "Cannot link to account without password");
     }
 
-    if (!(await bcrypt.compare(password, user.password_hash))) {
+    if (!(await verifyPassword(password, user.password_hash))) {
       throw httpError(401, "Invalid password");
     }
 

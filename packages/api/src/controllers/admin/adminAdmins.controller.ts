@@ -1,17 +1,11 @@
 import { Request, Response, NextFunction } from "express";
 import { getAdmin, getAdmins, getAdminById } from "../../models/admins.models";
-import {
-  createInvitation,
-  invalidatePendingInvitations,
-} from "../../models/invitations.models";
-import db from "../../database/db";
 import { sendSuccess, sendCreated } from "../../utils/responseUtils";
 import { getValidatedQuery } from "../../middleware/validate";
 import type { AdminParams, AdminsQuery } from "@auth-boilerplate/shared";
 import { RequestWithUser } from "../../types";
 import { services } from "../../services";
 import { httpError } from "../../utils/httpError";
-import { withTransaction } from "../../utils/withTransaction";
 
 // GET /api/admin/admins
 export const getAllAdmins = async (
@@ -40,9 +34,6 @@ export const createAdminHandler = async (
   next: NextFunction,
 ) => {
   try {
-    // The admins model matches email verbatim (its casing gap is a D6 item)
-    // while createInvitation stores lowercase — normalise here or a mixed-case
-    // duplicate slips past the 409 and fails only at redemption.
     const email = (req.body.email as string).toLowerCase();
 
     const existingAdmin = await getAdmin(email);
@@ -50,11 +41,9 @@ export const createAdminHandler = async (
       throw httpError(409, "Email already exists");
     }
 
-    // Invalidate + create atomically (the C3 inviteMember shape), so the
-    // address can never be left with no live invitation — or, raced, with two.
-    const { invitation, token } = await withTransaction(db, async (client) => {
-      await invalidatePendingInvitations(email, "admin_registration", client);
-      return createInvitation({ email, type: "admin_registration" }, client);
+    const { invitation, token } = await services.invitation.mintInvitation({
+      email,
+      type: "admin_registration",
     });
 
     await services.email.sendAdminRegistrationInvite(email, token);
