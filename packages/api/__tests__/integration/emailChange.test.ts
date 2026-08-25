@@ -161,8 +161,7 @@ describe("Email Change Integration Tests", () => {
       expect(response.body.message).toBe("Credentials missing");
     });
 
-    it("should invalidate previous email change requests", async () => {
-      // First request
+    it("supersedes every earlier request, whatever address it pointed at", async () => {
       await request(app)
         .post("/api/auth/request-email-change")
         .set("Cookie", userCookies)
@@ -172,7 +171,6 @@ describe("Email Change Integration Tests", () => {
         })
         .expect(200);
 
-      // Second request should invalidate the first
       await request(app)
         .post("/api/auth/request-email-change")
         .set("Cookie", userCookies)
@@ -182,7 +180,63 @@ describe("Email Change Integration Tests", () => {
         })
         .expect(200);
 
-      // Previous invitation should be invalidated (can't directly verify without token)
+      // The supersede keys on the requester's CURRENT address, so it clears
+      // every pending email-change token this user holds — including the
+      // ones earlier tests in this file left behind — not just the previous
+      // one, and not only those aimed at the same target.
+      const pending = await getPendingInvitationsForEmail(
+        "test@example.com",
+        "email_change",
+      );
+      expect(pending).toHaveLength(1);
+      expect(pending[0].new_email).toBe("second@example.com");
+    });
+
+    it("kills the token already sent to a mistyped address", async () => {
+      // The endpoint never hands back its token, so the first request is
+      // minted through the model to get one in hand — the same trick the
+      // confirm suite below uses. This is the reported failure: a
+      // verification link sitting in a stranger's inbox has to stop working
+      // the moment the user corrects the address.
+      const { createInvitation } =
+        await import("../../src/models/invitations.models");
+      const { getUserUuid } =
+        await import("../../src/database/test-data/testUuids");
+
+      const mistyped = await createInvitation({
+        email: "test@example.com",
+        type: "email_change",
+        new_email: "typo@example.com",
+        user_id: getUserUuid(1),
+      });
+
+      await request(app)
+        .post("/api/auth/request-email-change")
+        .set("Cookie", userCookies)
+        .send({
+          newEmail: "corrected@example.com",
+          password: "Password1",
+        })
+        .expect(200);
+
+      // 400, not the 404 an unknown token gets: the row still exists, and
+      // superseding spends it the same way redeeming would. Whoever holds
+      // that mailbox is told the link is already used.
+      const stale = await request(app)
+        .post(`/api/auth/confirm-email-change/${mistyped.token}`)
+        .expect(400);
+      expect(stale.body.msg ?? stale.body.message).toContain(
+        "already been used",
+      );
+
+      // ...and the corrected address is still live, so the fix supersedes
+      // rather than simply refusing to mint.
+      const pending = await getPendingInvitationsForEmail(
+        "test@example.com",
+        "email_change",
+      );
+      expect(pending).toHaveLength(1);
+      expect(pending[0].new_email).toBe("corrected@example.com");
     });
   });
 

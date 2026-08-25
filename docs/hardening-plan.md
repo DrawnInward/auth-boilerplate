@@ -1130,9 +1130,8 @@ with the new unit tables:
     a user holding several live email-change tokens — unestablished whether
     that is intended).
 
-**2026-08-20 — OPEN, not yet done: `email_change` is the only mint that does
-not supersede.** Recorded here so it is not lost; no code has been written for
-it. `registration`, `password_reset`, `admin_invite` and `org_invite` all go
+**2026-08-20 — DONE 2026-08-25: `email_change` was the only mint that did not
+supersede.** `registration`, `password_reset`, `admin_invite` and `org_invite` all go
 through `invitationService.mintInvitation`, whose contract is "exactly one
 token live per address and type". `requestEmailChange` calls `createInvitation`
 directly with no `invalidatePendingInvitations`, so a user who sends a change
@@ -1143,9 +1142,21 @@ routing it through `mintInvitation` — note the invalidation keys on the
 invitation's `email` column (the user's _current_ address, not `new_email`),
 which gives the wanted one-pending-change-per-account semantics but IS a
 behaviour change, since two can be live today, so it needs its own test.
-Present identically in skoped (`docs/launch-backlog-2026-08-19.md` §5b);
-security-flavoured, so upstream first. No evidence either way that the
-omission was deliberate — treat the intent as unverified.
+Present identically in skoped; security-flavoured, so it landed here first
+and was ported straight after. No evidence either way that the omission was
+deliberate — the intent was never established.
+
+Shipped as exactly that: `requestEmailChange` now calls
+`services.invitation.mintInvitation`, and `emailChange.test.ts` gained two
+specs replacing a placebo that asserted nothing. One proves the supersede
+clears every pending email-change token for the requester whatever address it
+pointed at; the other mints through the model to hold a token, requests a
+change through the endpoint, and confirms the held token now answers 400
+"Invitation has already been used" while the corrected address stays live.
+**Known residual:** the branch where the target address already has an account
+mints nothing (the S5 no-oracle path), so it leaves an earlier token alive.
+Invalidating there would spend a good token and put nothing in its place, and
+the deliberately identical response could not tell the user it had happened.
 
 - **`organization.service.ts`** — create-org + seat-owner as one transaction, shared
   by the user and admin handlers; the admin's `owner_id is required` 400 moved in

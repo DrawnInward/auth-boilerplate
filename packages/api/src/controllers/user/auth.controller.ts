@@ -12,10 +12,7 @@ import {
   createAccessToken,
   revokeUserTokens,
 } from "../../models/refresh.models";
-import {
-  createInvitation,
-  validateInvitationToken,
-} from "../../models/invitations.models";
+import { validateInvitationToken } from "../../models/invitations.models";
 import { sendSuccess, sendCreated } from "../../utils/responseUtils";
 import type { TokenParams } from "@auth-boilerplate/shared";
 import { setAuthCookies } from "../../utils";
@@ -496,7 +493,15 @@ export const requestEmailChange = async (
       );
       await services.email.sendAccountExists(newEmail);
     } else {
-      const { token } = await createInvitation({
+      // Minted, not created: a second request supersedes the first, so a
+      // token sent to a mistyped address stops working the moment the user
+      // corrects it. The supersede keys on the CURRENT address (the row's
+      // `email`), which is what makes it independent of where either
+      // request was pointed. Residual: the taken-target branch above mints
+      // nothing, so it leaves an earlier token alive — invalidating there
+      // would kill a good token and put nothing in its place, and the
+      // no-oracle response could not tell the user it had happened.
+      const { token } = await services.invitation.mintInvitation({
         email: user.email!,
         type: "email_change",
         new_email: newEmail,
