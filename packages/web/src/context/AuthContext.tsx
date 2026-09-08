@@ -10,6 +10,7 @@ import {
   useState,
   useCallback,
   useMemo,
+  startTransition,
   type ReactNode,
 } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -105,28 +106,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     navigate("/login");
   }, [logoutMutation, navigate, setMfaRequired]);
 
+  // Disarm the gate and leave the verify page as ONE render. The router's
+  // navigate is a transition (lower priority than a plain setState), so a
+  // flag clear outside it commits first, re-renders the verify page with
+  // its guard tripped, and flashes the login form on the way to the landing
+  // page (found in Skoped 2026-09-07, same shape here).
+  const leaveMfaChallenge = useCallback(
+    (to: string) => {
+      startTransition(() => {
+        setMfaRequired(false);
+        navigate(to);
+      });
+    },
+    [navigate, setMfaRequired],
+  );
+
   const verifyMfa = useCallback(
     async (data: MfaVerifyDto) => {
       await mfaVerifyMutation.mutateAsync(data);
-      setMfaRequired(false);
       await queryClient.refetchQueries({ queryKey: ["me"] });
       const from =
         (location.state as { from?: Location })?.from?.pathname || "/dashboard";
-      navigate(from);
+      leaveMfaChallenge(from);
     },
-    [mfaVerifyMutation, location.state, queryClient, navigate, setMfaRequired],
+    [mfaVerifyMutation, location.state, queryClient, leaveMfaChallenge],
   );
 
   const verifyMfaBackup = useCallback(
     async (data: MfaBackupVerifyDto) => {
       await mfaBackupMutation.mutateAsync(data);
-      setMfaRequired(false);
       await queryClient.refetchQueries({ queryKey: ["me"] });
       const from =
         (location.state as { from?: Location })?.from?.pathname || "/dashboard";
-      navigate(from);
+      leaveMfaChallenge(from);
     },
-    [mfaBackupMutation, location.state, queryClient, navigate, setMfaRequired],
+    [mfaBackupMutation, location.state, queryClient, leaveMfaChallenge],
   );
 
   const value = useMemo(

@@ -4,6 +4,7 @@ import {
   useState,
   useCallback,
   useMemo,
+  startTransition,
 } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import type {
@@ -82,26 +83,39 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
     navigate("/admin/login");
   }, [logoutMutation, navigate, setMfaRequired]);
 
+  // Disarm the gate and leave the verify page as ONE render. The router's
+  // navigate is a transition (lower priority than a plain setState), so a
+  // flag clear outside it commits first, re-renders the verify page with
+  // its guard tripped, and flashes the login form on the way to the landing
+  // page (found in Skoped 2026-09-07, same shape here).
+  const leaveMfaChallenge = useCallback(
+    (to: string) => {
+      startTransition(() => {
+        setMfaRequired(false);
+        navigate(to);
+      });
+    },
+    [navigate, setMfaRequired],
+  );
+
   const verifyMfa = useCallback(
     async (data: MfaVerifyDto) => {
       await mfaVerifyMutation.mutateAsync(data);
-      setMfaRequired(false);
       const from =
         (location.state as { from?: Location })?.from?.pathname || "/admin";
-      navigate(from);
+      leaveMfaChallenge(from);
     },
-    [mfaVerifyMutation, navigate, location.state, setMfaRequired],
+    [mfaVerifyMutation, location.state, leaveMfaChallenge],
   );
 
   const verifyMfaBackup = useCallback(
     async (data: MfaBackupVerifyDto) => {
       await mfaBackupMutation.mutateAsync(data);
-      setMfaRequired(false);
       const from =
         (location.state as { from?: Location })?.from?.pathname || "/admin";
-      navigate(from);
+      leaveMfaChallenge(from);
     },
-    [mfaBackupMutation, navigate, location.state, setMfaRequired],
+    [mfaBackupMutation, location.state, leaveMfaChallenge],
   );
 
   const value = useMemo(
