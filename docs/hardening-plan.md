@@ -845,8 +845,10 @@ RETURNING`, rule 1's pre-check shape). And OAuthTab's "Link" reuses the login fl
     `esbuild`, `fsevents`, `msw`, `unrs-resolver`) all work without them on Linux — verified by
     running the full gate on a scriptless `npm ci` — because modern native modules ship binaries
     as ordinary platform packages. `npm run rebuild:native` is the explicit, reviewed allowlist
-    for platforms where a prebuild is missing. Consequence of the `.npmrc`: root `prepare` no
-    longer fires, so a fresh clone runs `npm run build:shared` by hand.
+    for platforms where a prebuild is missing. Consequence of the `.npmrc`: no install hook can
+    build `packages/shared`, so the dead root `prepare` was removed (2026-09-11) and the root
+    `setup` script chains the shared build explicitly; after pulling a change to the shared
+    package, run `npm run build:shared` by hand.
   - **Practice:** `npm ci` is the only routine install command; `npm install` happens only when
     deliberately changing dependencies, and the lockfile diff is reviewed as code — it is the
     security boundary. New releases get a ~7-day cooldown before adoption (every npm

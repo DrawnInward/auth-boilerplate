@@ -9,7 +9,6 @@
     "dev:web": "npm run dev -w @auth-boilerplate/web",
     "build": "npm run build --workspaces --if-present",
     "build:shared": "npm run build -w @auth-boilerplate/shared",
-    "prepare": "npm run build:shared",
     "test": "npm run test -w @auth-boilerplate/api",
     "test:web": "npm run test -w @auth-boilerplate/web",
     "typecheck": "npm run typecheck --workspaces --if-present",
@@ -20,7 +19,7 @@
     "rebuild:native": "npm rebuild bcrypt esbuild",
     "seed": "npm run seed -w @auth-boilerplate/api",
     "migrate": "npm run migrate -w @auth-boilerplate/api",
-    "setup": "npm run setup -w @auth-boilerplate/api"
+    "setup": "npm run build:shared && npm run setup -w @auth-boilerplate/api"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

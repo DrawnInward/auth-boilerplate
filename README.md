@@ -72,9 +72,15 @@ Install and initialize:
 
 ```bash
 npm install
-npm run setup
+npm run setup            # builds packages/shared first, then env files + databases
 npm run seed
 ```
+
+`.npmrc` sets `ignore-scripts=true` (supply-chain defence), so no install
+hook ever builds `@auth-boilerplate/shared` for you. `npm run setup` does it
+explicitly; after that, run `npm run build:shared` whenever
+`packages/shared` changes or you pull a change to it. Every import of the
+shared package fails to resolve until `packages/shared/dist` exists.
 
 To use a custom project name or database password:
 
