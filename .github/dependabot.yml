@@ -1,0 +1,14 @@
+# Dependabot: security fixes only, one grouped PR per wave.
+# No version-update PRs (open-pull-requests-limit: 0). A human reviews and
+# merges. Added by security-watch, 2026-11-03.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    groups:
+      security:
+        applies-to: security-updates
+        patterns: ["*"]
